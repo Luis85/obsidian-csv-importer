@@ -18,12 +18,12 @@ import { ImportIndexView, VIEW_TYPE_IMPORT_INDEX } from "./view/ImportIndexView"
  * interface used by the UI to the `ImportService`.
  */
 export default class CsvImporterPlugin extends Plugin implements ImportIndexHost, SettingsHost {
-	settings: PluginSettings = { ...DEFAULT_SETTINGS };
+	override settings: PluginSettings = { ...DEFAULT_SETTINGS };
 	private store!: ConfigStore;
 	private storage!: ImportStorage;
 	private service!: ImportService;
 
-	async onload(): Promise<void> {
+	override async onload(): Promise<void> {
 		const raw = (await this.loadData()) as Partial<PluginData> | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
 		const version = typeof raw?.version === "number" ? raw.version : 0;

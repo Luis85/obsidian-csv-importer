@@ -74,6 +74,7 @@ export class PreviewPane {
 		}
 		try {
 			const row = visible[pos];
+			if (row === undefined) return;
 			// Plan the rows up to the selected one so duplicate names and {{row}} match the real import.
 			const upTo: ParsedCsv = {
 				...parsed,

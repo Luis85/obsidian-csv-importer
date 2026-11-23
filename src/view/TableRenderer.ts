@@ -88,7 +88,7 @@ export class TableRenderer {
 		if (this.query) {
 			const q = this.query;
 			const lower = this.hooks.lowerRows(parsed);
-			entries = entries.filter((_e, i) => lower[i].includes(q));
+			entries = entries.filter((_e, i) => (lower[i] ?? "").includes(q));
 		}
 		return entries;
 	}
@@ -178,7 +178,9 @@ export class TableRenderer {
 		const end = Math.min(page.entries.length, target);
 		const frag = createFragment();
 		for (let r = page.shown; r < end; r++) {
-			const { row, n } = page.entries[r];
+			const entry = page.entries[r];
+			if (!entry) continue;
+			const { row, n } = entry;
 			const tr = createEl("tr");
 			tr.createEl("td", { cls: "csv-importer-rownum", text: String(n) });
 			for (let c = 0; c < page.parsed.headers.length; c++) {

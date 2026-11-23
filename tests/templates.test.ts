@@ -77,30 +77,30 @@ describe("renderTemplate vs reference and compiled path", () => {
 	}
 
 	it("whitespace in braces is trimmed, values are trimmed, unknown is empty, names are case-sensitive", () => {
-		const ctx = CONTEXTS[0];
+		const ctx = CONTEXTS[0]!;
 		expect(renderTemplate("{{  Name  }}|{{Age}}|{{name}}|{{Zip}}", ctx)).toBe("Ann|5||");
 	});
 
 	it("row and file win over headers with the same name", () => {
-		const ctx = CONTEXTS[4];
+		const ctx = CONTEXTS[4]!;
 		expect(renderTemplate("{{row}}/{{file}}/{{Name}}", ctx)).toBe("7/real/N");
 	});
 
 	it("duplicate headers resolve to the leftmost column", () => {
-		expect(renderTemplate("{{Dup}}", CONTEXTS[3])).toBe("first");
+		expect(renderTemplate("{{Dup}}", CONTEXTS[3]!)).toBe("first");
 	});
 
 	it("special characters in values and file names are inserted literally (no replace patterns)", () => {
-		expect(renderTemplate("{{file}}", CONTEXTS[3])).toBe("f $& $1");
-		expect(renderTemplate("a$b $1 $& {{Name}} $$", CONTEXTS[3])).toBe("a$b $1 $& n $$");
+		expect(renderTemplate("{{file}}", CONTEXTS[3]!)).toBe("f $& $1");
+		expect(renderTemplate("a$b $1 $& {{Name}} $$", CONTEXTS[3]!)).toBe("a$b $1 $& n $$");
 	});
 
 	it("placeholders inside values are not expanded again", () => {
-		expect(renderTemplate("{{Name}}-{{file}}", CONTEXTS[6])).toBe("{{Age}}-{{row}}");
+		expect(renderTemplate("{{Name}}-{{file}}", CONTEXTS[6]!)).toBe("{{Age}}-{{row}}");
 	});
 
 	it("uses formatted display values when present", () => {
-		expect(renderTemplate("{{Name}} {{Age}}", CONTEXTS[5])).toBe("Fmt Name 42");
+		expect(renderTemplate("{{Name}} {{Age}}", CONTEXTS[5]!)).toBe("Fmt Name 42");
 	});
 
 	it("body templates in planNotes render exactly like renderTemplate", () => {
@@ -111,8 +111,8 @@ describe("renderTemplate vs reference and compiled path", () => {
 			notes.forEach((n, i) => {
 				const ctx: TemplateContext = {
 					headers: parsed.headers,
-					row: parsed.rows[i],
-					rowNumber: parsed.rowNumbers[i],
+					row: parsed.rows[i]!,
+					rowNumber: parsed.rowNumbers[i]!,
 					fileBasename: "people",
 				};
 				expect(n.body).toBe(reference(t, ctx));
@@ -175,10 +175,10 @@ describe("applyValueTemplate", () => {
 			return c;
 		});
 		const notes = planNotes(parsed, cfg({ fileNameTemplate: "N {{row}}", columns }), { path: "d/s.csv", basename: "s" });
-		expect(notes[0].frontmatter.Name).toBe("[[Ann]] (Core, #1)");
-		expect(notes[0].frontmatter.Tags).toEqual(["t/a", "t/b"]);
-		expect(notes[1].frontmatter.Name).toBeNull();
-		expect(JSON.stringify(notes[1].frontmatter.Tags ?? null)).not.toContain("t/");
+		expect(notes[0]!.frontmatter.Name).toBe("[[Ann]] (Core, #1)");
+		expect(notes[0]!.frontmatter.Tags).toEqual(["t/a", "t/b"]);
+		expect(notes[1]!.frontmatter.Name).toBeNull();
+		expect(JSON.stringify(notes[1]!.frontmatter.Tags ?? null)).not.toContain("t/");
 	});
 });
 

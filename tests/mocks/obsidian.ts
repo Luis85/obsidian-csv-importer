@@ -38,8 +38,8 @@ export class TFolder extends TAbstractFile {
 function splitFrontmatter(text: string): { fm: Record<string, unknown>; body: string } {
 	const m = /^---\n([\s\S]*?)\n?---\n?([\s\S]*)$/.exec(text);
 	if (!m) return { fm: {}, body: text };
-	const fm = (parse(m[1]) ?? {}) as Record<string, unknown>;
-	return { fm, body: m[2] };
+	const fm = (parse(m[1]!) ?? {}) as Record<string, unknown>;
+	return { fm, body: m[2] ?? "" };
 }
 
 /** In-memory vault.adapter (dir/file listing by path prefix). `mkdirDelay` simulates slow I/O to expose races. */

@@ -84,7 +84,7 @@ export function mergeFrontmatter(input: MergeInput): MergeResult {
 	};
 	for (const k of fill) {
 		const c = existing[k];
-		const p: FrontmatterValue = Object.prototype.hasOwnProperty.call(planned, k) ? planned[k] : null;
+		const p: FrontmatterValue = Object.prototype.hasOwnProperty.call(planned, k) ? (planned[k] ?? null) : null;
 		if (!isEmpty(c)) {
 			out[k] = valueHash(c);
 		} else if (!isEmpty(p) || (Object.prototype.hasOwnProperty.call(planned, k) && !Object.prototype.hasOwnProperty.call(existing, k))) {
@@ -97,7 +97,7 @@ export function mergeFrontmatter(input: MergeInput): MergeResult {
 	for (const k of managed) {
 		if (fill.has(k)) continue;
 		const has = Object.prototype.hasOwnProperty.call(planned, k);
-		const p: FrontmatterValue = has ? planned[k] : null;
+		const p: FrontmatterValue = has ? (planned[k] ?? null) : null;
 		const c = existing[k];
 		const pEmpty = isEmpty(p);
 		const cEmpty = isEmpty(c);

@@ -80,7 +80,7 @@ export function setup(overrides: Partial<FileImportConfig> = {}) {
 		await app.vault.create(path, text);
 	};
 	const read = (path: string) => app.vault.files.get(path) ?? "";
-	const fm = (path: string) => parse(/^---\n([\s\S]*?)---/.exec(read(path))![1]) as Record<string, unknown>;
+	const fm = (path: string) => parse(/^---\n([\s\S]*?)---/.exec(read(path))![1]!) as Record<string, unknown>;
 	const editInBases = (path: string, fn: (fm: Record<string, unknown>) => void) =>
 		app.fileManager.processFrontMatter(app.vault.getAbstractFileByPath(path) as TFile, fn);
 	return { app, cfg: config, run, put, read, fm, editInBases, getSnapshot, setSnapshot };

@@ -189,7 +189,7 @@ describe("Phase 3 warnings and fill-only", () => {
 		const { result } = await t.run("id,role\n1,Dev\n", true);
 		expect(result.warnings.some((w) => w.startsWith("2 notes in the target folder share a key"))).toBe(true);
 		const real = await t.run("id,role\n1,Dev\n");
-		expect(real.result.rows[0].path).toBe("Data/hours/Entry 1.md");
+		expect(real.result.rows[0]!.path).toBe("Data/hours/Entry 1.md");
 	});
 
 	it("warns on very large imports", async () => {

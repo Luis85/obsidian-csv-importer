@@ -31,9 +31,9 @@ describe("ConfigStore", () => {
 		await store.set("a.csv", c);
 		expect(persist).toHaveBeenCalledTimes(1);
 		c.tags = "mutated";
-		c.columns[0].property = "mutated";
+		c.columns[0]!.property = "mutated";
 		expect(store.get("a.csv")?.tags).toBe("one");
-		expect(store.get("a.csv")?.columns[0].property).toBe("A");
+		expect(store.get("a.csv")?.columns[0]!.property).toBe("A");
 		expect(store.paths().length).toBe(1);
 		expect(store.has("a.csv")).toBe(true);
 	});
@@ -67,7 +67,7 @@ describe("ConfigStore", () => {
 	it("toRecord returns a deep snapshot", async () => {
 		const { store } = make({ "a.csv": cfg({ tags: "x" }) });
 		const rec = store.toRecord();
-		rec["a.csv"].tags = "mutated";
+		rec["a.csv"]!.tags = "mutated";
 		delete rec["a.csv"];
 		expect(store.get("a.csv")?.tags).toBe("x");
 		expect(store.paths()).toEqual(["a.csv"]);

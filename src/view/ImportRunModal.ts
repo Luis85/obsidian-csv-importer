@@ -69,11 +69,11 @@ export class ImportRunModal extends Modal {
 		this.modalEl.addClass("csv-importer-run");
 	}
 
-	onOpen(): void {
+	override onOpen(): void {
 		void this.showPreview();
 	}
 
-	close(): void {
+	override close(): void {
 		if (this.running) {
 			new Notice("Use the stop button to end the import.");
 			return;
@@ -81,7 +81,7 @@ export class ImportRunModal extends Modal {
 		super.close();
 	}
 
-	onClose(): void {
+	override onClose(): void {
 		this.stop = true;
 		this.contentEl.empty();
 		this.resolveClosed(this.finished ?? this.latest ?? emptyResult(true));
@@ -155,7 +155,7 @@ export class ImportRunModal extends Modal {
 			this.showDone(outcome.result);
 		} catch (e) {
 			this.running = false;
-			stopBtn.disabled = true;
+			if (stopBtn) stopBtn.disabled = true;
 			renderCallout(this.reset(), "error", { title: "Import failed", items: [errorMessage(e)] });
 			this.buttons([{ text: CLOSE, cta: true, onClick: () => this.close() }]);
 		}

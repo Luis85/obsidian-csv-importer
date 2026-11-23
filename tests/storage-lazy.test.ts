@@ -30,7 +30,7 @@ describe("ImportStorage layout and lazy loading", () => {
 		expect(keys.filter((k) => k.endsWith(".undo.json"))).toHaveLength(1);
 		expect(keys.filter((k) => /^[0-9a-f]{14}\.json$/.test(k))).toHaveLength(1);
 		const index = JSON.parse(app.vault.adapter.data.get(`${DIR}/index.json`)!) as Record<string, { hasUndo: boolean; file: string }>;
-		expect(index["a.csv"].hasUndo).toBe(true);
+		expect(index["a.csv"]!.hasUndo).toBe(true);
 	});
 
 	it("init reads only the index; state files are loaded per CSV on demand", async () => {
@@ -49,7 +49,7 @@ describe("ImportStorage layout and lazy loading", () => {
 		expect(fresh.hasUndo("a.csv")).toBe(false);
 		expect((await fresh.loadSnapshot("a.csv"))["n/1.md"]).toEqual({ x: "1" });
 		expect(reads).toHaveLength(2);
-		expect((await fresh.loadUndo("b.csv"))?.modified[0].content).toBe("old");
+		expect((await fresh.loadUndo("b.csv"))?.modified[0]!.content).toBe("old");
 		expect(reads).toHaveLength(3);
 	});
 

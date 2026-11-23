@@ -180,13 +180,13 @@ describe("buildColumnConfigs / reconcileColumns", () => {
 		expect(cfg.map((c) => c.property)).toEqual(["A", "A 2", "property", "property 2"]);
 		expect(cfg.every((c) => c.include)).toBe(true);
 		expect(cfg.map((c) => c.index)).toEqual([0, 1, 2, 3]);
-		expect(cfg[0].type).toBe("number");
+		expect(cfg[0]!.type).toBe("number");
 	});
 
 	it("reconcile keeps user choices, adds new, drops removed, reindexes", () => {
 		const old = parseCsv("a,b,c\n1,2,x", { delimiter: ",", hasHeader: true });
 		const cfg = buildColumnConfigs(old, dot);
-		cfg[1] = { ...cfg[1], property: "Renamed", type: "text", include: false };
+		cfg[1] = { ...cfg[1]!, property: "Renamed", type: "text", include: false };
 		const next = parseCsv("c,b,d\nx,2,2026-01-01", { delimiter: ",", hasHeader: true });
 		const out = reconcileColumns(cfg, next, dot);
 		expect(out.map((c) => c.source)).toEqual(["c", "b", "d"]);

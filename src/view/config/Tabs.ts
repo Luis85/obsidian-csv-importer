@@ -83,6 +83,7 @@ export class Tabs {
 		else if (ev.key === "End") next = this.tabs.length - 1;
 		if (next < 0) return;
 		ev.preventDefault();
-		this.select(this.tabs[next].id, true);
+		const target = this.tabs[next];
+		if (target) this.select(target.id, true);
 	}
 }

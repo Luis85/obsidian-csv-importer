@@ -76,7 +76,7 @@ describe("date formats", () => {
 		const parsed = parseCsv("d,n\n03/04/2026,a\n25/04/2026,b\n", cfg());
 		const config = cfg({ fileNameTemplate: "{{n}}" });
 		config.columns = buildColumnConfigs(parsed, inf);
-		expect(config.columns[0].type).toBe("date");
+		expect(config.columns[0]!.type).toBe("date");
 		const notes = planNotes(parsed, config, csv);
 		expect(notes.map((n) => n.frontmatter["d"])).toEqual(["2026-04-03", "2026-04-25"]);
 	});
@@ -105,14 +105,14 @@ describe("units", () => {
 		const parsed = parseCsv("a,b,c\n$1.5,10,x\n$2,20,y\n", cfg());
 		const cols = buildColumnConfigs(parsed, inf);
 		expect(cols[0]).toMatchObject({ type: "number", stripUnits: true });
-		expect(cols[1].stripUnits).toBeUndefined();
-		expect(cols[2].type).toBe("text");
+		expect(cols[1]!.stripUnits).toBeUndefined();
+		expect(cols[2]!.type).toBe("text");
 		expect(inferColumnType(["12 %"], inf)).toBe("number");
 	});
 	it("reconcile keeps the user's stripUnits", () => {
 		const parsed = parseCsv("a\n1\n2\n", cfg());
 		const out = reconcileColumns([{ source: "a", index: 5, property: "a", type: "number", include: true, stripUnits: true }], parsed, inf);
-		expect(out[0].stripUnits).toBe(true);
+		expect(out[0]!.stripUnits).toBe(true);
 	});
 	it("convertValue honors stripUnits", () => {
 		expect(convertValue("12 %", "number", { ...conv, stripUnits: true })).toBe(12);
@@ -159,23 +159,23 @@ describe("composite key", () => {
 		const parsed = parseCsv(text, cfg());
 		const config = cfg({ keyColumns: ["Date", "Amount"], fileNameTemplate: "{{row}}" });
 		const notes = planNotes(parsed, config, csv);
-		expect(notes[0].key).toEqual({ property: "import_key", value: "2026-01-01 | 5" });
-		expect(notes[0].frontmatter["import_key"]).toBe("2026-01-01 | 5");
-		expect(notes[0].types["import_key"]).toBe("text");
-		expect(notes[1].key).toBeNull(); // empty part
-		expect(notes[2].key?.value).toBe("2026-01-03 | 7");
+		expect(notes[0]!.key).toEqual({ property: "import_key", value: "2026-01-01 | 5" });
+		expect(notes[0]!.frontmatter["import_key"]).toBe("2026-01-01 | 5");
+		expect(notes[0]!.types["import_key"]).toBe("text");
+		expect(notes[1]!.key).toBeNull(); // empty part
+		expect(notes[2]!.key?.value).toBe("2026-01-03 | 7");
 	});
 	it("key property collision gets a suffix", () => {
 		const parsed = parseCsv("a,b,import_key\n1,2,3\n", cfg());
 		const config = cfg({ keyColumns: ["a", "b"], fileNameTemplate: "{{row}}" });
 		const notes = planNotes(parsed, config, csv);
-		expect(notes[0].key?.property).toBe("import_key 2");
-		expect(notes[0].frontmatter["import_key"]).toBe(3);
+		expect(notes[0]!.key?.property).toBe("import_key 2");
+		expect(notes[0]!.frontmatter["import_key"]).toBe(3);
 	});
 	it("one entry behaves like keyColumn", () => {
 		const parsed = parseCsv(text, cfg());
 		const notes = planNotes(parsed, cfg({ keyColumns: ["Memo"], fileNameTemplate: "{{row}}" }), csv);
-		expect(notes[0].key).toEqual({ property: "Memo", value: "a" });
+		expect(notes[0]!.key).toEqual({ property: "Memo", value: "a" });
 	});
 });
 
@@ -240,7 +240,7 @@ describe("extra properties", () => {
 				{ property: "blank", type: "text", defaultValue: "" },
 			],
 		});
-		const [n] = planNotes(parsed, config, csv, { now });
+		const n = planNotes(parsed, config, csv, { now })[0]!;
 		expect(n.frontmatter).toMatchObject({
 			status: "open",
 			who: "Anna #1 of f",
@@ -255,7 +255,7 @@ describe("extra properties", () => {
 	});
 	it("omit drops empty extras", () => {
 		const config = cfg({ fileNameTemplate: "{{Name}}", emptyValues: "omit", extraProperties: [{ property: "blank", type: "text", defaultValue: "" }] });
-		const [n] = planNotes(parsed, config, csv, { now });
+		const n = planNotes(parsed, config, csv, { now })[0]!;
 		expect("blank" in n.frontmatter).toBe(false);
 		expect(n.fillOnly).toEqual([]);
 	});
@@ -271,13 +271,13 @@ describe("extra properties", () => {
 		});
 		config.columns = buildColumnConfigs(parsed, inf);
 		expect(extraPropertyConflicts(config)).toEqual(["qty", "ok"]);
-		const [n] = planNotes(parsed, config, csv, { now });
+		const n = planNotes(parsed, config, csv, { now })[0]!;
 		expect(n.frontmatter["Qty"]).toBe(2);
 		expect(n.frontmatter["ok"]).toBe("y");
 		expect(n.fillOnly).toEqual(["ok"]);
 	});
 	it("fillOnly is [] without extras", () => {
-		expect(planNotes(parsed, cfg({ fileNameTemplate: "{{Name}}" }), csv)[0].fillOnly).toEqual([]);
+		expect(planNotes(parsed, cfg({ fileNameTemplate: "{{Name}}" }), csv)[0]!.fillOnly).toEqual([]);
 	});
 });
 

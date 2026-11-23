@@ -31,4 +31,4 @@ Tage: 5
 ---
 ```
 
-The delimiter and decimal separator are detected automatically; if the German file shows `Stunden` as text, set the decimal separator to `,` in the import settings. See the walkthrough in the main README for using the result in Bases.
+The delimiter and decimal separator are detected automatically; if the German file shows `Stunden` as text, set **Decimal separator** to Comma on the **File & rows** tab of the import settings (**Configure** in the table view). See the walkthrough in the main README for using the result in Bases.

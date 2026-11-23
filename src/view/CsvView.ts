@@ -67,11 +67,11 @@ export class CsvView extends TextFileView {
 		return VIEW_TYPE_CSV;
 	}
 
-	getDisplayText(): string {
+	override getDisplayText(): string {
 		return this.file ? this.file.basename : "CSV";
 	}
 
-	getIcon(): string {
+	override getIcon(): string {
 		return "table";
 	}
 
@@ -80,7 +80,7 @@ export class CsvView extends TextFileView {
 	}
 
 	/** The view is strictly read-only: never write the (possibly re-decoded) text back to the CSV. */
-	save(_clear?: boolean): Promise<void> {
+	override save(_clear?: boolean): Promise<void> {
 		return Promise.resolve();
 	}
 

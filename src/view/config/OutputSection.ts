@@ -8,6 +8,7 @@ import { isUniqueColumn, suggestShortKey } from "./keys";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
 import { FolderSuggest } from "./FolderSuggest";
+import { planNotes } from "../../import/noteBuilder";
 
 /** The "Notes" tab (target folder, file name) and the "Re-import" tab (conflict handling, match columns). */
 export class OutputSection {
@@ -164,7 +165,7 @@ export class OutputSection {
 		if (propBox) {
 			propBox.empty();
 			if (keys.length >= 2) {
-				const example = parsed?.rows[0] ? keyExample(keys.map((k) => (parsed.rows[0][cfg.columns.find((c) => c.source === k)?.index ?? -1] ?? "").trim())) : "";
+				const example = this.keyExampleText();
 				new Setting(propBox)
 					.setName(KEY_PROPERTY)
 					.setDesc(`The values are joined with " | " and stored in this property. ${example}`.trim())
@@ -200,5 +201,21 @@ export class OutputSection {
 			this.renderKeyList();
 			this.draft.emit("preview");
 		});
+	}
+
+	/** "Example: …" with the key value exactly as the first row would store it (typed and formatted). */
+	private keyExampleText(): string {
+		const parsed = this.draft.parsed;
+		if (!parsed || parsed.rows.length === 0) return "";
+		try {
+			const first = planNotes(
+				{ ...parsed, rows: parsed.rows.slice(0, 1), rowNumbers: parsed.rowNumbers.slice(0, 1) },
+				this.draft.cfg,
+				{ path: this.draft.file.path, basename: this.draft.file.basename },
+			)[0];
+			return first?.key ? keyExample([first.key.value]) : "";
+		} catch {
+			return "";
+		}
 	}
 }

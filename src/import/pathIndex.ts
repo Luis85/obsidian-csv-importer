@@ -42,7 +42,8 @@ export class PathIndex {
 		let current = "";
 		const parts = folder.split("/").filter((p) => p.length > 0);
 		for (let i = 0; i < parts.length; i++) {
-			const next = current ? `${current}/${parts[i]}` : parts[i];
+			const part = parts[i] ?? "";
+			const next = current ? `${current}/${part}` : part;
 			const found = this.lookup(next);
 			if (isFolder(found)) current = found.path;
 			else return [next, ...parts.slice(i + 1)].join("/");

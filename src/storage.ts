@@ -63,7 +63,8 @@ export function rekeyUndo(manifest: UndoManifest, oldPath: string, newPath: stri
 	}
 	for (const map of [manifest.writtenHashes, manifest.snapshotBefore]) {
 		if (map && Object.prototype.hasOwnProperty.call(map, oldPath)) {
-			map[newPath] = map[oldPath];
+			const v = map[oldPath];
+			if (v !== undefined) map[newPath] = v;
 			delete map[oldPath];
 		}
 	}
@@ -383,7 +384,8 @@ export class ImportStorage {
 			if (snapMaybe) {
 				const snap = await this.loadSnapshot(csvPath);
 				if (Object.prototype.hasOwnProperty.call(snap, oldNotePath)) {
-					snap[newNotePath] = snap[oldNotePath];
+					const prev = snap[oldNotePath];
+					if (prev !== undefined) snap[newNotePath] = prev;
 					delete snap[oldNotePath];
 					l.snapDirty = true;
 					if (idx.snapDirs && !idx.snapDirs.includes(newDir)) {

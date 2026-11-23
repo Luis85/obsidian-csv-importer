@@ -183,7 +183,7 @@ export const REVIEW_COLUMNS = "Review columns";
 /** Column options (replaces the "Template…" pill). */
 export const COLUMN_OPTIONS = "Options";
 export const VALUE_TEMPLATE = "Value template";
-export const IGNORE_UNITS = "Ignore units (\u20ac, %, kg)";
+export const IGNORE_UNITS = "Ignore units (\u20ac, $, %)";
 
 /** Dialog footer: "Save and import" becomes "Import now"; it also saves. */
 export const IMPORT_NOW = "Import now";

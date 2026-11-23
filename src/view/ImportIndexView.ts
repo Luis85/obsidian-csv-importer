@@ -46,11 +46,11 @@ export class ImportIndexView extends ItemView {
 		return "CSV imports";
 	}
 
-	getIcon(): string {
+	override getIcon(): string {
 		return "table-properties";
 	}
 
-	async onOpen(): Promise<void> {
+	override async onOpen(): Promise<void> {
 		const { vault, workspace } = this.app;
 		this.registerEvent(vault.on("rename", () => this.refreshSoon()));
 		this.registerEvent(vault.on("delete", () => this.refreshSoon()));
@@ -64,7 +64,7 @@ export class ImportIndexView extends ItemView {
 		await this.refresh();
 	}
 
-	onClose(): Promise<void> {
+	override onClose(): Promise<void> {
 		this.contentEl.empty();
 		return Promise.resolve();
 	}

@@ -413,7 +413,9 @@ export async function writeNotesWith(
 			break;
 		}
 		const written0 = writer.written;
-		await writer.writeRow(notes[i]);
+		const note = notes[i];
+		if (!note) continue;
+		await writer.writeRow(note);
 		done = i + 1;
 		await checkpointer.afterRow(writer.written - written0);
 		if (now() - lastYield > SLICE_MS) {

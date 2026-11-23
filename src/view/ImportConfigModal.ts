@@ -60,7 +60,7 @@ export class ImportConfigModal extends Modal {
 		this.advanced = new AdvancedSection(this.draft);
 	}
 
-	onOpen(): void {
+	override onOpen(): void {
 		this.modalEl.addClass("csv-importer-modal");
 		this.setTitle(`Import settings: ${this.file.name}`);
 		this.draft.reparse();
@@ -69,7 +69,7 @@ export class ImportConfigModal extends Modal {
 		if (this.draft.cfg.encoding === "auto") void this.advanced.detectEncoding();
 	}
 
-	onClose(): void {
+	override onClose(): void {
 		this.contentEl.empty();
 	}
 

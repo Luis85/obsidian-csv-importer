@@ -22,8 +22,8 @@ describe("uuid generator", () => {
 		const ids = notes.map((n) => n.frontmatter["note id"]);
 		expect(new Set(ids).size).toBe(2);
 		for (const id of ids) expect(id).toMatch(UUID);
-		expect(notes[0].fillOnly).toContain("note id");
-		expect(serializeNote(notes[0].frontmatter, notes[0].body, notes[0].types)).toMatch(/^note id: "?[0-9a-f-]{36}"?$/m);
+		expect(notes[0]!.fillOnly).toContain("note id");
+		expect(serializeNote(notes[0]!.frontmatter, notes[0]!.body, notes[0]!.types)).toMatch(/^note id: "?[0-9a-f-]{36}"?$/m);
 	});
 
 	it("can be combined with text and is injectable for tests", () => {

@@ -173,7 +173,7 @@ function normalizeListProps(
 ): void {
 	for (const name of LIST_PROPS) {
 		if (name in fm) {
-			const list = normalizeListProp(name, fm[name]);
+			const list = normalizeListProp(name, fm[name] ?? null);
 			if (list.length > 0) fm[name] = list;
 			else if (config.emptyValues === "omit") delete fm[name];
 			else fm[name] = null;

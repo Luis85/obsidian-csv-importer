@@ -44,7 +44,7 @@ class ConfirmModal extends Modal {
 		super(app);
 	}
 
-	onOpen(): void {
+	override onOpen(): void {
 		this.setTitle(this.heading);
 		this.contentEl.createEl("p", { text: this.message });
 		if (this.option) {
@@ -64,7 +64,7 @@ class ConfirmModal extends Modal {
 		else ok.setCta();
 	}
 
-	onClose(): void {
+	override onClose(): void {
 		this.contentEl.empty();
 		if (!this.answered) this.done(false, false);
 	}

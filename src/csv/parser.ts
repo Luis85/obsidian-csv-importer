@@ -154,9 +154,10 @@ export function parseCsv(text: string, opts: { delimiter: DelimiterOption; hasHe
 	let blank = 0;
 	for (let ri = 0; ri < records.length; ri++) {
 		const r = records[ri];
+		if (!r) continue;
 		let allBlank = true;
 		for (let i = 0; i < r.length; i++) {
-			if (r[i].trim() !== "") {
+			if ((r[i] ?? "").trim() !== "") {
 				allBlank = false;
 				break;
 			}

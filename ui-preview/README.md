@@ -35,9 +35,10 @@ logs `ui-preview shim gap` to the console) so new imports do not break the build
   toggles, modals, settings rows, view header). Fonts, exact spacing, focus rings, scrollbars, and the mobile
   layout (bottom sheet modals, stacked settings rows) are close but not exact. Obsidian's real mobile
   `.modal-button-container` behavior is not reproduced exactly (here buttons do not wrap).
-- The settings tab renders `display()` (pre-1.13 path). Obsidian 1.13+ renders `getSettingDefinitions()`
-  (declarative, searchable settings) natively; that renderer is not emulated, so group headings and row
-  styling of the 1.13+ path may differ.
+- The settings tab is declarative (`getSettingDefinitions()`). `scenarios.ts` renders the definitions as
+  `Setting` rows with `renderDefinitions()`; Obsidian's own renderer is not emulated exactly, so group headings
+  and row styling may differ slightly.
+- `node ui-preview/readme-shots.mjs` regenerates the README screenshots in `docs/images/` at 2x.
 - Menu, Notice, `AbstractInputSuggest` (no-op, no folder dropdown), Platform are minimal. Icons: only the
   lucide icons the plugin uses are embedded; unknown names render as a dot.
 - No real vault: `App.vault` is a stub with a few fake folders; the host (`FakeHost`) keeps config in memory

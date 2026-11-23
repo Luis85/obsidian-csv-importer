@@ -51,7 +51,7 @@ describe("S1 ownership", () => {
 		const t = setup();
 		await t.run(CSV);
 		t.app.vault.rename("Data/hours/Entry 1.md", "Data/hours/Moved.md");
-		t.setSnapshot({ ...t.getSnapshot(), "Data/hours/Moved.md": t.getSnapshot()["Data/hours/Entry 1.md"] });
+		t.setSnapshot({ ...t.getSnapshot(), "Data/hours/Moved.md": t.getSnapshot()["Data/hours/Entry 1.md"]! });
 		const { result } = await t.run(CSV_V2);
 		expect(t.fm("Data/hours/Moved.md").role).toBe("Lead");
 		expect(result.skipped).toBe(0);
@@ -135,7 +135,7 @@ describe("S4 case-insensitive paths", () => {
 		const dry = await t.run(CSV, { dryRun: true });
 		const real = await t.run(CSV);
 		expect(dry.result.rows.map((r) => [r.path, r.outcome])).toEqual(real.result.rows.map((r) => [r.path, r.outcome]));
-		expect(dry.result.rows[0].path).toBe("Data/hours/entry 1.md");
+		expect(dry.result.rows[0]!.path).toBe("Data/hours/entry 1.md");
 		expect([...t.app.vault.files.keys()].filter((k) => k.toLowerCase() === "data/hours/entry 1.md")).toHaveLength(1);
 	});
 
@@ -144,8 +144,8 @@ describe("S4 case-insensitive paths", () => {
 		await t.put("Data/hours/ENTRY 1.md", "mine");
 		const dry = await t.run(CSV, { dryRun: true });
 		const real = await t.run(CSV);
-		expect(real.result.rows[0].path).toBe("Data/hours/Entry 1 1.md");
-		expect(dry.result.rows[0].path).toBe(real.result.rows[0].path);
+		expect(real.result.rows[0]!.path).toBe("Data/hours/Entry 1 1.md");
+		expect(dry.result.rows[0]!.path).toBe(real.result.rows[0]!.path);
 		expect(t.read("Data/hours/ENTRY 1.md")).toBe("mine");
 	});
 

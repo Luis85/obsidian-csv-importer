@@ -1,5 +1,10 @@
 import type { ColumnConfig, DateOrder, FileImportConfig, FrontmatterValue, HeaderDrift, ParsedCsv, PropertyType } from "../types";
 
+/** Capture group of a regex match; the patterns used here always set the groups read through this. */
+function grp(m: RegExpExecArray, i: number): string {
+	return m[i] ?? "";
+}
+
 export interface InferenceOptions {
 	decimalSeparator: "." | ",";
 	/** Infer `date` instead of `datetime` when all times are 00:00(:00). */
@@ -53,7 +58,7 @@ export function formatNumber(n: number, precision?: number | null): string {
 			// Too small for toFixed (would round to 0): keep exponent form, always with a decimal point (YAML float).
 			str = `${m[1]}${m[2]}.${m[3] ?? "0"}e${m[4]}`;
 		} else if (exp < 0) str = n.toFixed(mantDigits - exp);
-		else str = (m[1] + m[2] + (m[3] ?? "")).padEnd(m[1].length + 1 + exp, "0");
+		else str = (grp(m, 1) + grp(m, 2) + (m[3] ?? "")).padEnd(grp(m, 1).length + 1 + exp, "0");
 	}
 	return str === "-0" ? "0" : str;
 }
@@ -67,7 +72,7 @@ const GROUPED_SPACES_RE = /^([+-]?\d{1,3}(?:[ \u00a0\u202f]\d{3})+)(?=[.,]\d+$|$
 export function stripNumberUnits(raw: string): string {
 	let s = raw.replace(/[\u20ac$\u00a3\u00a5%]/g, "").replace(UNIT_WORDS_RE, "").trim();
 	const g = GROUPED_SPACES_RE.exec(s);
-	if (g) s = g[1].replace(/[ \u00a0\u202f]/g, "") + s.slice(g[1].length);
+	if (g) s = grp(g, 1).replace(/[ \u00a0\u202f]/g, "") + s.slice(grp(g, 1).length);
 	return s.replace(/^([+-])\s+/, "$1");
 }
 
@@ -153,28 +158,28 @@ function ymd(y: number, mo: number, d: number): string | null {
 
 function parseDatePart(s: string, order: SlashOrder): string | null {
 	let m = ISO_RE.exec(s) ?? YMD_SLASH_RE.exec(s);
-	if (m) return ymd(+m[1], +m[2], +m[3]);
+	if (m) return ymd(+grp(m, 1), +grp(m, 2), +grp(m, 3));
 	m = DOT_RE.exec(s) ?? DASH_DMY_RE.exec(s);
-	if (m) return ymd(+m[3], +m[2], +m[1]);
+	if (m) return ymd(+grp(m, 3), +grp(m, 2), +grp(m, 1));
 	m = SLASH_RE.exec(s);
 	if (m) {
-		const a = +m[1];
-		const b = +m[2];
+		const a = +grp(m, 1);
+		const b = +grp(m, 2);
 		let o: SlashOrder = order;
 		if (o === "auto") o = a === b || a > 12 ? "dmy" : b > 12 ? "mdy" : "none";
-		if (o === "dmy") return ymd(+m[3], b, a);
-		if (o === "mdy") return ymd(+m[3], a, b);
+		if (o === "dmy") return ymd(+grp(m, 3), b, a);
+		if (o === "mdy") return ymd(+grp(m, 3), a, b);
 		return null;
 	}
 	m = NAME_DMY_RE.exec(s);
 	if (m) {
-		const mo = MONTHS[m[2].toLowerCase()];
-		return mo ? ymd(+m[3], mo, +m[1]) : null;
+		const mo = MONTHS[grp(m, 2).toLowerCase()];
+		return mo ? ymd(+grp(m, 3), mo, +grp(m, 1)) : null;
 	}
 	m = NAME_MDY_RE.exec(s);
 	if (m) {
-		const mo = MONTHS[m[1].toLowerCase()];
-		return mo ? ymd(+m[3], mo, +m[2]) : null;
+		const mo = MONTHS[grp(m, 1).toLowerCase()];
+		return mo ? ymd(+grp(m, 3), mo, +grp(m, 2)) : null;
 	}
 	return null;
 }
@@ -183,7 +188,7 @@ function parseDatePart(s: string, order: SlashOrder): string | null {
 function splitTime(s: string): { date: string; h: number; mi: number; sec: number; tz: string | undefined } | null {
 	const m = DATETIME_RE.exec(s);
 	if (!m) return null;
-	return { date: m[1], h: +m[2], mi: +m[3], sec: m[4] === undefined ? 0 : +m[4], tz: m[5] };
+	return { date: grp(m, 1), h: +grp(m, 2), mi: +grp(m, 3), sec: m[4] === undefined ? 0 : +grp(m, 4), tz: m[5] };
 }
 
 /**
@@ -200,8 +205,8 @@ export function resolveDateOrder(values: string[], dateOrder: DateOrder = "auto"
 		if (!v.includes("/")) continue;
 		const m = SLASH_RE.exec(splitTime(v)?.date ?? v);
 		if (!m) continue;
-		if (+m[1] > 12) first = true;
-		if (+m[2] > 12) second = true;
+		if (+grp(m, 1) > 12) first = true;
+		if (+grp(m, 2) > 12) second = true;
 	}
 	if (first && !second) return "dmy";
 	if (second && !first) return "mdy";
@@ -343,12 +348,12 @@ function inferFrom(count: number, get: (i: number) => string, opts: InferenceOpt
  * Values with units ("12 %", "1.234,56 EUR") only count as number via the column's `stripUnits` (see buildColumnConfigs).
  */
 export function inferColumnType(values: string[], opts: InferenceOptions): PropertyType {
-	return inferFrom(values.length, (i) => values[i], opts).type;
+	return inferFrom(values.length, (i) => values[i] ?? "", opts).type;
 }
 
 function inferColumn(parsed: ParsedCsv, index: number, opts: InferenceOptions): Inferred {
 	const rows = parsed.rows;
-	return inferFrom(rows.length, (i) => rows[i][index] ?? "", opts);
+	return inferFrom(rows.length, (i) => rows[i]?.[index] ?? "", opts);
 }
 
 function inferredFields(inf: Inferred): { type: PropertyType; stripUnits?: true } {

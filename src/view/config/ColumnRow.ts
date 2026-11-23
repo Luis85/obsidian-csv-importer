@@ -43,6 +43,7 @@ function convertedSample(draft: ConfigDraft, col: ColumnConfig): string {
 	const rowIndex = parsed.rows.findIndex((r) => (r[col.index] ?? "").trim() !== "");
 	if (rowIndex < 0) return "";
 	const row = parsed.rows[rowIndex];
+	if (!row) return "";
 	let v: FrontmatterValue;
 	try {
 		const convert = (c: ColumnConfig, raw: string): FrontmatterValue => {

@@ -20,7 +20,7 @@ export class FolderSuggest extends AbstractInputSuggest<TFolder> {
 		el.setText(folder.path);
 	}
 
-	selectSuggestion(folder: TFolder): void {
+	override selectSuggestion(folder: TFolder): void {
 		this.inputEl.value = folder.path;
 		this.onPick(folder.path);
 		this.close();

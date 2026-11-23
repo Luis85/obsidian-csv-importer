@@ -42,7 +42,7 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 	}
 
 	/** Declarative settings (Obsidian 1.13+, the minimum app version): they appear in the settings search. */
-	getSettingDefinitions(): SettingDefinitionItem[] {
+	override getSettingDefinitions(): SettingDefinitionItem[] {
 		const group = (heading: string, items: SettingDefinitionItem[]): SettingDefinitionItem => ({
 			type: "group",
 			heading,
@@ -122,11 +122,11 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 		return result;
 	}
 
-	getControlValue(key: string): unknown {
+	override getControlValue(key: string): unknown {
 		return (this.host.settings as unknown as Record<string, unknown>)[key];
 	}
 
-	async setControlValue(key: string, value: unknown): Promise<void> {
+	override async setControlValue(key: string, value: unknown): Promise<void> {
 		(this.host.settings as unknown as Record<string, unknown>)[key] = value;
 		await this.host.saveSettings();
 	}
