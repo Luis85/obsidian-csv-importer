@@ -225,6 +225,15 @@ export function sourceLinkProperty(config: FileImportConfig): string | null {
 	return sourceLinkFor(config, config.columns);
 }
 
+/** Older versions always wrote the source link to this property. */
+export const legacySourceLinkProperty = "source";
+
+/** Property names that may hold this CSV's source link: the current one (if any) plus the legacy "source". */
+export function ownedLinkProperties(config: FileImportConfig): string[] {
+	const cur = sourceLinkProperty(config);
+	return cur !== null && cur !== legacySourceLinkProperty ? [cur, legacySourceLinkProperty] : [legacySourceLinkProperty];
+}
+
 function sourceLinkFor(config: FileImportConfig, columns: ColumnConfig[]): string | null {
 	if (!config.addSourceLink) return null;
 	const taken = new Set(columns.map((c) => c.property.toLowerCase()));
@@ -292,7 +301,7 @@ export function planNotes(
 		: [];
 
 	parsed.rows.forEach((row, i) => {
-		const rowNumber = i + 1;
+		const rowNumber = parsed.rowNumbers[i] ?? i + 1;
 		const converted = new Map<number, FrontmatterValue>();
 		const nameVals: string[] = [];
 		const bodyVals: string[] = [];

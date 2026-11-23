@@ -39,3 +39,44 @@ describe("ImportStorage writes", () => {
 		expect(app.vault.adapter.data.size).toBeGreaterThan(0);
 	});
 });
+
+describe("ImportStorage robustness", () => {
+	it("a corrupt index.json is rebuilt from the state files on disk", async () => {
+		const app = new MockApp();
+		const first = new ImportStorage(app as unknown as App, "plugins/csv");
+		await first.saveSnapshot("a.csv", { "A/1.md": { x: "1" } });
+		await first.saveSnapshot("b.csv", { "B/1.md": { x: "2" } });
+		app.vault.adapter.data.set("plugins/csv/imports/index.json", "{ half writt");
+		const second = new ImportStorage(app as unknown as App, "plugins/csv");
+		await second.saveSnapshot("b.csv", { "B/1.md": { x: "3" } });
+		expect(await second.loadSnapshot("a.csv")).toEqual({ "A/1.md": { x: "1" } });
+		const third = new ImportStorage(app as unknown as App, "plugins/csv");
+		expect(await third.loadSnapshot("a.csv")).toEqual({ "A/1.md": { x: "1" } });
+	});
+
+	it("falls back to the deterministic file names when a CSV has no index entry", async () => {
+		const app = new MockApp();
+		const first = new ImportStorage(app as unknown as App, "plugins/csv");
+		await first.saveSnapshot("a.csv", { "A/1.md": { x: "1" } });
+		await first.saveUndo("a.csv", { csvPath: "a.csv", timestamp: 1, created: ["A/1.md"], modified: [] });
+		app.vault.adapter.data.delete("plugins/csv/imports/index.json");
+		const second = new ImportStorage(app as unknown as App, "plugins/csv");
+		await second.init();
+		// Simulate an index that lost the entry.
+		(second as unknown as { index: Map<string, unknown> }).index.clear();
+		expect(await second.loadSnapshot("a.csv")).toEqual({ "A/1.md": { x: "1" } });
+		expect((await second.loadUndo("a.csv"))?.created).toEqual(["A/1.md"]);
+	});
+
+	it("deleteNote removes the path from every snapshot", async () => {
+		const app = new MockApp();
+		const storage = new ImportStorage(app as unknown as App, "plugins/csv");
+		await storage.saveSnapshot("a.csv", { "N/1.md": { x: "1" }, "N/2.md": { x: "2" } });
+		await storage.saveSnapshot("b.csv", { "M/1.md": { x: "1" } });
+		await storage.deleteNote("N/1.md");
+		expect(await storage.loadSnapshot("a.csv")).toEqual({ "N/2.md": { x: "2" } });
+		const again = new ImportStorage(app as unknown as App, "plugins/csv");
+		expect(await again.loadSnapshot("a.csv")).toEqual({ "N/2.md": { x: "2" } });
+		expect(await again.loadSnapshot("b.csv")).toEqual({ "M/1.md": { x: "1" } });
+	});
+});

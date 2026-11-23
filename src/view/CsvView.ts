@@ -147,7 +147,15 @@ export class CsvView extends TextFileView {
 
 	private openConfig(): void {
 		if (!this.file) return;
-		new ImportConfigModal(this.app, this.host, this.file, this.raw, () => this.render()).open();
+		new ImportConfigModal(this.app, this.host, this.file, this.raw, () => {
+			// An encoding change must take effect in the table and in the Import button.
+			this.render();
+			const pending = this.redecodeIfNeeded();
+			this.pendingDecode = pending;
+			void pending.finally(() => {
+				if (this.pendingDecode === pending) this.pendingDecode = null;
+			});
+		}).open();
 	}
 
 	private async runImport(): Promise<void> {

@@ -771,9 +771,14 @@ export class ImportConfigModal extends Modal {
 		}
 		try {
 			// Plan the rows up to the selected one so duplicate names and {{row}} match the real import.
-			const upTo: ParsedCsv = { ...this.parsed, rows: this.parsed.rows.slice(0, this.previewRow + 1) };
+			const upTo: ParsedCsv = {
+				...this.parsed,
+				rows: this.parsed.rows.slice(0, this.previewRow + 1),
+				rowNumbers: this.parsed.rowNumbers.slice(0, this.previewRow + 1),
+			};
 			const notes = planNotes(upTo, this.cfg, { path: this.file.path, basename: this.file.basename });
-			const note = notes.find((n) => n.row === this.previewRow + 1);
+			const wanted = this.parsed.rowNumbers[this.previewRow] ?? this.previewRow + 1;
+			const note = notes.find((n) => n.row === wanted);
 			this.previewEl.setText(
 				note ? `${note.path}\n\n${serializeNote(note.frontmatter, note.body, note.types)}` : "This row would be skipped because every cell is empty.",
 			);

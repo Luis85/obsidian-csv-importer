@@ -94,7 +94,16 @@ export class ImportStorage {
 			if (!(await adapter.exists(this.dir))) return;
 			const indexPath = `${this.dir}/${INDEX_FILE}`;
 			if (await adapter.exists(indexPath)) {
-				const data = JSON.parse(await adapter.read(indexPath)) as Record<string, Partial<IndexEntry>>;
+				let data: Record<string, Partial<IndexEntry>>;
+				try {
+					data = JSON.parse(await adapter.read(indexPath)) as Record<string, Partial<IndexEntry>>;
+				} catch (e) {
+					// Corrupt or half-written index: rebuild it from the state files.
+					console.error("CSV Importer: import index is unreadable, rebuilding it", e);
+					this.index.clear();
+					await this.migrate();
+					return;
+				}
 				for (const [csvPath, e] of Object.entries(data)) {
 					this.index.set(csvPath, {
 						file: e.file ?? hashPath(csvPath),
@@ -237,8 +246,8 @@ export class ImportStorage {
 		await this.init();
 		const l = this.slot(csvPath);
 		if (l.snapshot === null) {
-			const idx = this.index.get(csvPath);
-			const data = idx ? await this.readJson<{ snapshot?: ImportSnapshot }>(this.snapFile(idx.file)) : null;
+			const file = this.index.get(csvPath)?.file ?? hashPath(csvPath);
+			const data = await this.readJson<{ snapshot?: ImportSnapshot }>(this.snapFile(file));
 			l.snapshot ??= data?.snapshot ?? {};
 		}
 		return l.snapshot;
@@ -249,7 +258,7 @@ export class ImportStorage {
 		const l = this.slot(csvPath);
 		if (l.undo === undefined) {
 			const idx = this.index.get(csvPath);
-			const data = idx?.hasUndo ? await this.readJson<UndoManifest>(this.undoFile(idx.file)) : null;
+			const data = !idx || idx.hasUndo ? await this.readJson<UndoManifest>(this.undoFile(idx?.file ?? hashPath(csvPath))) : null;
 			if (l.undo === undefined) l.undo = data;
 		}
 		return l.undo ?? null;
@@ -381,6 +390,22 @@ export class ImportStorage {
 			if (l.snapDirty || l.undoDirty) pending.push(this.persist(csvPath));
 		}
 		if (indexChanged) pending.push(this.persistIndex());
+		await Promise.all(pending);
+	}
+
+	/** Drops a deleted note from every snapshot that lists it. */
+	async deleteNote(notePath: string): Promise<void> {
+		await this.init();
+		const dir = parentOf(notePath);
+		const pending: Promise<void>[] = [];
+		for (const [csvPath, idx] of [...this.index]) {
+			if (idx.snapDirs !== null && !idx.snapDirs.includes(dir)) continue;
+			const snap = await this.loadSnapshot(csvPath);
+			if (!Object.prototype.hasOwnProperty.call(snap, notePath)) continue;
+			delete snap[notePath];
+			this.slot(csvPath).snapDirty = true;
+			pending.push(this.persist(csvPath));
+		}
 		await Promise.all(pending);
 	}
 

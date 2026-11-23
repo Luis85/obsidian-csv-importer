@@ -260,7 +260,7 @@ describe("hasTimezoneOffsets", () => {
 
 describe("property name uniqueness", () => {
 	it("is case-insensitive and truncated", () => {
-		const parsed = { headers: ["Name", "name", "NAME"], rows: [["a", "b", "c"]], delimiter: "," as const, warnings: [] };
+		const parsed = { headers: ["Name", "name", "NAME"], rows: [["a", "b", "c"]], delimiter: "," as const, warnings: [], rowNumbers: [1] };
 		const cols = buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: true, listSeparator: "," });
 		expect(cols.map((c) => c.property)).toEqual(["Name", "name 2", "NAME 3"]);
 		expect(toPropertyName("x".repeat(500))).toHaveLength(200);

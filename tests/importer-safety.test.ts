@@ -72,9 +72,10 @@ describe("S1 ownership", () => {
 		await t.put("Data/hours/Archive/old.md", FOREIGN);
 		const { result } = await t.run(CSV);
 		expect(t.read("Data/hours/Archive/old.md")).toBe(FOREIGN);
-		expect(result.skipped).toBe(1);
-		expect(result.created).toBe(1);
-		expect(result.rows.find((r) => r.row === 1)?.reason).toBe("not created by this import");
+		// The foreign note is left alone and never blocks creation of the CSV's own note.
+		expect(result.skipped).toBe(0);
+		expect(result.created).toBe(2);
+		expect(t.app.vault.files.has("Data/hours/Entry 1.md")).toBe(true);
 	});
 
 	it("notes this import created are still updated, also after being moved (snapshot entry)", async () => {
@@ -269,5 +270,97 @@ describe("P1 progress", () => {
 		await writeNotes(t.app as unknown as App, notes, t.cfg, { dryRun: true, onProgress: (d) => seen.push(d) });
 		expect(seen[seen.length - 1]).toBe(3000);
 		expect(seen.length).toBeLessThan(500);
+	});
+});
+
+describe("shared key property across CSVs", () => {
+	const plan = (csv: string, cfg: FileImportConfig, csvPath: string) => {
+		const parsed = parseCsv(csv, cfg);
+		prepareConfig(cfg, parsed, true);
+		return planNotes(parsed, cfg, { path: csvPath, basename: csvPath.replace(/^.*\//, "").replace(/\.csv$/, "") });
+	};
+	const mk = (template: string): FileImportConfig => ({
+		...createDefaultFileConfig(DEFAULT_SETTINGS),
+		fileNameTemplate: template,
+		keyColumn: "id",
+		targetFolder: "People",
+	});
+
+	it("two CSVs with the same key in one folder do not shadow each other", async () => {
+		const app = new MockApp();
+		const a = mk("A {{id}}");
+		const b = mk("B {{id}}");
+		const csv = "id,role\n1,Dev\n";
+		const outA = await writeNotes(app as unknown as App, plan(csv, a, "a.csv"), a);
+		expect(outA.result.created).toBe(1);
+		const first = await writeNotes(app as unknown as App, plan(csv, b, "b.csv"), b);
+		expect(first.result.created).toBe(1);
+		expect(app.vault.files.has("People/B 1.md")).toBe(true);
+		const again = await writeNotes(app as unknown as App, plan("id,role\n1,Lead\n", b, "b.csv"), b, { snapshot: first.snapshot });
+		expect(again.result.updated).toBe(1);
+		expect(app.vault.files.get("People/B 1.md")).toContain("Lead");
+		expect(app.vault.files.get("People/A 1.md")).toContain("Dev");
+	});
+
+	it("a foreign note with the same key never blocks the CSV's own note", async () => {
+		const app = new MockApp();
+		const b = mk("B {{id}}");
+		await app.vault.createFolder("People");
+		await app.vault.create("People/Aaa hand made.md", "---\nid: 1\n---\nmine\n");
+		const first = await writeNotes(app as unknown as App, plan("id,role\n1,Dev\n", b, "b.csv"), b);
+		expect(first.result.created).toBe(1);
+		const second = await writeNotes(app as unknown as App, plan("id,role\n1,Lead\n", b, "b.csv"), b, { snapshot: first.snapshot });
+		expect(second.result.updated).toBe(1);
+		expect(app.vault.files.get("People/Aaa hand made.md")).toBe("---\nid: 1\n---\nmine\n");
+	});
+
+	it("warns when every existing match was skipped as not created by this import", async () => {
+		const app = new MockApp();
+		const b = mk("B {{id}}");
+		await app.vault.createFolder("People");
+		await app.vault.create("People/B 1.md", "---\nid: 1\n---\nold\n");
+		const { result } = await writeNotes(app as unknown as App, plan("id,role\n1,Dev\n", b, "b.csv"), b);
+		expect(result.skipped).toBe(1);
+		expect(result.warnings.some((w) => w.includes("Update existing notes not created by this import"))).toBe(true);
+	});
+
+	it("recognises the legacy `source` link as owned", async () => {
+		const app = new MockApp();
+		const b = mk("B {{id}}");
+		b.addSourceLink = true;
+		await app.vault.createFolder("People");
+		await app.vault.create("People/B 1.md", '---\nid: 1\nsource: "[[b.csv]]"\n---\nold\n');
+		// A "source" column pushes the current link property to source_csv; the legacy name must still count.
+		const { result } = await writeNotes(app as unknown as App, plan("id,source\n1,Dev\n", b, "b.csv"), b);
+		expect(result.skipped).toBe(0);
+		expect(result.updated).toBe(1);
+	});
+});
+
+describe("checkpoints", () => {
+	it("checkpoints after the first written note", async () => {
+		const t = setup({ fileNameTemplate: "N {{id}}" });
+		const parsed = parseCsv("id,role\n1,x\n2,y\n3,z\n", t.cfg);
+		prepareConfig(t.cfg, parsed, true);
+		const notes = planNotes(parsed, t.cfg, { path: "Data/hours.csv", basename: "hours" });
+		const seen: number[] = [];
+		await writeNotes(t.app as unknown as App, notes, t.cfg, { onCheckpoint: (_s, u) => void seen.push(u.created.length) });
+		expect(seen.length).toBeGreaterThanOrEqual(1);
+		expect(seen[0]).toBe(1);
+	});
+
+	it("does not return before a pending checkpoint has finished", async () => {
+		const t = setup({ fileNameTemplate: "N {{id}}" });
+		const parsed = parseCsv("id,role\n1,x\n2,y\n", t.cfg);
+		prepareConfig(t.cfg, parsed, true);
+		const notes = planNotes(parsed, t.cfg, { path: "Data/hours.csv", basename: "hours" });
+		let finished = false;
+		await writeNotes(t.app as unknown as App, notes, t.cfg, {
+			onCheckpoint: async () => {
+				await new Promise((r) => setTimeout(r, 30));
+				finished = true;
+			},
+		});
+		expect(finished).toBe(true);
 	});
 });

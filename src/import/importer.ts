@@ -10,18 +10,22 @@ import type {
 	UndoManifest,
 } from "../types";
 import { mergeFrontmatter, valueHash } from "./merge";
-import { formatValue, serializeNote, sourceLinkProperty } from "./noteBuilder";
+import { formatValue, ownedLinkProperties, serializeNote, sourceLinkProperty } from "./noteBuilder";
 
 /** Time budget between two yields to the UI. */
 const SLICE_MS = 12;
 /** Checkpoint (persist snapshot + undo) after this many written rows, at most every CHECKPOINT_MIN_MS. */
 const CHECKPOINT_ROWS = 200;
 const CHECKPOINT_MIN_MS = 2000;
+/** Never checkpoint more often than this, not even the early one after the first written note. */
+const CHECKPOINT_FLOOR_MS = 500;
 /** Maximum total size of previous note contents kept for undo. */
 export const UNDO_CAP_CHARS = 20 * 1024 * 1024;
 
 export const KEY_WARNING =
 	"No key column: notes are matched by file name. If rows are inserted or re-sorted, the wrong notes are updated. Choose a key column in the import settings.";
+export const NOT_OWNED_WARNING =
+	'Some notes were skipped because this import did not create them. If you created them with an earlier version or another tool, turn on "Update existing notes not created by this import" in the import settings.';
 export const UNDO_TRUNCATED_WARNING = "The import is too large to undo completely.";
 
 const now = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -289,7 +293,7 @@ export async function writeNotes(
 
 	// --- key index ---
 	const keyProperty = notes.find((n) => n.key)?.key?.property ?? null;
-	const keyIndex = new Map<string, TFile>();
+	const keyIndex = new Map<string, TFile[]>();
 	if (keyProperty) {
 		try {
 			const folders = new Set(notes.map((n) => resolveFolder(parentOf(normalizePath(n.path)))));
@@ -305,7 +309,9 @@ export async function writeNotes(
 				const v: unknown = app.metadataCache.getFileCache(file)?.frontmatter?.[keyProperty];
 				if (v === undefined || v === null || Array.isArray(v) || typeof v === "object") continue;
 				const key = formatValue(v as FrontmatterValue);
-				if (!keyIndex.has(key)) keyIndex.set(key, file);
+				const list = keyIndex.get(key);
+				if (list) list.push(file);
+				else keyIndex.set(key, [file]);
 			}
 		} catch (e) {
 			console.error("CSV Importer: could not index existing notes", e);
@@ -356,7 +362,11 @@ export async function writeNotes(
 			(undo.writtenHashes ??= {})[created.path] = valueHash(text);
 			touched.add(created.path);
 			snapshot[created.path] = plannedSnapshot(note);
-			if (note.key) keyIndex.set(note.key.value, created);
+			if (note.key) {
+				const list = keyIndex.get(note.key.value);
+				if (list) list.unshift(created);
+				else keyIndex.set(note.key.value, [created]);
+			}
 			childMaps.get(parentOf(created.path))?.set(created.name.toLowerCase(), created);
 		}
 		claimed.add(target.toLowerCase());
@@ -376,8 +386,10 @@ export async function writeNotes(
 		const planned = normalizeLink(note.frontmatter[linkProperty]);
 		if (planned === null) return false;
 		const fm = app.metadataCache.getFileCache(file)?.frontmatter;
-		return normalizeLink(fm?.[linkProperty]) === planned;
+		return ownedProps.some((p) => normalizeLink(fm?.[p]) === planned);
 	};
+	const ownedProps = ownedLinkProperties(config);
+	let skippedNotOwned = 0;
 	const hasOtherKey = (file: TFile, note: PlannedNote): boolean => {
 		if (!note.key) return false;
 		const v: unknown = app.metadataCache.getFileCache(file)?.frontmatter?.[note.key.property];
@@ -388,21 +400,27 @@ export async function writeNotes(
 	let lastYield = now();
 	let lastCheckpoint = now();
 	let sinceCheckpoint = 0;
+	let checkpointed = false;
+	let pendingCheckpoint: Promise<unknown> = Promise.resolve();
 	const checkpoint = async (wait: boolean): Promise<void> => {
 		if (dryRun || !opts.onCheckpoint) return;
+		checkpointed = true;
 		sinceCheckpoint = 0;
 		lastCheckpoint = now();
-		try {
-			const p = Promise.resolve(opts.onCheckpoint(snapshot, undo));
-			if (wait) await p;
-			else void p.catch(() => undefined);
-		} catch {
-			// Persisting is best effort; the final save reports problems.
-		}
+		// Chained so checkpoints never overlap, and awaited before returning so a late one cannot
+		// overwrite the caller's final save.
+		const cb = opts.onCheckpoint;
+		const p = pendingCheckpoint.then(() => cb(snapshot, undo)).catch(() => undefined); // best effort; the final save reports problems
+		pendingCheckpoint = p;
+		if (wait) await p;
 	};
 	const afterRow = async (done: number, wrote: number): Promise<void> => {
 		sinceCheckpoint += wrote;
-		if (sinceCheckpoint >= CHECKPOINT_ROWS && now() - lastCheckpoint >= CHECKPOINT_MIN_MS) await checkpoint(false);
+		const since = now() - lastCheckpoint;
+		const first = !checkpointed && wrote > 0;
+		if (first || (since >= CHECKPOINT_FLOOR_MS && sinceCheckpoint > 0 && (sinceCheckpoint >= CHECKPOINT_ROWS || since >= CHECKPOINT_MIN_MS))) {
+			await checkpoint(false);
+		}
 		if (now() - lastYield > SLICE_MS) {
 			opts.onProgress?.(done, total);
 			await yieldToUi();
@@ -430,7 +448,9 @@ export async function writeNotes(
 					continue;
 				}
 				seenKeys.add(note.key.value);
-				keyMatch = keyIndex.get(note.key.value) ?? null;
+				// Only a note this import owns counts as the existing note for this key; foreign notes sharing
+				// the key (hand-made, or created by another CSV) never shadow it.
+				keyMatch = (keyIndex.get(note.key.value) ?? []).find((f) => owns(f, note)) ?? null;
 			}
 
 			let existing: TFile | null = keyMatch;
@@ -452,7 +472,10 @@ export async function writeNotes(
 				await createNote(note, path);
 			} else if (!owns(existing, note)) {
 				if (config.conflict === "rename") await createNote(note, copyPath());
-				else record({ row: note.row, path: existing.path, outcome: "skipped", reason: "not created by this import" });
+				else {
+					skippedNotOwned++;
+					record({ row: note.row, path: existing.path, outcome: "skipped", reason: "not created by this import" });
+				}
 			} else if (!keyMatch && hasOtherKey(existing, note)) {
 				if (config.conflict === "rename") await createNote(note, copyPath());
 				else record({ row: note.row, path: existing.path, outcome: "skipped", reason: "file name taken by another record" });
@@ -521,7 +544,9 @@ export async function writeNotes(
 		done = i + 1;
 		await afterRow(done, result.created + result.updated - written0);
 	}
+	if (skippedNotOwned > 0 && result.updated + result.unchanged === 0) result.warnings.push(NOT_OWNED_WARNING);
 	if (result.cancelled) await checkpoint(true);
+	await pendingCheckpoint;
 	opts.onProgress?.(done, total);
 	if (undoTruncated && !dryRun) {
 		(undo as UndoManifest & { truncated?: boolean }).truncated = true;

@@ -154,9 +154,11 @@ export function parseCsv(text: string, opts: { delimiter: DelimiterOption; hasHe
 	}
 	const w = headers.length;
 	const rows: string[][] = [];
+	const rowNumbers: number[] = [];
 	let tooLong = 0;
 	let blank = 0;
-	for (const r of records) {
+	for (let ri = 0; ri < records.length; ri++) {
+		const r = records[ri];
 		let allBlank = true;
 		for (let i = 0; i < r.length; i++) {
 			if (r[i].trim() !== "") {
@@ -168,6 +170,7 @@ export function parseCsv(text: string, opts: { delimiter: DelimiterOption; hasHe
 			blank++;
 			continue;
 		}
+		rowNumbers.push(ri + 1);
 		if (r.length === w) rows.push(r);
 		else if (r.length > w) {
 			tooLong++;
@@ -182,5 +185,5 @@ export function parseCsv(text: string, opts: { delimiter: DelimiterOption; hasHe
 		);
 	}
 	if (blank > 0) warnings.push(`${blank} blank ${blank === 1 ? "row was" : "rows were"} skipped.`);
-	return { headers, rows, delimiter, warnings };
+	return { headers, rows, delimiter, warnings, rowNumbers };
 }

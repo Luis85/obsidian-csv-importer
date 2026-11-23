@@ -148,6 +148,11 @@ export interface ParsedCsv {
 	rows: string[][];
 	/** Delimiter actually used. */
 	delimiter: Exclude<DelimiterOption, "auto">;
+	/**
+	 * 1-based data row number of each entry in `rows` as counted in the file INCLUDING skipped blank rows
+	 * (so `{{row}}` and file names stay stable when blank rows are skipped). Same length as `rows`.
+	 */
+	rowNumbers: number[];
 	/** Non-fatal problems found while parsing, e.g. "Unterminated quote starting in row 12." Shown to the user. */
 	warnings: string[];
 }

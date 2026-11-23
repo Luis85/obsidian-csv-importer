@@ -70,6 +70,8 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 				if (isCsv(file)) {
 					void this.store.delete(file.path);
 					void this.storage.delete(file.path);
+				} else if (file instanceof TFile && file.extension.toLowerCase() === "md") {
+					void this.storage.deleteNote(file.path);
 				}
 			}),
 		);
