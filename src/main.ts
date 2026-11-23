@@ -1,7 +1,7 @@
 import { Notice, Plugin } from "obsidian";
 import type { TFile } from "obsidian";
 import { ConfigStore } from "./configStore";
-import { DEFAULT_SETTINGS } from "./defaults";
+import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig } from "./defaults";
 import type { CsvImporterHost } from "./host";
 import { ImportService } from "./obsidian/importService";
 import { isCsv, registerVaultEvents } from "./obsidian/vaultEvents";
@@ -25,10 +25,14 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 	async onload(): Promise<void> {
 		const raw = (await this.loadData()) as Partial<PluginData> | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
-		this.store = new ConfigStore(raw?.files, () => this.persist());
+		const version = typeof raw?.version === "number" ? raw.version : 0;
+		const files: Record<string, FileImportConfig> = {};
+		for (const [path, cfg] of Object.entries(raw?.files ?? {})) files[path] = migrateFileConfig(cfg, this.settings);
+		this.store = new ConfigStore(files, () => this.persist());
 		this.storage = new ImportStorage(this.app, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
 		this.service = new ImportService(this.app, this.storage, this.store, () => this.settings);
 		void this.storage.init();
+		if (version !== CURRENT_DATA_VERSION) void this.persist().catch((e) => console.error("CSV Importer: could not save data", e));
 
 		this.registerView(VIEW_TYPE_CSV, (leaf) => new CsvView(leaf, this));
 		try {
@@ -136,7 +140,7 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 	}
 
 	private persist(): Promise<void> {
-		const data: PluginData = { settings: this.settings, files: this.store ? this.store.toRecord() : {} };
+		const data: PluginData = { version: CURRENT_DATA_VERSION, settings: this.settings, files: this.store ? this.store.toRecord() : {} };
 		return this.saveData(data);
 	}
 

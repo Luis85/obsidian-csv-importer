@@ -298,6 +298,8 @@ export class CsvView extends TextFileView {
 				? `${plural(rowCount, "row", "rows")} · ${plural(colCount, "column", "columns")} · ${delimiterLabel(parsed.delimiter)}`
 				: "No data",
 		);
+		const extraCount = cfg.extraProperties?.length ?? 0;
+		if (parsed && extraCount > 0) stats.appendText(` · + ${plural(extraCount, "extra property", "extra properties")}`);
 
 		const search = el.createEl("input", {
 			cls: "csv-importer-search",

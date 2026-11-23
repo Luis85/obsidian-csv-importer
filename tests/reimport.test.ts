@@ -172,3 +172,45 @@ describe("key matching uses the value actually written", () => {
 		expect(result.created).toBe(1);
 	});
 });
+
+describe("Phase 3 warnings and fill-only", () => {
+	it("warns about duplicate keys in the CSV (plural aware)", async () => {
+		const t = setup();
+		const { result } = await t.run("id,role\n1,A\n1,B\n1,C\n2,D\n", true);
+		expect(result.warnings).toContain('2 rows share a key with another row (e.g. "1"). Only the first is imported.');
+		const one = await setup().run("id,role\n1,A\n1,B\n", true);
+		expect(one.result.warnings).toContain('1 row shares a key with another row (e.g. "1"). Only the first is imported.');
+	});
+
+	it("warns about notes in the vault sharing a key, and prefers the non-conflict copy", async () => {
+		const t = setup({ conflict: "update", adoptExistingNotes: true });
+		await t.put("Data/hours/Entry 1 (conflicted copy).md", "---\nid: 1\nrole: X\n---\n");
+		await t.put("Data/hours/Entry 1.md", "---\nid: 1\nrole: X\n---\n");
+		const { result } = await t.run("id,role\n1,Dev\n", true);
+		expect(result.warnings.some((w) => w.startsWith("2 notes in the target folder share a key"))).toBe(true);
+		const real = await t.run("id,role\n1,Dev\n");
+		expect(real.result.rows[0].path).toBe("Data/hours/Entry 1.md");
+	});
+
+	it("warns on very large imports", async () => {
+		const t = setup();
+		const csv = "id\n" + Array.from({ length: 5001 }, (_, i) => i + 1).join("\n") + "\n";
+		const { result } = await t.run(csv, true);
+		expect(result.warnings).toContain(
+			"This import creates or updates 5001 notes. Very large numbers of notes can slow down the vault and Bases.",
+		);
+	});
+
+	it("fills extra properties only when missing on update", async () => {
+		const t = setup({
+			conflict: "update",
+			extraProperties: [{ property: "status", type: "text", defaultValue: "open" }],
+		});
+		await t.run("id,role\n1,Dev\n2,Dev\n");
+		expect(t.fm("Data/hours/Entry 1.md").status).toBe("open");
+		await t.editInBases("Data/hours/Entry 1.md", (fm) => (fm.status = "done"));
+		await t.run("id,role\n1,Lead\n2,Dev\n");
+		expect(t.fm("Data/hours/Entry 1.md").status).toBe("done");
+		expect(t.fm("Data/hours/Entry 1.md").role).toBe("Lead");
+	});
+});

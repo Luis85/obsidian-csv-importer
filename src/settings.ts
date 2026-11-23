@@ -1,5 +1,5 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
-import type { Plugin } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, requireApiVersion } from "obsidian";
+import type { Plugin, SettingDefinitionItem } from "obsidian";
 import { confirmDialog } from "./view/ConfirmModal";
 import type { ConflictStrategy, CsvEncoding, DelimiterOption, EmptyValueMode, PluginSettings } from "./types";
 import {
@@ -28,6 +28,101 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 		private readonly host: Plugin & SettingsHost,
 	) {
 		super(app, host);
+	}
+
+	/**
+	 * Declarative settings (Obsidian 1.13+): they appear in the settings search. Older versions never call this
+	 * and render `display()` instead; the version guard keeps the two paths from mixing.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		if (!requireApiVersion("1.13.0")) return [];
+		const group = (heading: string, items: SettingDefinitionItem[]): SettingDefinitionItem => ({
+			type: "group",
+			heading,
+			items: items as never,
+		});
+		const toggle = (key: keyof PluginSettings, name: string, desc?: string): SettingDefinitionItem => ({
+			name,
+			desc,
+			control: { type: "toggle", key },
+		});
+		const dropdown = (key: keyof PluginSettings, name: string, options: Record<string, string>, desc?: string): SettingDefinitionItem => ({
+			name,
+			desc,
+			control: { type: "dropdown", key, options },
+		});
+		const text = (key: keyof PluginSettings, name: string, desc: string, placeholder?: string): SettingDefinitionItem => ({
+			name,
+			desc,
+			control: { type: "text", key, placeholder },
+		});
+		return [
+			{ name: "", desc: SETTINGS_DESC.intro, searchable: false },
+			group("Reading CSV files", [
+				dropdown("defaultEncoding", NAME.encoding, ENCODING_LABELS, SETTINGS_DESC.encoding),
+				dropdown("defaultDelimiter", NAME.delimiter, DELIMITER_OPTIONS_SETTINGS, SETTINGS_DESC.delimiter),
+				toggle("defaultHasHeader", NAME.hasHeader),
+				dropdown("defaultDecimalSeparator", NAME.decimal, DECIMAL_OPTIONS_SETTINGS, SETTINGS_DESC.decimal),
+				text("defaultListSeparator", NAME.listSeparator, SETTINGS_DESC.listSeparator),
+				dropdown("defaultEmptyValues", NAME.emptyCells, EMPTY_VALUE_OPTIONS, SETTINGS_DESC.emptyCells),
+				toggle("midnightAsDate", "Treat midnight timestamps as dates", SETTINGS_DESC.midnight),
+			]),
+			group("Creating notes", [
+				text("defaultTargetFolder", NAME.targetFolder, SETTINGS_DESC.targetFolder, "Example: Imports/data"),
+				text("defaultFileNameTemplate", NAME.fileName, SETTINGS_DESC.fileName),
+				{ name: NAME.body, desc: SETTINGS_DESC.body, control: { type: "textarea", key: "defaultBodyTemplate" } },
+				text("defaultTags", NAME.tags, SETTINGS_DESC.tags),
+				toggle("defaultAddSourceLink", "Add link to the CSV file", SETTINGS_DESC.sourceLink),
+				toggle("defaultCreateBase", NAME.createBase, SETTINGS_DESC.createBase),
+			]),
+			group("Existing notes", [
+				dropdown("defaultConflict", NAME.conflict, CONFLICT_OPTIONS, SETTINGS_DESC.conflict),
+				toggle("defaultProtectEdits", NAME.protectEdits, SETTINGS_DESC.protectEdits),
+				toggle("defaultKeepValuesOnEmpty", NAME.keepOnEmpty, SETTINGS_DESC.keepOnEmpty),
+			]),
+			group("Table view", [
+				{
+					name: "Rows shown per page",
+					desc: SETTINGS_DESC.pageSize,
+					control: {
+						type: "number",
+						key: "pageSize",
+						min: 10,
+						max: 100000,
+						validate: (v: number) => (Number.isInteger(v) && v >= 10 && v <= 100000 ? undefined : PAGE_SIZE_ERROR),
+					},
+				},
+			]),
+			group("Data", [
+				{
+					name: "Reset all import settings",
+					desc: SETTINGS_DESC.reset,
+					action: () => this.confirmReset(),
+				},
+			]),
+		];
+	}
+
+	getControlValue(key: string): unknown {
+		return (this.host.settings as unknown as Record<string, unknown>)[key];
+	}
+
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		(this.host.settings as unknown as Record<string, unknown>)[key] = value;
+		await this.host.saveSettings();
+	}
+
+	private confirmReset(): void {
+		void confirmDialog(
+			this.app,
+			"Reset all import settings?",
+			"This removes the saved import settings of all CSV files. This cannot be undone.",
+			"Reset all",
+			true,
+		).then((ok) => {
+			if (!ok) return;
+			void this.host.forgetAllFileConfigs().then(() => new Notice("Import settings reset."));
+		});
 	}
 
 	display(): void {
@@ -260,18 +355,7 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			.setName("Reset all import settings")
 			.setDesc(SETTINGS_DESC.reset)
 			.addButton((b) => {
-				b.setButtonText("Reset all").onClick(() => {
-					void confirmDialog(
-						this.app,
-						"Reset all import settings?",
-						"This removes the saved import settings of all CSV files. This cannot be undone.",
-						"Reset all",
-						true,
-					).then((ok) => {
-						if (!ok) return;
-						void this.host.forgetAllFileConfigs().then(() => new Notice("Import settings reset."));
-					});
-				});
+				b.setButtonText("Reset all").onClick(() => this.confirmReset());
 				b.buttonEl.addClass("mod-warning");
 			});
 	}

@@ -6,10 +6,10 @@ import { parseCsv } from "../csv/parser";
 import { detectHeaderDrift, prepareConfig } from "../csv/typeInference";
 import { emptyResult } from "../core/result";
 import { errorMessage, plural } from "../core/util";
-import { applyUndo, applyUndoToSnapshot, writeNotes } from "../import/importer";
+import { ROW_FILTER_WARNING, HISTORY_NOT_SAVED_WARNING, applyUndo, applyUndoToSnapshot, writeNotes } from "../import/importer";
 import { valueHash } from "../import/merge";
-import { planNotes, resolveTargetFolder, staticPrefix } from "../import/noteBuilder";
-import { createDefaultFileConfig } from "../defaults";
+import { countMatching, planNotes, resolveTargetFolder, staticPrefix } from "../import/noteBuilder";
+import { createDefaultFileConfig, migrateFileConfig } from "../defaults";
 import type { ImportStorage } from "../storage";
 import type { CsvEncoding, FileImportConfig, ImportResult, ImportSnapshot, PluginSettings, UndoManifest } from "../types";
 import { confirmDialog } from "../view/ConfirmModal";
@@ -41,7 +41,7 @@ export class ImportService {
 	getFileConfig(file: TFile): FileImportConfig {
 		const defaults = createDefaultFileConfig(this.getSettings());
 		const stored = this.store.get(file.path);
-		return stored ? { ...defaults, ...stored } : defaults;
+		return stored ? migrateFileConfig({ ...defaults, ...stored }, this.getSettings()) : defaults;
 	}
 
 	saveFileConfig(file: TFile, config: FileImportConfig): Promise<void> {
@@ -87,6 +87,8 @@ export class ImportService {
 			prepareConfig(cfg, parsed, this.getSettings().midnightAsDate);
 			const notes = planNotes(parsed, cfg, { path: file.path, basename: file.basename });
 			const stored = await this.storage.loadSnapshot(file.path);
+			const warnings = [...parsed.warnings];
+			if (cfg.rowFilter) warnings.push(ROW_FILTER_WARNING(countMatching(parsed, cfg), parsed.rows.length));
 			const staticFolder = staticPrefix(resolveTargetFolder(cfg, file.path));
 
 			const modal = new ImportRunModal(this.app, {
@@ -95,12 +97,12 @@ export class ImportService {
 				reportFolder: file.parent && !file.parent.isRoot() ? file.parent.path : "",
 				drift,
 				preview: async () =>
-					(await writeNotes(this.app, notes, cfg, { dryRun: true, snapshot: stored, warnings: parsed.warnings })).result,
+					(await writeNotes(this.app, notes, cfg, { dryRun: true, snapshot: stored, warnings })).result,
 				execute: async (opts) => {
 					const snap = await this.storage.loadSnapshot(file.path);
 					const out = await writeNotes(this.app, notes, cfg, {
 						snapshot: snap,
-						warnings: parsed.warnings,
+						warnings,
 						onCheckpoint: async (s, u) => {
 							try {
 								await this.storage.saveSnapshot(file.path, s);
@@ -146,11 +148,16 @@ export class ImportService {
 		undo: UndoManifest,
 		result: ImportResult,
 	): Promise<{ result: ImportResult; undoable: boolean }> {
-		await this.storage.saveSnapshot(file.path, snapshot);
 		const undoable = hasChanges(undo);
-		if (undoable) await this.storage.saveUndo(file.path, undo);
-		cfg.lastImport = Date.now();
-		await this.saveFileConfig(file, cfg);
+		try {
+			await this.storage.saveSnapshot(file.path, snapshot);
+			if (undoable) await this.storage.saveUndo(file.path, undo);
+			cfg.lastImport = Date.now();
+			await this.saveFileConfig(file, cfg);
+		} catch (e) {
+			console.error("CSV Importer: could not save import history", e);
+			result.warnings.push(HISTORY_NOT_SAVED_WARNING);
+		}
 		return { result, undoable };
 	}
 

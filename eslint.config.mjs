@@ -27,6 +27,12 @@ export default defineConfig([
 		},
 	},
 	{
+		files: ["src/**/*.ts"],
+		rules: {
+			"obsidianmd/ui/sentence-case": ["warn", { enforceCamelCaseLower: true }],
+		},
+	},
+	{
 		// Tests run in Node under vitest and may be less strict.
 		files: ["tests/**/*.ts"],
 		languageOptions: { globals: { ...globals.node } },

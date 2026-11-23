@@ -16,7 +16,13 @@ import { inferenceOptions } from "../shared";
 export type DraftEvent = "preview" | "columns" | "parsing";
 
 export function cloneConfig(cfg: FileImportConfig): FileImportConfig {
-	return { ...cfg, columns: cfg.columns.map((c) => ({ ...c })) };
+	return {
+		...cfg,
+		columns: cfg.columns.map((c) => ({ ...c })),
+		keyColumns: [...(cfg.keyColumns ?? [])],
+		rowFilter: cfg.rowFilter ? { ...cfg.rowFilter } : null,
+		extraProperties: (cfg.extraProperties ?? []).map((p) => ({ ...p })),
+	};
 }
 
 /** Working state of the import settings dialog, shared by its sections. */

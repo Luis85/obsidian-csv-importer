@@ -1,15 +1,17 @@
 import { Notice, Setting } from "obsidian";
-import type { CsvEncoding, DelimiterOption, EmptyValueMode } from "../../types";
-import { sourceLinkProperty } from "../../import/noteBuilder";
+import type { CsvEncoding, DateOrder, DelimiterOption, EmptyValueMode, RowFilterOp } from "../../types";
+import { countMatching, sourceLinkProperty } from "../../import/noteBuilder";
 import { errorMessage } from "../../core/util";
 import {
 	CONFIG_DESC,
+	DATE_ORDER_OPTIONS,
 	DECIMAL_OPTIONS_DIALOG,
 	DELIMITER_OPTIONS_DIALOG,
 	EMPTY_VALUE_OPTIONS,
 	ENCODING_LABELS,
 	NAME,
 	PRECISION_ERROR,
+	ROW_FILTER_OPS,
 } from "../labels";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
@@ -21,6 +23,7 @@ export class AdvancedSection {
 	private bodyInput: HTMLTextAreaElement | null = null;
 	private sourceHintEl: HTMLElement | null = null;
 	private encodingSetting: Setting | null = null;
+	private filterBoxEl: HTMLElement | null = null;
 
 	constructor(private readonly draft: ConfigDraft) {}
 
@@ -28,6 +31,7 @@ export class AdvancedSection {
 		this.detailsEl = parent.createEl("details", { cls: "csv-importer-advanced" });
 		this.detailsEl.createEl("summary", { text: "Advanced" });
 		this.buildParsingOptions(this.detailsEl);
+		this.buildRowFilter(this.detailsEl);
 		this.buildContentOptions(this.detailsEl);
 		if (this.draft.looksWrong()) this.detailsEl.open = true;
 		this.renderChips();
@@ -36,7 +40,11 @@ export class AdvancedSection {
 			if (this.draft.looksWrong()) this.detailsEl.open = true;
 			this.renderChips();
 		});
-		this.draft.on("preview", () => this.updateSourceHint());
+		this.draft.on("parsing", () => this.renderRowFilter());
+		this.draft.on("preview", () => {
+			this.updateSourceHint();
+			this.updateFilterCount();
+		});
 	}
 
 	/** Show which encoding "Auto" picked. Only a hint, so failures are ignored. */
@@ -119,6 +127,18 @@ export class AdvancedSection {
 					}),
 			);
 		new Setting(el)
+			.setName("Date order for dates like 03/04/2026")
+			.setDesc("Decides whether the first number is the day or the month. Detect only decides when a value makes it clear, such as 25/12/2026.")
+			.addDropdown((d) =>
+				d
+					.addOptions(DATE_ORDER_OPTIONS)
+					.setValue(cfg.dateOrder)
+					.onChange((v) => {
+						cfg.dateOrder = v as DateOrder;
+						this.draft.redetectTypes();
+					}),
+			);
+		new Setting(el)
 			.setName(NAME.listSeparator)
 			.setDesc(CONFIG_DESC.listSeparator)
 			.addText((t) =>
@@ -167,6 +187,79 @@ export class AdvancedSection {
 				this.draft.emit("columns");
 			});
 		});
+	}
+
+	private buildRowFilter(el: HTMLElement): void {
+		const { cfg } = this.draft;
+		new Setting(el)
+			.setName("Import only some rows")
+			.setDesc("Rows that do not match are left out of the preview and the import.")
+			.addToggle((t) =>
+				t.setValue(cfg.rowFilter !== null).onChange((on) => {
+					cfg.rowFilter = on ? { column: cfg.columns[0]?.source ?? "", op: "equals", value: "" } : null;
+					this.renderRowFilter();
+					this.draft.emit("preview");
+				}),
+			);
+		this.filterBoxEl = el.createDiv({ cls: "csv-importer-sub-settings" });
+		this.renderRowFilter();
+	}
+
+	private renderRowFilter(): void {
+		const box = this.filterBoxEl;
+		const { cfg } = this.draft;
+		if (!box) return;
+		box.empty();
+		const filter = cfg.rowFilter;
+		if (!filter) return;
+		if (!cfg.columns.some((c) => c.source === filter.column)) filter.column = cfg.columns[0]?.source ?? "";
+		const columns: Record<string, string> = {};
+		for (const c of cfg.columns) columns[c.source] = c.source;
+		const setting = new Setting(box).setName("Keep rows where");
+		setting.addDropdown((d) =>
+			d.addOptions(columns).setValue(filter.column).onChange((v) => {
+				filter.column = v;
+				this.draft.emit("preview");
+			}),
+		);
+		setting.addDropdown((d) =>
+			d.addOptions(ROW_FILTER_OPS).setValue(filter.op).onChange((v) => {
+				filter.op = v as RowFilterOp;
+				valueInput?.toggleClass("csv-importer-hidden", filter.op === "empty" || filter.op === "notEmpty");
+				this.draft.emit("preview");
+			}),
+		);
+		let valueInput: HTMLInputElement | null = null;
+		setting.addText((t) => {
+			valueInput = t.inputEl;
+			t.setPlaceholder("Value")
+				.setValue(filter.value)
+				.onChange((v) => {
+					filter.value = v;
+					this.draft.emitPreviewDebounced();
+				});
+			t.inputEl.setAttr("aria-label", "Filter value");
+			t.inputEl.toggleClass("csv-importer-hidden", filter.op === "empty" || filter.op === "notEmpty");
+		});
+		box.createDiv({ cls: "csv-importer-key-hint csv-importer-filter-count", attr: { "aria-live": "polite" } });
+		this.updateFilterCount();
+	}
+
+	private updateFilterCount(): void {
+		const el = this.filterBoxEl?.querySelector<HTMLElement>(".csv-importer-filter-count");
+		const { cfg, parsed } = this.draft;
+		if (!el) return;
+		if (!cfg.rowFilter || !parsed) {
+			el.setText("");
+			return;
+		}
+		let matching = 0;
+		try {
+			matching = countMatching(parsed, cfg);
+		} catch {
+			matching = 0;
+		}
+		el.setText(`${matching} of ${parsed.rows.length} rows match.`);
 	}
 
 	private buildContentOptions(el: HTMLElement): void {

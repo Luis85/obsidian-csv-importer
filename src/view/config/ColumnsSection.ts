@@ -55,13 +55,27 @@ export class ColumnsSection {
 		const row = parsed.rows[rowIndex];
 		let v: FrontmatterValue;
 		try {
-			v = convertValue(row[col.index] ?? "", col.type, conversionOptions(cfg));
+			const convert = (c: ColumnConfig, raw: string): FrontmatterValue => {
+				// stripUnits is a per-column option of the number conversion.
+				const opts = { ...conversionOptions(cfg), stripUnits: !!c.stripUnits };
+				return convertValue(raw, c.type, opts);
+			};
+			v = convert(col, row[col.index] ?? "");
 			if (col.valueTemplate) {
+				// Display values of all columns, as the real import builds them for templates.
+				const formatted = parsed.headers.map((_h, idx) => {
+					const c = cfg.columns.find((x) => x.index === idx);
+					const raw = (row[idx] ?? "").trim();
+					if (!c || c.type === "text" || c.type === "list") return raw;
+					const cv = convert(c, row[idx] ?? "");
+					return cv === null ? "" : formatValue(cv);
+				});
 				v = applyValueTemplate(col.valueTemplate, v, {
 					headers: parsed.headers,
 					row,
-					rowNumber: rowIndex + 1,
+					rowNumber: parsed.rowNumbers[rowIndex] ?? rowIndex + 1,
 					fileBasename: file.basename,
+					formatted,
 				});
 			}
 		} catch {
@@ -119,6 +133,11 @@ export class ColumnsSection {
 		const sel = typeTd.createEl("select", { cls: "dropdown", attr: { "aria-label": `Type of ${col.source}` } });
 		for (const [value, label] of Object.entries(TYPE_LABELS)) sel.createEl("option", { value, text: label });
 		sel.value = col.type;
+		const unitsLabel = typeTd.createEl("label", { cls: "csv-importer-units", attr: { title: "Ignore currency and percent signs when reading numbers, for example $1,234.56 or 12 %" } });
+		const unitsCb = unitsLabel.createEl("input", { type: "checkbox", attr: { "aria-label": "Ignore currency and percent signs" } });
+		unitsCb.checked = !!col.stripUnits;
+		unitsLabel.createSpan({ text: "Ignore units" });
+		unitsLabel.toggleClass("csv-importer-hidden", col.type !== "number");
 
 		const tplTd = tr.createEl("td", { cls: "csv-importer-col-template", attr: { "data-label": "Template" } });
 		const tplToggle = tplTd.createEl("button", {
@@ -172,8 +191,15 @@ export class ColumnsSection {
 			draft.emit("preview");
 		});
 
+		unitsCb.addEventListener("change", () => {
+			col.stripUnits = unitsCb.checked;
+			showConv();
+			draft.emit("preview");
+		});
+
 		sel.addEventListener("change", () => {
 			col.type = sel.value as PropertyType;
+			unitsLabel.toggleClass("csv-importer-hidden", col.type !== "number");
 			showConv();
 			draft.emit("preview");
 		});

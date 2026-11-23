@@ -2,8 +2,8 @@
  * Note planning: turns a parsed CSV plus its import config into planned notes (path, frontmatter, body, key).
  * Also the public barrel for the pure helpers split into templates.ts, folders.ts and yaml.ts.
  */
-import type { ColumnConfig, FileImportConfig, FrontmatterValue, ParsedCsv, PlannedNote, PropertyType } from "../types";
-import { buildColumnConfigs, conversionOptionsOf, convertValue, inferenceOptionsOf, type ConversionOptions } from "../csv/typeInference";
+import type { ColumnConfig, FileImportConfig, FrontmatterValue, ParsedCsv, PlannedNote, PropertyType, RowFilter } from "../types";
+import { buildColumnConfigs, conversionOptionsOf, convertValue, inferenceOptionsOf, parseNumber, resolveDateOrder, type ConversionOptions } from "../csv/typeInference";
 import { compileTemplate, formatValue, headerIndexOf, renderCompiled, type CompiledTemplate, type TemplateContext } from "./templates";
 import { compileFolderSegments, hasFolderPlaceholders, renderFolderSegments, resolveTargetFolder, sanitizeFileName } from "./folders";
 
@@ -114,7 +114,7 @@ function buildRowContext(
 	row: string[],
 	rowNumber: number,
 	byIndex: Map<number, ColumnConfig>,
-	conv: ConversionOptions,
+	convByIndex: Map<number, ConversionOptions>,
 	fileBasename: string,
 ): RowContexts {
 	const converted = new Map<number, FrontmatterValue>();
@@ -128,7 +128,7 @@ function buildRowContext(
 			bodyVals.push(raw.trim());
 			return;
 		}
-		const v = convertValue(raw, col.type, conv);
+		const v = convertValue(raw, col.type, convByIndex.get(idx) as ConversionOptions);
 		converted.set(idx, v);
 		nameVals.push(formatCell(v, raw, col.type, true));
 		bodyVals.push(formatCell(v, raw, col.type, false));
@@ -181,27 +181,164 @@ function normalizeListProps(
 	}
 }
 
+/** Source headers that identify a row: `keyColumns` if non-empty, else `[keyColumn]` if set, else none. */
+export function effectiveKeyColumns(config: FileImportConfig): string[] {
+	const multi = (config.keyColumns ?? []).filter((k) => k !== "");
+	if (multi.length > 0) return multi;
+	return config.keyColumn ? [config.keyColumn] : [];
+}
+
+/** Property that stores a composite key (2+ key columns): `config.keyProperty`, suffixed " 2".. when a column uses it. Null otherwise. */
+export function compositeKeyProperty(config: FileImportConfig, columns: ColumnConfig[] = config.columns): string | null {
+	if (effectiveKeyColumns(config).length < 2) return null;
+	const taken = new Set(columns.map((c) => c.property.toLowerCase()));
+	const base = (config.keyProperty ?? "").trim() || "import_key";
+	let name = base;
+	let n = 2;
+	while (taken.has(name.toLowerCase())) name = `${base} ${n++}`;
+	return name;
+}
+
+/**
+ * Names of extra properties that cannot be written: they collide (case-insensitive) with a column property, the
+ * composite key property, `tags` (when config.tags is set), the source link property, or an earlier extra property.
+ * The column wins; the extra property is skipped.
+ */
+export function extraPropertyConflicts(config: FileImportConfig): string[] {
+	const reserved = reservedExtraNames(config);
+	const out: string[] = [];
+	for (const e of config.extraProperties ?? []) {
+		const name = e.property.trim();
+		if (name === "") continue;
+		if (reserved.has(name.toLowerCase())) out.push(e.property);
+		else reserved.add(name.toLowerCase());
+	}
+	return out;
+}
+
+function reservedExtraNames(config: FileImportConfig): Set<string> {
+	const reserved = new Set(config.columns.map((c) => c.property.toLowerCase()));
+	const key = compositeKeyProperty(config);
+	if (key !== null) reserved.add(key.toLowerCase());
+	const link = sourceLinkProperty(config);
+	if (link !== null) reserved.add(link.toLowerCase());
+	if (parseTags(config.tags).length > 0) reserved.add("tags");
+	return reserved;
+}
+
+/**
+ * Does a row pass the filter? null filter matches everything. Cells are trimmed; text comparisons are
+ * case-insensitive; equals / greaterThan / lessThan compare numerically when both sides parse (decimal-aware),
+ * else as lower-cased strings. An unknown column matches nothing.
+ */
+export function rowMatches(filter: RowFilter | null, headers: string[], row: string[], decimalSeparator: "." | ","): boolean {
+	if (!filter) return true;
+	const idx = headers.indexOf(filter.column);
+	if (idx < 0) return false;
+	const cell = (row[idx] ?? "").trim();
+	const want = (filter.value ?? "").trim();
+	const a = cell.toLowerCase();
+	const b = want.toLowerCase();
+	const cmp = (): number => {
+		const na = parseNumber(cell, decimalSeparator);
+		const nb = parseNumber(want, decimalSeparator);
+		if (na !== null && nb !== null) return na - nb;
+		return a < b ? -1 : a > b ? 1 : 0;
+	};
+	switch (filter.op) {
+		case "empty":
+			return cell === "";
+		case "notEmpty":
+			return cell !== "";
+		case "equals":
+			return cmp() === 0;
+		case "notEquals":
+			return cmp() !== 0;
+		case "contains":
+			return a.includes(b);
+		case "notContains":
+			return !a.includes(b);
+		case "greaterThan":
+			return cell !== "" && cmp() > 0;
+		case "lessThan":
+			return cell !== "" && cmp() < 0;
+		default:
+			return false;
+	}
+}
+
+/** Number of data rows that pass config.rowFilter (all rows when there is none). */
+export function countMatching(parsed: ParsedCsv, config: FileImportConfig): number {
+	if (!config.rowFilter) return parsed.rows.length;
+	let n = 0;
+	for (const row of parsed.rows) if (rowMatches(config.rowFilter, parsed.headers, row, config.decimalSeparator)) n++;
+	return n;
+}
+
+/** Key values that occur on more than one planned note (in order of first repetition). */
+export function findDuplicateKeys(notes: PlannedNote[]): string[] {
+	const seen = new Set<string>();
+	const dup = new Set<string>();
+	for (const n of notes) {
+		if (!n.key) continue;
+		if (seen.has(n.key.value)) dup.add(n.key.value);
+		else seen.add(n.key.value);
+	}
+	return [...dup];
+}
+
+function pad2(n: number): string {
+	return String(n).padStart(2, "0");
+}
+
 /**
  * Plan one note per data row. Frontmatter contains included columns (typed via convertValue),
  * `tags` (when config.tags non-empty, merged with a `tags` column if present), and
  * `source: "[[path/to/file.csv]]"` when addSourceLink (property name: see sourceLinkProperty). Null values are kept (empty property).
  * Empty file names fall back to `<file> <row>`. Duplicate paths within one run (case-insensitive)
  * get " 2", " 3" suffixes. If config.columns is empty, columns are inferred on the fly
- * (midnightAsDate = true).
+ * (midnightAsDate = true). Rows rejected by config.rowFilter produce no note (row numbers of the rest are kept).
+ * Composite keys (2+ key columns) are written to compositeKeyProperty(config). Extra properties are added after
+ * the columns and listed in `fillOnly`. `opts.now` fixes `{{today}}` / `{{now}}` for tests.
  */
 export function planNotes(
 	parsed: ParsedCsv,
 	config: FileImportConfig,
 	csv: { path: string; basename: string },
+	opts: { now?: Date } = {},
 ): PlannedNote[] {
 	const dynamicFolder = hasFolderPlaceholders(config);
 	const staticFolder = resolveTargetFolder(config, csv.path);
 	const columns =
 		config.columns.length > 0 ? config.columns : buildColumnConfigs(parsed, inferenceOptionsOf(config, true));
-	const keyCol = config.keyColumn ? columns.find((c) => c.source === config.keyColumn) : undefined;
+	const keyCols = effectiveKeyColumns(config);
+	const keyCol = keyCols.length === 1 ? columns.find((c) => c.source === keyCols[0]) : undefined;
+	const compositeCols =
+		keyCols.length >= 2 ? keyCols.map((k) => columns.find((c) => c.source === k)) : [];
+	const compositeProp = keyCols.length >= 2 ? compositeKeyProperty(config, columns) : null;
 	// The key column is always written: it has to be stored in the notes to match them on later imports.
 	const included = columns.filter((c) => c.include || c === keyCol);
 	const conv = conversionOptionsOf(config);
+	// Per column: unit stripping and the date order resolved over the whole column (ambiguous slash dates).
+	const convByIndex = new Map<number, ConversionOptions>();
+	for (const col of columns) {
+		const o: ConversionOptions = { ...conv };
+		if (col.type === "number" && col.stripUnits) o.stripUnits = true;
+		if (col.type === "date" || col.type === "datetime") {
+			const order = resolveDateOrder(
+				parsed.rows.map((r) => r[col.index] ?? ""),
+				config.dateOrder ?? "auto",
+			);
+			if (order) o.dateOrder = order;
+		}
+		convByIndex.set(col.index, o);
+	}
+	const now = opts.now ?? new Date();
+	const today = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+	const nowStr = `${today}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+	const conflicts = reservedExtraNames(config);
+	const extras: { name: string; type: PropertyType; tpl: CompiledTemplate }[] = [];
+	const extraSeen = new Set<string>();
 	const configTags = parseTags(config.tags);
 	const linkProp = sourceLinkFor(config, columns);
 	const paths = new PathAllocator();
@@ -215,11 +352,19 @@ export function planNotes(
 	for (const col of included) {
 		if (col.valueTemplate) valueTpls.set(col, compileTemplate(col.valueTemplate, headerIndex, true));
 	}
+	for (const e of config.extraProperties ?? []) {
+		const name = e.property.trim();
+		if (name === "" || conflicts.has(name.toLowerCase()) || extraSeen.has(name.toLowerCase())) continue;
+		extraSeen.add(name.toLowerCase());
+		const text = (e.defaultValue ?? "").replace(/\{\{\s*today\s*\}\}/g, today).replace(/\{\{\s*now\s*\}\}/g, nowStr);
+		extras.push({ name, type: e.type, tpl: compileTemplate(text, headerIndex) });
+	}
 	const folderSegs = dynamicFolder ? compileFolderSegments(config.targetFolder, headerIndex) : [];
 
 	parsed.rows.forEach((row, i) => {
+		if (!rowMatches(config.rowFilter, parsed.headers, row, config.decimalSeparator)) return;
 		const rowNumber = parsed.rowNumbers[i] ?? i + 1;
-		const { converted, nameCtx, bodyCtx } = buildRowContext(parsed, row, rowNumber, byIndex, conv, csv.basename);
+		const { converted, nameCtx, bodyCtx } = buildRowContext(parsed, row, rowNumber, byIndex, convByIndex, csv.basename);
 		const folder = dynamicFolder ? renderFolderSegments(folderSegs, nameCtx) : staticFolder;
 
 		const { fm, types } = buildFrontmatter(included, converted, valueTpls, bodyCtx, config);
@@ -230,13 +375,29 @@ export function planNotes(
 			fm["tags"] = [...new Set([...colTags, ...configTags])];
 			types["tags"] = "list";
 		}
+		const fillOnly: string[] = [];
+		for (const ex of extras) {
+			const v = convertValue(renderCompiled(ex.tpl, bodyCtx), ex.type, conv);
+			if (v === null && config.emptyValues === "omit") continue;
+			fm[ex.name] = v;
+			types[ex.name] = ex.type;
+			fillOnly.push(ex.name);
+		}
 		if (linkProp !== null) {
 			fm[linkProp] = `[[${csv.path}]]`;
 			types[linkProp] = "text";
 		}
 
 		let key: PlannedNote["key"] = null;
-		if (keyCol) {
+		if (compositeProp !== null) {
+			const parts = compositeCols.map((c) => (c ? (bodyCtx.formatted?.[c.index] ?? "").trim() : ""));
+			if (parts.every((p) => p !== "")) {
+				const value = parts.join(" | ");
+				fm[compositeProp] = value;
+				types[compositeProp] = "text";
+				key = { property: compositeProp, value };
+			}
+		} else if (keyCol) {
 			// Must equal what was written for the property (after any value template).
 			const kv = fm[keyCol.property];
 			if (kv !== null && kv !== undefined && !Array.isArray(kv)) key = { property: keyCol.property, value: formatValue(kv) };
@@ -250,6 +411,7 @@ export function planNotes(
 			frontmatter: fm,
 			body: renderCompiled(bodyTpl, bodyCtx),
 			row: rowNumber,
+			fillOnly,
 			types,
 			key,
 		});

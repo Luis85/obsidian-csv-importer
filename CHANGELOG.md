@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **Extra properties**: add properties that are not in the CSV (name, type, default value with `{{Column}}`, `{{row}}`, `{{file}}`, `{{today}}`, `{{now}}`). Defaults fill new notes and empty properties on re-import; values set in Obsidian are kept.
+- More date formats: `DD/MM/YYYY`, `MM/DD/YYYY`, `DD-MM-YYYY`, month names (English and German). Ambiguous slash dates follow the new **Date order** setting and are never guessed.
+- **Ignore units** for number columns: `1.234,56 €`, `$1,234.56`, `12 %`, space and narrow-space thousands separators.
+- Composite key: match notes by several columns, stored in a key property.
+- **Import only some rows**: a row filter per file.
+- Preview warnings for duplicate keys in the CSV, duplicate notes in the vault (e.g. sync conflict copies), very large imports, active row filters and extra properties that clash with columns.
+- Settings appear in Obsidian's settings search (1.13+).
+
+### Reliability
+- Saved data has a schema version and old configurations are migrated.
+- If notes were written but the import history could not be saved, the import reports a warning instead of failing.
+
+### Development
+- Architecture refactor: vault gateway, pure ownership policy, single template engine, import service, UI sections; more tests.
+- CI on Node 20, 22 and 24; release assets get build provenance attestations; sentence-case lint rule.
+
 ## 0.1.0 (beta) - 2026-11-23
 
 First beta release, installable with BRAT.

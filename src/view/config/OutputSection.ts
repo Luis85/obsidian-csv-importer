@@ -1,4 +1,4 @@
-import { Setting } from "obsidian";
+import { Menu, Setting, setIcon } from "obsidian";
 import type { App } from "obsidian";
 import type { ConflictStrategy } from "../../types";
 import { suggestKeyColumn } from "../../csv/typeInference";
@@ -15,6 +15,8 @@ export class OutputSection {
 	private folderInput: HTMLInputElement | null = null;
 	private keySettingEl: Setting | null = null;
 	private keyHintEl: HTMLElement | null = null;
+	private keyListEl: HTMLElement | null = null;
+	private keyPropertyEl: HTMLElement | null = null;
 	private updateOptionsEl: HTMLElement | null = null;
 
 	constructor(
@@ -71,6 +73,8 @@ export class OutputSection {
 
 		this.keySettingEl = new Setting(el).setName("Match notes by column").setDesc(CONFIG_DESC.key);
 		this.keyHintEl = this.keySettingEl.descEl.createDiv({ cls: "csv-importer-key-hint" });
+		this.keyListEl = el.createDiv({ cls: "csv-importer-key-list" });
+		this.keyPropertyEl = el.createDiv({ cls: "csv-importer-sub-settings" });
 		this.renderKeyDropdown();
 
 		this.draft.on("parsing", () => {
@@ -118,24 +122,97 @@ export class OutputSection {
 			);
 	}
 
+	/** Key columns in use: the composite list, or the single key column. */
+	private keys(): string[] {
+		const cfg = this.draft.cfg;
+		return cfg.keyColumns.length > 0 ? cfg.keyColumns : cfg.keyColumn ? [cfg.keyColumn] : [];
+	}
+
+	/** Store the key columns; keyColumn stays the first one for compatibility. */
+	private setKeys(list: string[]): void {
+		const cfg = this.draft.cfg;
+		const unique = [...new Set(list)];
+		cfg.keyColumns = unique.length >= 2 ? unique : [];
+		cfg.keyColumn = unique[0] ?? "";
+	}
+
 	private renderKeyDropdown(): void {
 		const setting = this.keySettingEl;
 		const cfg = this.draft.cfg;
 		if (!setting) return;
 		setting.controlEl.empty();
+		const sources = new Set(cfg.columns.map((c) => c.source));
+		this.setKeys(this.keys().filter((k) => sources.has(k)));
+		const keys = this.keys();
 		const options: Record<string, string> = { "": "None" };
 		for (const c of cfg.columns) options[c.source] = c.source;
-		if (cfg.keyColumn && !(cfg.keyColumn in options)) cfg.keyColumn = "";
 		setting.addDropdown((d) =>
 			d
 				.addOptions(options)
-				.setValue(cfg.keyColumn)
+				.setValue(keys[0] ?? "")
 				.onChange((v) => {
-					cfg.keyColumn = v;
-					this.renderKeyHint();
+					const rest = this.keys().slice(1).filter((k) => k !== v);
+					this.setKeys(v === "" ? [] : [v, ...rest]);
+					this.renderKeyDetails();
 					this.draft.emit("preview");
 				}),
 		);
+		setting.addButton((b) => {
+			b.setButtonText("Add column").onClick((evt) => {
+				const used = new Set(this.keys());
+				const menu = new Menu();
+				for (const c of cfg.columns) {
+					if (used.has(c.source)) continue;
+					menu.addItem((item) =>
+						item.setTitle(c.source).onClick(() => {
+							this.setKeys([...this.keys(), c.source]);
+							this.renderKeyDropdown();
+							this.draft.emit("preview");
+						}),
+					);
+				}
+				menu.showAtMouseEvent(evt);
+			});
+			b.buttonEl.setAttr("aria-label", "Add another column to the key");
+			b.buttonEl.toggleClass("csv-importer-hidden", keys.length === 0 || keys.length >= cfg.columns.length);
+		});
+		this.renderKeyDetails();
+	}
+
+	/** Chips for the extra key columns, the key property field and the hint. */
+	private renderKeyDetails(): void {
+		const cfg = this.draft.cfg;
+		const keys = this.keys();
+		const list = this.keyListEl;
+		const propBox = this.keyPropertyEl;
+		if (list) {
+			list.empty();
+			for (const k of keys.slice(1)) {
+				const chip = list.createSpan({ cls: "csv-importer-chip csv-importer-key-chip" });
+				chip.createSpan({ text: k });
+				const rm = chip.createEl("button", { cls: "csv-importer-chip-remove", attr: { type: "button", "aria-label": `Remove ${k} from the key` } });
+				setIcon(rm, "x");
+				rm.addEventListener("click", () => {
+					this.setKeys(this.keys().filter((x) => x !== k));
+					this.renderKeyDropdown();
+					this.draft.emit("preview");
+				});
+			}
+		}
+		if (propBox) {
+			propBox.empty();
+			if (keys.length >= 2) {
+				new Setting(propBox)
+					.setName("Key property")
+					.setDesc('The values are joined with " | " and stored in this property.')
+					.addText((t) =>
+						t.setPlaceholder("import_key").setValue(cfg.keyProperty).onChange((v) => {
+							cfg.keyProperty = v.trim() === "" ? "import_key" : v.trim();
+							this.draft.emitPreviewDebounced();
+						}),
+					);
+			}
+		}
 		this.renderKeyHint();
 	}
 
@@ -144,7 +221,7 @@ export class OutputSection {
 		const { cfg, parsed } = this.draft;
 		if (!hint) return;
 		hint.empty();
-		if (cfg.keyColumn || !parsed) return;
+		if (this.keys().length > 0 || !parsed) return;
 		let suggestion: string | null = null;
 		try {
 			suggestion = suggestKeyColumn(parsed, cfg.columns);
@@ -156,7 +233,7 @@ export class OutputSection {
 		hint.createSpan({ text: `Suggested: ${name}` });
 		const btn = hint.createEl("button", { cls: "csv-importer-chip", text: `Use ${name}`, attr: { type: "button" } });
 		btn.addEventListener("click", () => {
-			cfg.keyColumn = name;
+			this.setKeys([name]);
 			this.renderKeyDropdown();
 			this.draft.emit("preview");
 		});

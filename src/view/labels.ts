@@ -1,4 +1,4 @@
-import type { ConflictStrategy, CsvEncoding, EmptyValueMode, PropertyType } from "../types";
+import type { ConflictStrategy, CsvEncoding, DateOrder, EmptyValueMode, PropertyType, RowFilterOp } from "../types";
 
 /** User-facing strings shared by the settings tab, the import settings dialog and the table view. */
 
@@ -148,3 +148,23 @@ export function delimiterLabel(d: string): string {
 		default: return d;
 	}
 }
+
+export const EXTRA_PROPERTIES_HELP =
+	"Add properties that are not in the CSV. The default value fills in new notes and empty properties on re-import; values you set in Obsidian are kept.";
+
+export const ROW_FILTER_OPS: Record<RowFilterOp, string> = {
+	equals: "equals",
+	notEquals: "does not equal",
+	contains: "contains",
+	notContains: "does not contain",
+	empty: "is empty",
+	notEmpty: "is not empty",
+	greaterThan: "is greater than",
+	lessThan: "is less than",
+};
+
+export const DATE_ORDER_OPTIONS: Record<DateOrder, string> = {
+	auto: "Detect (only when unambiguous)",
+	dmy: "Day first (DD/MM/YYYY)",
+	mdy: "Month first (MM/DD/YYYY)",
+};

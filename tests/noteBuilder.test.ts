@@ -67,6 +67,7 @@ describe("planNotes", () => {
 			frontmatter: { Name: "A", Qty: 1.5, Done: true },
 			body: "Qty: 1.5",
 			row: 1,
+			fillOnly: [],
 			types: { Name: "text", Qty: "number", Done: "checkbox" },
 			key: null,
 		});

@@ -8,6 +8,7 @@ import { renderCallout } from "./dom";
 import { OVERWRITE_CONFIRM } from "./labels";
 import { AdvancedSection } from "./config/AdvancedSection";
 import { ColumnsSection } from "./config/ColumnsSection";
+import { ExtraPropertiesSection } from "./config/ExtraPropertiesSection";
 import { ConfigDraft } from "./config/ConfigDraft";
 import { OutputSection } from "./config/OutputSection";
 import { PreviewPane } from "./config/PreviewPane";
@@ -20,6 +21,7 @@ export class ImportConfigModal extends Modal {
 
 	private warningsEl!: HTMLElement;
 	private readonly columns: ColumnsSection;
+	private readonly extras: ExtraPropertiesSection;
 	private readonly output: OutputSection;
 	private readonly preview: PreviewPane;
 	private readonly advanced: AdvancedSection;
@@ -35,6 +37,7 @@ export class ImportConfigModal extends Modal {
 		this.draft = new ConfigDraft(host, file, text);
 		this.initialConflict = this.draft.cfg.conflict;
 		this.columns = new ColumnsSection(this.draft);
+		this.extras = new ExtraPropertiesSection(this.draft);
 		this.output = new OutputSection(app, this.draft);
 		this.preview = new PreviewPane(this.draft);
 		this.advanced = new AdvancedSection(this.draft);
@@ -72,6 +75,7 @@ export class ImportConfigModal extends Modal {
 		this.draft.on("parsing", () => this.renderWarnings());
 
 		this.columns.build(el);
+		this.extras.build(el);
 		this.output.build(el);
 		this.preview.build(el);
 		this.advanced.build(el);

@@ -74,7 +74,7 @@ export class ImportRunModal extends Modal {
 
 	close(): void {
 		if (this.running) {
-			new Notice("Use Stop to end the import.");
+			new Notice("Use the stop button to end the import.");
 			return;
 		}
 		super.close();

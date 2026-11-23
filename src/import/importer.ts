@@ -1,11 +1,11 @@
 import { normalizePath } from "obsidian";
 import type { App, TFile } from "obsidian";
 import { ROW_REASON, emptyResult } from "../core/result";
-import { errorMessage, parentOf } from "../core/util";
+import { errorMessage, parentOf, plural } from "../core/util";
 import type { FileImportConfig, FrontmatterValue, ImportResult, ImportSnapshot, PlannedNote, RowOutcome, UndoManifest } from "../types";
 import { Checkpointer } from "./checkpointer";
 import { mergeFrontmatter, valueHash } from "./merge";
-import { formatValue, ownedLinkProperties, serializeNote, sourceLinkProperty } from "./noteBuilder";
+import { effectiveKeyColumns, extraPropertyConflicts, formatValue, ownedLinkProperties, serializeNote, sourceLinkProperty } from "./noteBuilder";
 import { hasOtherKey, isOwned } from "./ownership";
 import { PathIndex } from "./pathIndex";
 import { UNDO_CAP_CHARS, UNDO_TRUNCATED_WARNING, UndoRecorder } from "./undo";
@@ -24,6 +24,22 @@ export const KEY_WARNING =
 	"No key column: notes are matched by file name. If rows are inserted or re-sorted, the wrong notes are updated. Choose a key column in the import settings.";
 export const NOT_OWNED_WARNING =
 	'Some notes were skipped because this import did not create them. If you created them with an earlier version or another tool, turn on "Update existing notes not created by this import" in the import settings.';
+
+export const LARGE_IMPORT_THRESHOLD = 5000;
+export const DUPLICATE_KEYS_IN_CSV_WARNING = (n: number, example: string): string =>
+	`${plural(n, "row shares", "rows share")} a key with another row (e.g. "${example}"). Only the first is imported.`;
+export const DUPLICATE_NOTES_IN_VAULT_WARNING = (n: number, example: string): string =>
+	`${plural(n, "note in the target folder shares", "notes in the target folder share")} a key with another note (e.g. "${example}"), for example sync conflict copies. Check them before importing.`;
+export const LARGE_IMPORT_WARNING = (n: number): string =>
+	`This import creates or updates ${n} notes. Very large numbers of notes can slow down the vault and Bases.`;
+export const ROW_FILTER_WARNING = (matching: number, total: number): string => `Row filter: ${matching} of ${total} rows are imported.`;
+export const EXTRA_PROPERTY_CONFLICT_WARNING = (name: string): string =>
+	`Extra property "${name}" has the same name as a CSV column and is ignored.`;
+export const HISTORY_NOT_SAVED_WARNING =
+	"The notes were written, but the import history could not be saved. Undo and edit protection may not work for this import.";
+
+const CONFLICT_COPY = /\(conflicted copy|\.sync-conflict-|conflict\)/i;
+const isConflictCopy = (f: TFile): boolean => CONFLICT_COPY.test(f.basename ?? f.path);
 
 const now = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
@@ -106,6 +122,19 @@ class KeyIndex {
 		return this.byKey.get(key) ?? [];
 	}
 
+	/** Number of notes sharing a key value with another note, and one example value, for the given keys. */
+	duplicates(keys: Iterable<string>): { count: number; example: string } | null {
+		let count = 0;
+		let example = "";
+		for (const k of new Set(keys)) {
+			const n = this.byKey.get(k)?.length ?? 0;
+			if (n < 2) continue;
+			count += n;
+			if (!example) example = k;
+		}
+		return count > 0 ? { count, example } : null;
+	}
+
 	add(key: string, file: TFile, first: boolean): void {
 		const list = this.byKey.get(key);
 		if (!list) this.byKey.set(key, [file]);
@@ -142,10 +171,30 @@ class NoteWriter {
 		this.ownedProps = ownedLinkProperties(config);
 		this.paths = new PathIndex(vault);
 		this.keys = new KeyIndex(vault, notes.find((n) => n.key)?.key?.property ?? null, notes, this.paths);
+		this.planWarnings(notes);
 		const hadPreviousImport = Object.keys(this.snapshot).length > 0;
-		if (!config.keyColumn && (config.conflict === "update" || config.conflict === "overwrite") && hadPreviousImport) {
+		if (effectiveKeyColumns(config).length === 0 && (config.conflict === "update" || config.conflict === "overwrite") && hadPreviousImport) {
 			this.result.warnings.push(KEY_WARNING);
 		}
+	}
+
+	private planWarnings(notes: PlannedNote[]): void {
+		const w = this.result.warnings;
+		const seen = new Set<string>();
+		let dupes = 0;
+		let example = "";
+		for (const n of notes) {
+			if (!n.key) continue;
+			if (seen.has(n.key.value)) {
+				dupes++;
+				example ||= n.key.value;
+			} else seen.add(n.key.value);
+		}
+		if (dupes > 0) w.push(DUPLICATE_KEYS_IN_CSV_WARNING(dupes, example));
+		const inVault = this.keys.duplicates(seen);
+		if (inVault) w.push(DUPLICATE_NOTES_IN_VAULT_WARNING(inVault.count, inVault.example));
+		if (notes.length > LARGE_IMPORT_THRESHOLD) w.push(LARGE_IMPORT_WARNING(notes.length));
+		for (const name of extraPropertyConflicts(this.config)) w.push(EXTRA_PROPERTY_CONFLICT_WARNING(name));
 	}
 
 	get written(): number {
@@ -226,6 +275,7 @@ class NoteWriter {
 			snapshot: this.snapshot[existing.path],
 			protectEdits: this.config.protectEdits,
 			keepValuesOnEmpty: this.config.keepValuesOnEmpty,
+			fillOnly: note.fillOnly,
 		});
 		const changed = Object.keys(merged.set);
 		const preserved = merged.preserved.length > 0 ? merged.preserved : undefined;
@@ -276,7 +326,8 @@ class NoteWriter {
 			this.seenKeys.add(note.key.value);
 			// Only a note this import owns counts as the existing note for this key; foreign notes sharing
 			// the key (hand-made, or created by another CSV) never shadow it.
-			keyMatch = this.keys.candidates(note.key.value).find((f) => this.owns(f, note)) ?? null;
+			const owned = this.keys.candidates(note.key.value).filter((f) => this.owns(f, note));
+			keyMatch = owned.find((f) => !isConflictCopy(f)) ?? owned[0] ?? null;
 		}
 
 		let existing: TFile | null = keyMatch;
