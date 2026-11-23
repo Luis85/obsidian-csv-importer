@@ -77,12 +77,14 @@ Each column is inspected over all its non-empty values. A type is chosen only if
 | --- | --- | --- |
 | checkbox | `true` / `false`, `yes` / `no` (case-insensitive) | `true` |
 | number | integers and decimals; decimal comma when the decimal separator is `,` | `0.625`, `0,625` |
-| date | ISO dates, or datetimes at midnight (setting: midnight as date) | `2026-11-18`, `2026-11-18 00:00:00` |
+| date | `YYYY-MM-DD`, `YYYY/MM/DD`, `DD.MM.YYYY`, or datetimes at midnight (setting: midnight as date) | `2026-11-18`, `18.11.2026`, `2026-11-18 00:00:00` |
 | datetime | ISO datetimes with a time component | `2026-11-18 14:30:00` |
-| list | values containing the list separator | `a, b, c` |
+| list | never inferred — choose it per column; values are split by the list separator | `a, b, c` |
 | text | everything else | `Backend` |
 
-Override any column in the import settings. Empty cells are not written.
+Values with leading zeros (`007`) and very long digit strings (IDs, phone numbers) stay text so nothing is lost.
+
+Override any column in the import settings. Empty cells become empty properties, so every note has the same set of properties.
 
 ## Templates
 
