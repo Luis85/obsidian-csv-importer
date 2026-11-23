@@ -3,21 +3,18 @@ import type { WorkspaceLeaf } from "obsidian";
 import type { ImportIndexHost, ImportSummary } from "../host";
 import { errorMessage } from "../core/util";
 import { relativeTime } from "./relativeTime";
+import { iconButton } from "./dom";
+import { CONFIGURE, CSV_MISSING, IMPORT_BUTTON, NO_IMPORTS_TITLE, REIMPORT_ALL, REIMPORT_BUTTON } from "./labels";
 
 export const VIEW_TYPE_IMPORT_INDEX = "csv-importer-index";
-
-/** Width below which row actions collapse into the "..." menu. Keep in sync with styles.css. */
-const NARROW_PX = 600;
 
 interface RowAction {
 	id: string;
 	label: string;
 	icon: string;
 	run: () => Promise<void> | void;
-	/** Only in the "..." menu on wide views. */
+	/** Listed below the separator in the "..." menu. */
 	menuOnly?: boolean;
-	/** Stays visible when the view is narrow. */
-	alwaysVisible?: boolean;
 	warning?: boolean;
 }
 
@@ -28,6 +25,7 @@ export class ImportIndexView extends ItemView {
 	private loaded = false;
 	private renderToken = 0;
 	private listEl: HTMLElement | null = null;
+	private toolsEl: HTMLElement | null = null;
 	private reimportAllBtn: HTMLButtonElement | null = null;
 
 	private readonly refreshSoon = debounce(() => void this.refresh(), 300, true);
@@ -88,12 +86,8 @@ export class ImportIndexView extends ItemView {
 		root.empty();
 		root.addClass("csv-importer-index");
 
-		const header = root.createDiv({ cls: "csv-importer-index-header" });
-		const titles = header.createDiv({ cls: "csv-importer-index-titles" });
-		titles.createEl("h2", { text: "CSV imports", cls: "csv-importer-index-title" });
-		titles.createEl("p", { text: "Every CSV file with saved import settings.", cls: "csv-importer-index-desc" });
-
-		const tools = header.createDiv({ cls: "csv-importer-index-tools" });
+		const tools = root.createDiv({ cls: "csv-importer-index-tools" });
+		this.toolsEl = tools;
 		const search = tools.createEl("input", {
 			type: "search",
 			cls: "csv-importer-index-search",
@@ -103,11 +97,12 @@ export class ImportIndexView extends ItemView {
 			this.query = search.value.trim().toLowerCase();
 			this.renderList();
 		});
-		const all = tools.createEl("button", { cls: "csv-importer-index-all", text: "Re-import all" });
+		const all = tools.createEl("button", { cls: "csv-importer-index-all", text: REIMPORT_ALL, attr: { type: "button" } });
 		all.addEventListener("click", () => void this.guard(() => this.host.reimportAll()));
 		this.reimportAllBtn = all;
+		iconButton(tools, { icon: "refresh-cw", label: "Refresh", onClick: () => void this.refresh() });
 
-		this.listEl = root.createDiv({ cls: "csv-importer-index-list", attr: { role: "list" } });
+		this.listEl = root.createDiv({ cls: "csv-importer-index-list" });
 	}
 
 	private renderList(): void {
@@ -116,13 +111,17 @@ export class ImportIndexView extends ItemView {
 		const token = ++this.renderToken;
 		list.empty();
 		if (this.reimportAllBtn) this.reimportAllBtn.disabled = !this.items.some((i) => i.exists);
+		this.toolsEl?.toggleClass("csv-importer-hidden", this.loaded && this.items.length === 0);
 
 		if (this.items.length === 0) {
 			if (!this.loaded) return;
 			const empty = list.createDiv({ cls: "csv-importer-index-empty" });
-			empty.appendText("No imports yet. Open a CSV file and click ");
-			empty.createEl("strong", { text: "Import" });
-			empty.appendText(" to get started.");
+			setIcon(empty.createDiv({ cls: "csv-importer-index-empty-icon" }), "table-properties");
+			empty.createEl("h3", { text: NO_IMPORTS_TITLE, cls: "csv-importer-index-empty-title" });
+			const hint = empty.createEl("p", { cls: "csv-importer-index-empty-hint" });
+			hint.appendText("Open a CSV file and choose ");
+			hint.createEl("strong", { text: IMPORT_BUTTON });
+			hint.appendText(" to set one up.");
 			return;
 		}
 		const visible = this.items.filter(
@@ -132,72 +131,91 @@ export class ImportIndexView extends ItemView {
 			list.createDiv({ cls: "csv-importer-index-empty", text: "No imports match your filter." });
 			return;
 		}
-		for (const item of visible) this.renderRow(list, item, token);
+		const head = list.createDiv({ cls: "csv-importer-index-row mod-head", attr: { role: "presentation" } });
+		head.createDiv({ cls: "csv-importer-index-main", text: "CSV file" });
+		head.createDiv({ cls: "csv-importer-index-last", text: "Last import" });
+		head.createDiv({ cls: "csv-importer-index-count", text: "Notes" });
+		head.createDiv({ cls: "csv-importer-index-actions" });
+		const body = list.createDiv({ cls: "csv-importer-index-rows", attr: { role: "list" } });
+		for (const item of visible) this.renderRow(body, item, token);
 	}
 
 	private renderRow(list: HTMLElement, item: ImportSummary, token: number): void {
 		const row = list.createDiv({ cls: "csv-importer-index-row", attr: { role: "listitem" } });
 		if (!item.exists) row.addClass("is-missing");
+		const dir = item.csvPath.includes("/") ? item.csvPath.slice(0, item.csvPath.lastIndexOf("/")) : "";
 
 		const main = row.createDiv({ cls: "csv-importer-index-main" });
-		const name = main.createEl("button", {
+		const nameLine = main.createDiv({ cls: "csv-importer-index-nameline" });
+		const tip = item.targetFolder ? `${item.csvPath}\n\u2192 ${item.targetFolder}` : item.csvPath;
+		const name = nameLine.createEl("button", {
 			cls: "csv-importer-index-name clickable-icon-reset",
 			text: item.fileName,
-			attr: { "aria-label": `Open ${item.csvPath}`, title: item.csvPath },
+			attr: { type: "button", "aria-label": `Open ${item.csvPath}`, title: tip },
 		});
 		name.disabled = !item.exists;
 		name.addEventListener("click", () => this.openCsv(item));
-		const dir = item.csvPath.includes("/") ? item.csvPath.slice(0, item.csvPath.lastIndexOf("/")) : "";
+		if (!item.exists) {
+			const warn = nameLine.createSpan({ cls: "csv-importer-index-missing" });
+			setIcon(warn.createSpan({ cls: "csv-importer-index-missing-icon" }), "alert-triangle");
+			warn.createSpan({ text: CSV_MISSING });
+		}
 		main.createDiv({ cls: "csv-importer-index-path", text: dir || "Vault root" });
 
-		const badges = main.createDiv({ cls: "csv-importer-index-badges" });
-		if (!item.exists) badges.createSpan({ cls: "csv-importer-badge mod-warning", text: "CSV missing" });
-		if (item.hasUndo) badges.createSpan({ cls: "csv-importer-badge", text: "Undo available" });
-
-		const meta = row.createDiv({ cls: "csv-importer-index-meta" });
-		this.metaLine(meta, "Target folder", item.targetFolder || "Not set");
-		const last = this.metaLine(meta, "Last import", item.lastImport ? relativeTime(item.lastImport) : "Never imported");
+		const lastText = item.lastImport ? relativeTime(item.lastImport) : "Never imported";
+		const last = row.createDiv({ cls: "csv-importer-index-last", text: lastText });
 		if (item.lastImport) last.setAttribute("title", new Date(item.lastImport).toLocaleString());
-		const count = this.metaLine(meta, "Notes", "...");
+		const count = row.createDiv({ cls: "csv-importer-index-count", text: "..." });
+
+		const summary = row.createDiv({ cls: "csv-importer-index-summary" });
+		const setCount = (text: string): void => {
+			count.setText(text);
+			const parts = [dir || "Vault root", lastText];
+			if (text !== "...") parts.push(`${text} ${text === "1" ? "note" : "notes"}`);
+			summary.setText(parts.join(" \u00b7 "));
+		};
+		setCount("...");
 		void this.host
 			.countImportedNotes(item.csvPath)
 			.then((n) => {
-				if (token === this.renderToken) count.setText(String(n));
+				if (token === this.renderToken) setCount(String(n));
 			})
 			.catch(() => {
-				if (token === this.renderToken) count.setText("?");
+				if (token === this.renderToken) setCount("?");
 			});
 
 		const actions = row.createDiv({ cls: "csv-importer-index-actions" });
 		const all = this.actionsFor(item);
-		for (const a of all.filter((x) => !x.menuOnly)) {
-			const btn = actions.createEl("button", {
-				cls: `csv-importer-index-action mod-${a.id}${a.alwaysVisible ? " is-always" : ""}`,
-				attr: { "aria-label": a.label, title: a.label },
+		if (item.exists) {
+			const label = item.lastImport ? REIMPORT_BUTTON : IMPORT_BUTTON;
+			const primary = actions.createEl("button", {
+				cls: "csv-importer-index-primary",
+				text: label,
+				attr: { type: "button", "aria-label": `${label} ${item.fileName}` },
 			});
-			setIcon(btn.createSpan({ cls: "csv-importer-index-action-icon" }), a.icon);
-			btn.createSpan({ cls: "csv-importer-index-action-text", text: a.label });
-			btn.addEventListener("click", () => void this.guard(a.run));
+			primary.addEventListener("click", () => void this.guard(() => this.host.reimport(item.csvPath)));
+			const cfg = all.find((a) => a.id === "configure");
+			if (cfg) {
+				iconButton(actions, {
+					icon: cfg.icon,
+					label: `${cfg.label} ${item.fileName}`,
+					cls: "csv-importer-index-configure",
+					onClick: () => void this.guard(cfg.run),
+				});
+			}
 		}
-		const more = actions.createEl("button", {
-			cls: "csv-importer-index-action mod-more",
-			attr: { "aria-label": `More actions for ${item.fileName}`, "aria-haspopup": "menu", title: "More actions" },
+		iconButton(actions, {
+			icon: "more-horizontal",
+			label: `More actions for ${item.fileName}`,
+			cls: "csv-importer-index-more",
+			onClick: (ev) => this.openMenu(ev, all),
 		});
-		setIcon(more.createSpan({ cls: "csv-importer-index-action-icon" }), "more-horizontal");
-		more.addEventListener("click", (ev) => this.openMenu(ev, all));
-	}
-
-	private metaLine(parent: HTMLElement, label: string, value: string): HTMLElement {
-		const line = parent.createDiv({ cls: "csv-importer-index-meta-line" });
-		line.createSpan({ cls: "csv-importer-index-meta-label", text: label });
-		return line.createSpan({ cls: "csv-importer-index-meta-value", text: value });
 	}
 
 	private actionsFor(item: ImportSummary): RowAction[] {
 		const actions: RowAction[] = [];
 		if (item.exists) {
-			actions.push({ id: "reimport", label: "Re-import", icon: "refresh-cw", alwaysVisible: true, run: () => this.host.reimport(item.csvPath) });
-			actions.push({ id: "configure", label: "Configure", icon: "settings", run: () => this.host.configureImport(item.csvPath) });
+			actions.push({ id: "configure", label: CONFIGURE, icon: "sliders-horizontal", run: () => this.host.configureImport(item.csvPath) });
 		}
 		const base = item.basePath;
 		if (base) {
@@ -226,13 +244,10 @@ export class ImportIndexView extends ItemView {
 	}
 
 	private openMenu(ev: MouseEvent, actions: RowAction[]): void {
-		const narrow = this.contentEl.clientWidth > 0 && this.contentEl.clientWidth < NARROW_PX;
 		const menu = new Menu();
-		const inline = actions.filter((a) => !a.menuOnly && !a.alwaysVisible);
-		if (narrow) {
-			for (const a of inline) menu.addItem((i) => i.setTitle(a.label).setIcon(a.icon).onClick(() => void this.guard(a.run)));
-			if (inline.length > 0) menu.addSeparator();
-		}
+		const regular = actions.filter((a) => !a.menuOnly);
+		for (const a of regular) menu.addItem((i) => i.setTitle(a.label).setIcon(a.icon).onClick(() => void this.guard(a.run)));
+		if (regular.length > 0) menu.addSeparator();
 		for (const a of actions.filter((x) => x.menuOnly)) {
 			menu.addItem((i) => i.setTitle(a.label).setIcon(a.icon).setWarning(a.warning === true).onClick(() => void this.guard(a.run)));
 		}

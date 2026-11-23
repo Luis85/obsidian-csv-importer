@@ -1,7 +1,8 @@
 import { setIcon } from "obsidian";
 import type { ColumnConfig, FileImportConfig, ParsedCsv } from "../types";
 import { convertValue } from "../csv/typeInference";
-import { TYPE_BADGES, TYPE_LABELS } from "./labels";
+import { NO_ROWS, TYPE_BADGES, TYPE_LABELS, noRowsMatch } from "./labels";
+import { SHOW_MORE, filterMatchCount } from "./runCopy";
 import { conversionOptions } from "./shared";
 
 type SortDir = "asc" | "desc";
@@ -38,6 +39,8 @@ export interface TableRendererHooks {
 /** Renders the CSV table with filter, sort and incremental "show more". Holds the view state of the table. */
 export class TableRenderer {
 	query = "";
+	/** The filter text as typed (the input shows this; `query` is trimmed and lowercased). */
+	queryRaw = "";
 	private sortCol = -1;
 	private sortDir: SortDir = "asc";
 	private visibleCount = 0;
@@ -47,12 +50,14 @@ export class TableRenderer {
 	/** Back to the unfiltered, unsorted first page. */
 	reset(): void {
 		this.query = "";
+		this.queryRaw = "";
 		this.sortCol = -1;
 		this.visibleCount = 0;
 	}
 
 	/** New filter text: start again from the first page. */
 	setQuery(value: string): void {
+		this.queryRaw = value;
 		this.query = value.trim().toLowerCase();
 		this.visibleCount = 0;
 	}
@@ -60,11 +65,11 @@ export class TableRenderer {
 	render(body: HTMLElement, parsed: ParsedCsv, columns: ColumnConfig[], cfg: FileImportConfig): void {
 		const entries = this.sortEntries(this.filterEntries(parsed), parsed, columns, cfg);
 
-		if (this.query) {
-			body.createDiv({ cls: "csv-importer-filter-info", text: `${entries.length} of ${parsed.rows.length} rows match` });
+		if (this.query && entries.length > 0) {
+			body.createDiv({ cls: "csv-importer-filter-info", text: filterMatchCount(entries.length, parsed.rows.length), attr: { role: "status" } });
 		}
 		if (entries.length === 0) {
-			body.createDiv({ cls: "csv-importer-empty", text: this.query ? "No rows match the filter." : "This file has no rows yet. Add data to the CSV, then reopen it." });
+			body.createDiv({ cls: "csv-importer-empty", text: this.query ? noRowsMatch(this.queryRaw.trim()) : NO_ROWS });
 		}
 
 		const scroller = body.createDiv({ cls: "csv-importer-scroll" });
@@ -197,7 +202,7 @@ export class TableRenderer {
 		if (page.shown >= page.entries.length) return;
 		const btn = more.createEl("button", {
 			cls: "csv-importer-btn",
-			text: `Show more (${page.shown} of ${page.entries.length})`,
+			text: `${SHOW_MORE} (${page.shown} of ${page.entries.length})`,
 		});
 		btn.addEventListener("click", () => {
 			this.visibleCount = page.shown + page.pageSize;

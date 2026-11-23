@@ -1,4 +1,4 @@
-import { Modal } from "obsidian";
+import { ButtonComponent, Modal } from "obsidian";
 import type { App } from "obsidian";
 
 /** Small yes/no dialog. Resolves true when confirmed. */
@@ -54,13 +54,14 @@ class ConfirmModal extends Modal {
 			label.createSpan({ text: this.option.label });
 		}
 		const row = this.contentEl.createDiv({ cls: "modal-button-container" });
-		row.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
-		const ok = row.createEl("button", { text: this.confirmLabel, cls: this.warning ? "mod-warning" : "mod-cta" });
-		ok.addEventListener("click", () => {
+		new ButtonComponent(row).setButtonText("Cancel").onClick(() => this.close());
+		const ok = new ButtonComponent(row).setButtonText(this.confirmLabel).onClick(() => {
 			this.answered = true;
 			this.done(true, this.checkbox?.checked ?? false);
 			this.close();
 		});
+		if (this.warning) ok.setDestructive().setCta();
+		else ok.setCta();
 	}
 
 	onClose(): void {

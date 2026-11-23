@@ -1,8 +1,9 @@
-import { Setting, setIcon } from "obsidian";
+import { Menu, setIcon } from "obsidian";
 import type { ExtraProperty, PropertyType } from "../../types";
 import { extraPropertyConflicts } from "../../import/noteBuilder";
 import { sectionHeading } from "../dom";
 import { EXTRA_PROPERTIES_HELP, TYPE_LABELS } from "../labels";
+import { ADD_EMPTY_PROPERTY, ADD_ID_PROPERTY, ADD_PROPERTY, EXTRA_PROPERTIES } from "./copy";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
 
@@ -19,28 +20,17 @@ export class ExtraPropertiesSection {
 	constructor(private readonly draft: ConfigDraft) {}
 
 	build(parent: HTMLElement): void {
-		sectionHeading(parent, "Extra properties");
+		sectionHeading(parent, EXTRA_PROPERTIES);
 		parent.createDiv({ cls: "setting-item-description csv-importer-section-help", text: EXTRA_PROPERTIES_HELP });
 		this.listEl = parent.createDiv({ cls: "csv-importer-extra-list" });
-		new Setting(parent).addButton((b) =>
-			b.setButtonText("Add property").onClick(() => {
-				this.draft.cfg.extraProperties.push({ property: "", type: "text", defaultValue: "" });
-				this.renderList();
-				this.draft.emit("preview");
-			}),
-		).addButton((b) =>
-			b
-				.setButtonText("Add ID property")
-				.setTooltip("Gives every new note a unique ID (UUID). The ID is kept on re-import.")
-				.onClick(() => {
-					const taken = new Set(this.draft.cfg.extraProperties.map((e) => e.property.trim().toLowerCase()));
-					let name = "id";
-					for (let n = 2; taken.has(name); n++) name = `id ${n}`;
-					this.draft.cfg.extraProperties.push({ property: name, type: "text", defaultValue: "{{uuid}}" });
-					this.renderList();
-					this.draft.emit("preview");
-				}),
-		);
+		const addRow = parent.createDiv({ cls: "csv-importer-extra-add" });
+		const add = addRow.createEl("button", { text: ADD_PROPERTY, attr: { type: "button", "aria-haspopup": "menu" } });
+		add.addEventListener("click", (evt) => {
+			const menu = new Menu();
+			menu.addItem((item) => item.setTitle(ADD_EMPTY_PROPERTY).setIcon("plus").onClick(() => this.addProperty("", "")));
+			menu.addItem((item) => item.setTitle(ADD_ID_PROPERTY).setIcon("key-round").onClick(() => this.addId()));
+			menu.showAtMouseEvent(evt);
+		});
 		this.chipsEl = parent.createDiv({ cls: "csv-importer-chips" });
 		this.renderList();
 		this.renderChips();
@@ -49,6 +39,20 @@ export class ExtraPropertiesSection {
 			this.renderChips();
 		});
 		this.draft.on("columns", () => this.updateWarnings());
+	}
+
+	private addProperty(name: string, defaultValue: string): void {
+		this.draft.cfg.extraProperties.push({ property: name, type: "text", defaultValue });
+		this.renderList();
+		this.draft.emit("preview");
+	}
+
+	/** Gives every new note a unique ID (UUID); the ID is kept on re-import. */
+	private addId(): void {
+		const taken = new Set(this.draft.cfg.extraProperties.map((e) => e.property.trim().toLowerCase()));
+		let name = "id";
+		for (let n = 2; taken.has(name); n++) name = `id ${n}`;
+		this.addProperty(name, "{{uuid}}");
 	}
 
 	private renderChips(): void {
@@ -96,7 +100,7 @@ export class ExtraPropertiesSection {
 		const def = fields.createEl("input", {
 			type: "text",
 			cls: "csv-importer-prop-input csv-importer-extra-default",
-			attr: { placeholder: "Default value, e.g. open or {{today}}", "aria-label": "Default value" },
+			attr: { placeholder: "Default, e.g. open or {{today}}", "aria-label": "Default value" },
 		});
 		def.value = prop.defaultValue;
 		def.addEventListener("focus", () => {
@@ -107,7 +111,7 @@ export class ExtraPropertiesSection {
 			draft.emitPreviewDebounced();
 		});
 
-		const remove = fields.createEl("button", { cls: "csv-importer-icon-btn", attr: { type: "button", "aria-label": "Remove property" } });
+		const remove = fields.createEl("button", { cls: "clickable-icon csv-importer-extra-remove", attr: { type: "button", "aria-label": "Remove property" } });
 		setIcon(remove, "trash-2");
 		remove.addEventListener("click", () => {
 			const list = draft.cfg.extraProperties;

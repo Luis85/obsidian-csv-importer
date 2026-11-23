@@ -4,7 +4,7 @@
  * Scenario registry for the ui-preview harness. Each scenario mounts the plugin's real view/modal code
  * (with the obsidian shim) into the page. Select by URL hash, e.g. index.html?theme=dark&mobile=1#c-config.
  */
-import { App, TFile, Notice, WorkspaceLeaf } from "obsidian";
+import { App, TFile, Notice, WorkspaceLeaf, Setting } from "obsidian";
 import { CsvView } from "../src/view/CsvView";
 import { ImportConfigModal } from "../src/view/ImportConfigModal";
 import { ImportRunModal } from "../src/view/ImportRunModal";
@@ -164,6 +164,18 @@ function extrasConfig(host, text) {
 	return cfg;
 }
 
+// --- owner:config scenarios (helper) ---
+async function mountConfig(tab, extras = false) {
+	const host = new FakeHost(timesheetEn);
+	const { app, file } = mountTableView(host, timesheetEn);
+	if (extras) host.configs.set(file.path, extrasConfig(host, timesheetEn));
+	new ImportConfigModal(app, host, file, timesheetEn).open();
+	await sleep(300);
+	const idx = { columns: 0, notes: 1, reimport: 2, file: 3 }[tab];
+	document.querySelectorAll(".csv-importer-tab")[idx]?.click();
+	await sleep(200);
+}
+
 const INDEX_ITEMS = [
 	{ csvPath: "Data/timesheet.csv", fileName: "timesheet.csv", exists: true, targetFolder: "Data/timesheet", lastImport: Date.now() - 2 * 3600e3, hasUndo: true, basePath: "Data/timesheet/timesheet.base" },
 	{ csvPath: "Finanzen/Konto/umsaetze-2026-10.csv", fileName: "umsaetze-2026-10.csv", exists: true, targetFolder: "Finanzen/Buchungen", lastImport: Date.now() - 3 * 86400e3, hasUndo: false, basePath: null },
@@ -198,7 +210,124 @@ async function mountIndex(items) {
 	await sleep(150);
 }
 
+// --- owner:table-run scenarios ---
+function manyRows(n) {
+	const rows = [];
+	for (let i = 1; i <= n; i++) {
+		const outcome = i % 7 === 0 ? "unchanged" : i % 3 === 0 ? "updated" : "created";
+		rows.push({ row: i, path: `Data/timesheet/Projekte/2026/timesheet mit einem sehr langen Dateinamen ${i}.md`, outcome, changed: outcome === "updated" ? ["Stunden"] : undefined });
+	}
+	rows.push({ row: n + 1, path: "Data/timesheet/timesheet broken.md", outcome: "failed", reason: "file name taken by another record" });
+	return rows;
+}
+
+const tableRunScenarios = {
+	"a2-table-filter-nomatch": {
+		title: "Table view: active row filter callout, search without matches",
+		async mount() {
+			const host = new FakeHost(timesheetEn);
+			host.undoable = true;
+			host.configs.set("Data/timesheet.csv", extrasConfig(host, timesheetEn));
+			const { view } = mountTableView(host, timesheetEn);
+			const input = document.querySelector(".csv-importer-search");
+			input.value = "zzz";
+			input.dispatchEvent(new Event("input"));
+			await sleep(400);
+		},
+	},
+	"a3-table-empty": {
+		title: "Table view: header only, no rows",
+		async mount() {
+			mountTableView(new FakeHost("Datum,Rolle,Stunden\n"), "Datum,Rolle,Stunden\n");
+		},
+	},
+	"e2-run-many": {
+		title: "Import run dialog, preview with many rows (groups open/closed)",
+		async mount() {
+			const host = new FakeHost(timesheetEn);
+			const { file } = mountTableView(host, timesheetEn);
+			const ctl = runControls(file);
+			ctl.preview = async () => tally(manyRows(30), { dryRun: true, warnings: [RUN_WARNING] });
+			new ImportRunModal(new App(), ctl).open();
+			await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
+			await sleep(200);
+		},
+	},
+	"e3-run-progress": {
+		title: "Import run dialog, mid-progress",
+		async mount() {
+			const host = new FakeHost(timesheetEn);
+			const { file } = mountTableView(host, timesheetEn);
+			const ctl = runControls(file);
+			ctl.execute = ({ onProgress }) => {
+				onProgress(3, 8);
+				return new Promise(() => {});
+			};
+			new ImportRunModal(new App(), ctl).open();
+			const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
+			cta.click();
+			await sleep(300);
+		},
+	},
+	"f2-run-done-many": {
+		title: "Import run dialog, done state with many rows",
+		async mount() {
+			const host = new FakeHost(timesheetEn);
+			const { file } = mountTableView(host, timesheetEn);
+			const ctl = runControls(file);
+			ctl.preview = async () => tally(manyRows(30), { dryRun: true });
+			ctl.execute = async () => ({ undoable: true, result: tally(manyRows(30)) });
+			new ImportRunModal(new App(), ctl).open();
+			const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
+			cta.click();
+			await waitFor(() => document.querySelector(".modal-title")?.textContent?.startsWith("Import finished"));
+			await sleep(200);
+		},
+	},
+	"f3-run-done-menu": {
+		title: "Import run dialog, done state with the more menu open",
+		async mount() {
+			const host = new FakeHost(timesheetEn);
+			const { file } = mountTableView(host, timesheetEn);
+			new ImportRunModal(new App(), runControls(file)).open();
+			const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
+			cta.click();
+			await waitFor(() => document.querySelector(".modal-title")?.textContent?.startsWith("Import finished"));
+			document.querySelector(".csv-importer-run-more").click();
+			await sleep(200);
+		},
+	},
+};
+// --- end owner:table-run scenarios ---
+
+// --- owner:index-settings scenarios --- (helper) Renders getSettingDefinitions() like Obsidian 1.13+ does.
+function renderDefinitions(tab, el) {
+	el.empty();
+	const renderItem = (container, def) => {
+		if (def.type === "group" || def.type === "list") {
+			if (def.heading) new Setting(container).setName(def.heading).setHeading();
+			for (const it of def.items ?? []) renderItem(container, it);
+			return;
+		}
+		if (def.visible === false) return;
+		const st = new Setting(container).setName(def.name);
+		if (def.desc) st.setDesc(def.desc);
+		if (def.render) return void def.render(st, null);
+		if (def.action) return void st.addButton((b) => b.setButtonText(def.name.replace(/\u2026$/, "")).onClick(def.action));
+		const c = def.control;
+		if (!c) return;
+		const value = tab.getControlValue(c.key);
+		const set = (v) => void tab.setControlValue(c.key, v);
+		if (c.type === "toggle") st.addToggle((t) => t.setValue(!!value).onChange(set));
+		else if (c.type === "dropdown") st.addDropdown((d) => d.addOptions(c.options).setValue(String(value)).onChange(set));
+		else if (c.type === "textarea") st.addTextArea((t) => t.setValue(String(value ?? "")).onChange(set));
+		else st.addText((t) => t.setValue(String(value ?? "")).onChange(set));
+	};
+	for (const def of tab.getSettingDefinitions()) renderItem(el, def);
+}
+
 export const scenarios = {
+	...tableRunScenarios,
 	"a-table-first-import": {
 		title: "Table view, first import hint (timesheet-de.csv)",
 		async mount() {
@@ -215,44 +344,36 @@ export const scenarios = {
 			mountTableView(host, text);
 		},
 	},
-	"c-config": {
-		title: "Import settings dialog",
+	// --- owner:config scenarios ---
+	"c-config": { title: "Import settings dialog, Columns tab", async mount() { await mountConfig("columns"); } },
+	"c-config-notes": { title: "Import settings dialog, Notes tab", async mount() { await mountConfig("notes"); } },
+	"c-config-reimport": { title: "Import settings dialog, Re-import tab", async mount() { await mountConfig("reimport"); } },
+	"c-config-file": { title: "Import settings dialog, File & rows tab", async mount() { await mountConfig("file"); } },
+	"c-config-extras": { title: "Import settings dialog: extra properties (ID uuid), Columns tab", async mount() { await mountConfig("columns", true); } },
+	"c-config-extras-reimport": { title: "Import settings dialog: composite key, Re-import tab", async mount() { await mountConfig("reimport", true); } },
+	"c-config-extras-filter": { title: "Import settings dialog: active row filter, File & rows tab", async mount() { await mountConfig("file", true); } },
+	"c-config-options": {
+		title: "Import settings dialog, column options expanded (number column)",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { app, file } = mountTableView(host, timesheetEn);
-			new ImportConfigModal(app, host, file, timesheetEn).open();
-			await sleep(400);
+			await mountConfig("columns");
+			const row = document.querySelectorAll(".csv-importer-col-row")[3];
+			const b = row?.querySelector(".csv-importer-col-options-btn");
+			const sum = row?.querySelector(".csv-importer-col-summary");
+			(b && b.offsetParent ? b : sum)?.click();
+			await sleep(150);
 		},
 	},
-	"c-config-extras": {
-		title: "Import settings dialog: extra properties (ID uuid), composite key, row filter",
+	"c-config-preview": {
+		title: "Import settings dialog, preview toggled on (narrow layouts)",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { app, file } = mountTableView(host, timesheetEn);
-			host.configs.set(file.path, extrasConfig(host, timesheetEn));
-			new ImportConfigModal(app, host, file, timesheetEn).open();
-			await sleep(300);
-			const d = document.querySelector("details.csv-importer-advanced");
-			if (d) d.open = true;
-			await sleep(200);
+			await mountConfig("columns", true);
+			const t = document.querySelector(".csv-importer-preview-toggle");
+			if (t && t.offsetParent) t.click();
+			await sleep(150);
 		},
 	},
-	"c-config-extras-filter": {
-		title: "Import settings dialog: active row filter (scrolled into view)",
-		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { app, file } = mountTableView(host, timesheetEn);
-			host.configs.set(file.path, extrasConfig(host, timesheetEn));
-			new ImportConfigModal(app, host, file, timesheetEn).open();
-			await sleep(300);
-			const d = document.querySelector("details.csv-importer-advanced");
-			if (d) d.open = true;
-			await sleep(200);
-			const fc = document.querySelector(".csv-importer-filter-count");
-			if (fc) fc.scrollIntoView({ block: "center" });
-			await sleep(100);
-		},
-	},
+	"d-config-advanced": { title: "Import settings dialog, File & rows tab (alias)", async mount() { await mountConfig("file"); } },
+	// --- end owner:config scenarios ---
 	"h-index": {
 		title: "CSV imports index view (4 imports, one missing CSV, one with undo)",
 		async mount() {
@@ -263,22 +384,6 @@ export const scenarios = {
 		title: "CSV imports index view, empty state",
 		async mount() {
 			await mountIndex([]);
-		},
-	},
-	"d-config-advanced": {
-		title: "Import settings dialog, Advanced expanded",
-		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { app, file } = mountTableView(host, timesheetEn);
-			new ImportConfigModal(app, host, file, timesheetEn).open();
-			await sleep(300);
-			const d = document.querySelector("details.csv-importer-advanced");
-			if (d) d.open = true;
-			await sleep(200);
-			// Scroll the dialog body so the expanded section is what the (non-tall) screenshot shows.
-			const body = document.querySelector(".csv-importer-config");
-			if (body) body.scrollTop = body.scrollHeight;
-			await sleep(100);
 		},
 	},
 	"e-run-preview": {
@@ -313,6 +418,7 @@ export const scenarios = {
 				settings: { ...DEFAULT_SETTINGS },
 				saveSettings: async () => {},
 				forgetAllFileConfigs: async () => {},
+				openImportIndex: async () => {},
 				manifest: { id: "csv-importer", name: "CSV Importer" },
 			};
 			const container = document.body.createDiv({ cls: "modal-container mod-dim" });
@@ -326,9 +432,27 @@ export const scenarios = {
 			const content = modal.createDiv({ cls: "modal-content vertical-tab-content-container" });
 			const tab = new CsvImporterSettingTab(app, {} as never, host);
 			content.appendChild(tab.containerEl);
-			tab.display();
+			renderDefinitions(tab, tab.containerEl);
 		},
 	},
+
+	// --- owner:index-settings scenarios ---
+	"h-index-long": {
+		title: "CSV imports index view, long names and many rows",
+		async mount() {
+			const long = Array.from({ length: 6 }, (_, i) => ({
+				csvPath: `Projekte/Kundenprojekte/2026/Quartal-${i + 1}/sehr-langer-dateiname-fuer-den-export-${i + 1}.csv`,
+				fileName: `sehr-langer-dateiname-fuer-den-export-${i + 1}.csv`,
+				exists: i !== 2,
+				targetFolder: "Projekte/Kunden",
+				lastImport: i % 2 ? null : Date.now() - (i + 1) * 3600e3,
+				hasUndo: i === 0,
+				basePath: null,
+			}));
+			await mountIndex(long);
+		},
+	},
+	// --- end owner:index-settings scenarios ---
 };
 
 // ---------------------------------------------------------------------------------------------

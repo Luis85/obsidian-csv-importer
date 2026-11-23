@@ -98,6 +98,7 @@ export const SETTINGS_DESC = {
 	protectEdits: "When updating, a CSV property you changed in Obsidian keeps your value.",
 	keepOnEmpty: "When updating, an empty cell does not clear a value in the note.",
 	pageSize: "Maximum number of rows rendered in the table before showing more.",
+	imports: "See every CSV with saved import settings, and re-import, configure or undo from one list.",
 	reset: "Removes the saved import settings of every CSV file. Imported notes are not affected.",
 } as const;
 
@@ -105,7 +106,7 @@ export const SETTINGS_DESC = {
 export const CONFIG_DESC = {
 	targetFolder:
 		"Leave empty to use the default folder shown as placeholder. Placeholders like {{Column}} create subfolders per row, for example Projects/{{Client}}.",
-	fileName: "Use {{Column name}} for cell values, {{row}} for the row number and {{file}} for the CSV name. The note body is set under Advanced.",
+	fileName: "Use {{Column name}} for cell values, {{row}} for the row number and {{file}} for the CSV name. The note body is set in the Notes tab of the import settings.",
 	key: "On re-import, the note whose property matches this column is updated, even if renamed. Pick a unique column such as an ID. The column is always written to the notes.",
 	protectEdits: "If you changed a CSV property in Obsidian, re-imports keep your value.",
 	keepOnEmpty: "An empty cell does not clear a value that exists in the note.",

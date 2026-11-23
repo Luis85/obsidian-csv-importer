@@ -9,17 +9,20 @@ import {
 	DELIMITER_OPTIONS,
 	EMPTY_VALUE_OPTIONS,
 	ENCODING_LABELS,
+	FILTER_ROWS,
+	FILTER_ROWS_WHERE,
+	LINK_NOTES_TO_CSV,
 	NAME,
 	PRECISION_ERROR,
 	ROW_FILTER_OPS,
 } from "../labels";
+import { filterCount } from "./copy";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
 
-/** The collapsible "Advanced" section: parsing options, number and empty-cell handling, templates and flags. */
+/** Parsing options, row filter, body template, tags and flags, spread over the dialog tabs. */
 export class AdvancedSection {
-	private detailsEl!: HTMLDetailsElement;
-	private bodyChipsEl!: HTMLElement;
+		private bodyChipsEl!: HTMLElement;
 	private bodyInput: HTMLTextAreaElement | null = null;
 	private sourceHintEl: HTMLElement | null = null;
 	private encodingSetting: Setting | null = null;
@@ -27,24 +30,33 @@ export class AdvancedSection {
 
 	constructor(private readonly draft: ConfigDraft) {}
 
-	build(parent: HTMLElement): void {
-		this.detailsEl = parent.createEl("details", { cls: "csv-importer-advanced" });
-		this.detailsEl.createEl("summary", { text: "Advanced" });
-		this.buildParsingOptions(this.detailsEl);
-		this.buildRowFilter(this.detailsEl);
-		this.buildContentOptions(this.detailsEl);
-		if (this.draft.looksWrong()) this.detailsEl.open = true;
-		this.renderChips();
-
-		this.draft.on("parsing", () => {
-			if (this.draft.looksWrong()) this.detailsEl.open = true;
-			this.renderChips();
-		});
+	/** Parsing options and the row filter: the "File & rows" tab. */
+	buildFile(el: HTMLElement): void {
+		this.buildRowFilter(el);
+		this.buildParsingOptions(el);
 		this.draft.on("parsing", () => this.renderRowFilter());
-		this.draft.on("preview", () => {
-			this.updateSourceHint();
-			this.updateFilterCount();
-		});
+		this.draft.on("preview", () => this.updateFilterCount());
+	}
+
+	/** Body, tags, source link and base: the lower part of the "Notes" tab. */
+	buildNotesContent(el: HTMLElement): void {
+		this.buildContentOptions(el);
+		this.renderChips();
+		this.draft.on("parsing", () => this.renderChips());
+		this.draft.on("preview", () => this.updateSourceHint());
+	}
+
+	/** "Adopt existing notes" toggle, shown on the "Re-import" tab. */
+	buildAdopt(el: HTMLElement): void {
+		new Setting(el)
+			.setName("Update existing notes not created by this import")
+			.setDesc(CONFIG_DESC.adopt)
+			.addToggle((t) =>
+				t.setValue(this.draft.cfg.adoptExistingNotes).onChange((v) => {
+					this.draft.cfg.adoptExistingNotes = v;
+					this.draft.emit("preview");
+				}),
+			);
 	}
 
 	/** Show which encoding "Auto" picked. Only a hint, so failures are ignored. */
@@ -192,7 +204,7 @@ export class AdvancedSection {
 	private buildRowFilter(el: HTMLElement): void {
 		const { cfg } = this.draft;
 		new Setting(el)
-			.setName("Import only some rows")
+			.setName(FILTER_ROWS)
 			.setDesc("Rows that do not match are left out of the preview and the import.")
 			.addToggle((t) =>
 				t.setValue(cfg.rowFilter !== null).onChange((on) => {
@@ -215,7 +227,7 @@ export class AdvancedSection {
 		if (!cfg.columns.some((c) => c.source === filter.column)) filter.column = cfg.columns[0]?.source ?? "";
 		const columns: Record<string, string> = {};
 		for (const c of cfg.columns) columns[c.source] = c.source;
-		const setting = new Setting(box).setName("Keep rows where");
+		const setting = new Setting(box).setName(FILTER_ROWS_WHERE);
 		setting.addDropdown((d) =>
 			d.addOptions(columns).setValue(filter.column).onChange((v) => {
 				filter.column = v;
@@ -241,7 +253,7 @@ export class AdvancedSection {
 			t.inputEl.setAttr("aria-label", "Filter value");
 			t.inputEl.toggleClass("csv-importer-hidden", filter.op === "empty" || filter.op === "notEmpty");
 		});
-		box.createDiv({ cls: "csv-importer-key-hint csv-importer-filter-count", attr: { "aria-live": "polite" } });
+		box.createDiv({ cls: "csv-importer-filter-count", attr: { "aria-live": "polite" } });
 		this.updateFilterCount();
 	}
 
@@ -259,7 +271,7 @@ export class AdvancedSection {
 		} catch {
 			matching = 0;
 		}
-		el.setText(`${matching} of ${parsed.rows.length} rows match.`);
+		el.setText(filterCount(matching, parsed.rows.length));
 	}
 
 	private buildContentOptions(el: HTMLElement): void {
@@ -285,7 +297,7 @@ export class AdvancedSection {
 					this.draft.emitPreviewDebounced();
 				}),
 			);
-		const sourceSetting = new Setting(el).setName("Add source link").setDesc(CONFIG_DESC.sourceLink);
+		const sourceSetting = new Setting(el).setName(LINK_NOTES_TO_CSV).setDesc(CONFIG_DESC.sourceLink);
 		this.sourceHintEl = sourceSetting.descEl.createDiv({ cls: "csv-importer-key-hint" });
 		sourceSetting.addToggle((t) =>
 			t.setValue(cfg.addSourceLink).onChange((v) => {
@@ -299,15 +311,6 @@ export class AdvancedSection {
 			.addToggle((t) =>
 				t.setValue(cfg.createBase).onChange((v) => {
 					cfg.createBase = v;
-				}),
-			);
-		new Setting(el)
-			.setName("Update existing notes not created by this import")
-			.setDesc(CONFIG_DESC.adopt)
-			.addToggle((t) =>
-				t.setValue(cfg.adoptExistingNotes).onChange((v) => {
-					cfg.adoptExistingNotes = v;
-					this.draft.emit("preview");
 				}),
 			);
 	}

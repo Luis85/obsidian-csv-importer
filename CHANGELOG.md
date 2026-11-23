@@ -13,6 +13,13 @@
 - Preview warnings for duplicate keys in the CSV, duplicate notes in the vault (e.g. sync conflict copies), very large imports, active row filters and extra properties that clash with columns.
 - Requires Obsidian 1.15.1 or later. Version guards were removed; settings use the declarative settings API and appear in Obsidian's settings search.
 
+### Interface overhaul
+- Import settings: tabs (Columns, Notes, Re-import, File & rows), a summary line, preview beside the settings on wide screens, buttons that stay visible, compact column rows with an options button, key suggestions that skip free-text columns, and a preview that follows the row filter.
+- Table view: one primary action, a status line with last import and Undo, at most one callout at a time.
+- Import dialog: results grouped by outcome with paths relative to the target folder; on phones the buttons stay visible and nothing overflows.
+- CSV imports index: dense rows, Import vs Re-import, clearer missing-CSV and empty states.
+- Settings tab regrouped; consistent wording, outline badges and native callouts throughout.
+
 ### Marketplace review fixes
 - Release assets (`main.js`, `styles.css`) carry GitHub artifact attestations (build provenance).
 - The settings tab no longer touches `Plugin.settings` (an Obsidian 1.13 API) and uses the declarative settings API.
