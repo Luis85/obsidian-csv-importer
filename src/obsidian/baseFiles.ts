@@ -1,4 +1,4 @@
-import { normalizePath, Notice, requireApiVersion, TFile } from "obsidian";
+import { normalizePath, Notice, TFile } from "obsidian";
 import type { App } from "obsidian";
 import { buildBaseFile } from "../import/baseFile";
 import type { FileImportConfig } from "../types";
@@ -18,7 +18,7 @@ export function openBase(app: App, staticFolder: string): void {
 }
 
 /**
- * Creates the base file next to the notes folder (Obsidian 1.9+ only). Never overwrites an existing file.
+ * Creates the base file next to the notes folder . Never overwrites an existing file.
  * Returns its path and content, or null when nothing was created.
  */
 export async function createBaseFile(
@@ -27,7 +27,6 @@ export async function createBaseFile(
 	cfg: FileImportConfig,
 	csvBasename: string,
 ): Promise<{ path: string; content: string } | null> {
-	if (!requireApiVersion("1.9.0")) return null;
 	try {
 		const path = normalizePath(`${folder}.base`);
 		if (app.vault.getAbstractFileByPath(path)) return null;

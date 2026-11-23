@@ -274,6 +274,8 @@ Competitor facts are taken from the plugins' own documentation and listings as r
 
 ## Installation
 
+Requires Obsidian 1.15.1 or later (desktop and mobile).
+
 ### Community plugins
 
 Once CSV Importer is listed in the community store:

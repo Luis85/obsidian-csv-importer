@@ -11,11 +11,11 @@
 - Composite key: match notes by several columns, stored in a key property.
 - **Import only some rows**: a row filter per file.
 - Preview warnings for duplicate keys in the CSV, duplicate notes in the vault (e.g. sync conflict copies), very large imports, active row filters and extra properties that clash with columns.
-- Settings appear in Obsidian's settings search (1.13+).
+- Requires Obsidian 1.15.1 or later. Version guards were removed; settings use the declarative settings API and appear in Obsidian's settings search.
 
 ### Marketplace review fixes
 - Release assets (`main.js`, `styles.css`) carry GitHub artifact attestations (build provenance).
-- The settings tab no longer touches `Plugin.settings` (an Obsidian 1.13 API) and implements the declarative settings API with a fallback for older versions.
+- The settings tab no longer touches `Plugin.settings` (an Obsidian 1.13 API) and uses the declarative settings API.
 - Removed duplicate CSS declarations; styles are now checked with Stylelint in CI.
 
 ### Reliability

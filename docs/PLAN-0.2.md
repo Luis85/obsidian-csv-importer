@@ -43,7 +43,7 @@ The existing 220 tests must stay green. Each worker has its own files:
 ### Obsidian rules and toolchain
 
 - The release workflow adds build provenance attestations for `main.js` and `styles.css`, as the sample plugin does.
-- Declarative settings with `getSettingDefinitions()` (1.13+), keeping `display()` as the fallback. `minAppVersion` stays 1.6.6.
+- Declarative settings with `getSettingDefinitions()`. Update: `minAppVersion` was raised to 1.15.1 at the user's request, so version guards and the `display()` fallback were removed.
 - Saved data gets a schema version (`version: 1`), so later versions can migrate it.
 - Final saves after a write are caught like checkpoints. The notes were written, so the user is told that the history could not be saved.
 - CI runs on Node 20, 22 and 24.

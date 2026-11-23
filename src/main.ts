@@ -136,8 +136,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 			leaf = workspace.getLeaf("tab");
 			await leaf.setViewState({ type: VIEW_TYPE_IMPORT_INDEX, active: true });
 		}
-		// setActiveLeaf (0.16.3) instead of revealLeaf, which is @since 1.7.2 and newer than minAppVersion.
-		workspace.setActiveLeaf(leaf, { focus: true });
+		await workspace.revealLeaf(leaf);
 	}
 
 	private async openConfig(file: TFile): Promise<void> {
