@@ -1,8 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 (beta) - 2026-11-23
 
-- Removed the use of Obsidian's undocumented property-type registry. Property types now come from the typed YAML values alone, and the "Register property types" setting is gone.
+First beta release, installable with BRAT.
+
+### Features
+- Table view for `.csv` files with sorting, filtering and type badges; click a badge to change a column's type, link its values or exclude it.
+- Import every row as a note with typed properties: unquoted numbers (decimal comma and thousands separators normalized), ISO dates and datetimes, booleans, lists; minimal text quoting; Excel serial dates; number precision; empty cells left empty or omitted.
+- Automatic type inference with per-column overrides; per-column value templates such as `[[{{value}}]]`.
+- Per-file import settings, kept in sync when files are renamed.
+- File name, body and folder templates with `{{Column}}`, `{{row}}`, `{{file}}` (for example `Projects/{{Client}}`).
+- "When a note already exists": Update properties, Skip, Create a copy, Replace whole note. Update keeps properties added in Obsidian, the note body, values edited in Obsidian and values for empty CSV cells; unchanged notes are not rewritten.
+- Match notes by a key column on re-import, even after renaming; key column suggestion.
+- Import dialog with preview, progress with Stop, a saveable report, Open base and Open first note.
+- Undo last import.
+- Encoding detection (UTF-8, UTF-16, Windows-1252) and delimiter detection.
+- Optional `.base` file (Obsidian 1.9+), optional source link and tags, list normalization for tags/aliases/cssclasses, warning when CSV columns change.
+- Commands and file-menu entries, including "Re-import all configured CSV files".
+- Uses only documented Obsidian APIs; no network access.
 
 ### Safety
 - Re-imports only change notes this CSV created. Other notes are skipped as "not created by this import". New option **Update existing notes not created by this import** turns this off.
@@ -30,24 +45,3 @@
 - README rewritten: quick start, timesheet and Bases walkthrough, privacy and data, limitations, troubleshooting, comparison. Developer docs moved to CONTRIBUTING.md.
 - Uses `vault.process` for writes; only real errors are logged.
 - New manifest description.
-
-## 0.1.0 (beta)
-
-- First beta release, installable with BRAT.
-- Table view for `.csv` files.
-- Per-file import settings, kept in sync on rename.
-- Automatic type inference (number, checkbox, date, datetime, text; list on request) with per-column overrides.
-- Semicolon delimiter and decimal comma support.
-- File name and body templates with `{{Column}}`, `{{row}}`, `{{file}}`.
-- Conflict strategies: skip, overwrite, update properties, create with suffix.
-- Optional source link property and tags.
-- Typed YAML output: unquoted numbers, ISO dates and datetimes, booleans; minimal text quoting; Excel serial dates; number precision; empty cells left empty or omitted.
-- Key column for idempotent re-imports.
-- Change column types and link values directly from the table header.
-- Per-column value templates, e.g. `[[{{value}}]]` for wikilinks.
-- "Existing notes" option (Update, Skip, Create a copy, Overwrite). Update keeps properties added in Obsidian, the note body, values edited in Obsidian, and values for empty CSV cells; unchanged notes are not rewritten.
-- Import dialog with dry-run preview, progress with Stop, and a saveable report.
-- Undo last import.
-- Encoding detection (UTF-8, UTF-16, Windows-1252).
-- Folder placeholders such as `Projects/{{Client}}`, optional `.base` file, list normalization for tags/aliases/cssclasses, warning when CSV columns change.
-- Commands and file-menu entries for importing and configuring.
