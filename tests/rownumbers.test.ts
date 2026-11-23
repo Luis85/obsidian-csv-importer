@@ -1,33 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseCsv } from "../src/csv/parser";
 import { planNotes } from "../src/import/noteBuilder";
-import type { FileImportConfig } from "../src/types";
-
-function cfg(over: Partial<FileImportConfig> = {}): FileImportConfig {
-	return {
-		delimiter: "auto",
-		hasHeader: true,
-		decimalSeparator: ".",
-		targetFolder: "",
-		fileNameTemplate: "{{file}} {{row}}",
-		bodyTemplate: "",
-		conflict: "skip",
-		tags: "",
-		addSourceLink: false,
-		listSeparator: ",",
-		emptyValues: "empty",
-		numberPrecision: null,
-		keyColumn: "",
-		adoptExistingNotes: false,
-		encoding: "auto",
-		protectEdits: true,
-		keepValuesOnEmpty: true,
-		createBase: false,
-		columns: [],
-		lastImport: null,
-		...over,
-	};
-}
+import { cfg } from "./helpers/harness";
 
 describe("row numbers with skipped blank rows", () => {
 	it("keeps original numbering for {{row}} and note.row", () => {

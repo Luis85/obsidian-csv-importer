@@ -10,33 +10,7 @@ import {
 } from "../src/import/noteBuilder";
 import { parseCsv } from "../src/csv/parser";
 import { buildColumnConfigs, suggestKeyColumn } from "../src/csv/typeInference";
-import type { FileImportConfig } from "../src/types";
-
-function cfg(over: Partial<FileImportConfig> = {}): FileImportConfig {
-	return {
-		delimiter: "auto",
-		hasHeader: true,
-		decimalSeparator: ".",
-		targetFolder: "",
-		fileNameTemplate: "{{file}} {{row}}",
-		bodyTemplate: "",
-		conflict: "skip",
-		tags: "",
-		addSourceLink: false,
-		listSeparator: ",",
-		emptyValues: "empty",
-		numberPrecision: null,
-		keyColumn: "",
-		adoptExistingNotes: false,
-		encoding: "auto",
-		protectEdits: true,
-		keepValuesOnEmpty: true,
-		createBase: false,
-		columns: [],
-		lastImport: null,
-		...over,
-	};
-}
+import { cfg } from "./helpers/harness";
 
 describe("renderTemplate", () => {
 	const ctx = { headers: ["Name", "Age"], row: ["Ann", " 5 "], rowNumber: 3, fileBasename: "people" };
@@ -388,12 +362,14 @@ describe("S4 file names", () => {
 		expect(notes[1].path).toBe("hours/a 2.md");
 		expect(notes[2].path).toBe("hours/A 2 2.md");
 	});
-	it("handles 10k duplicates quickly", () => {
+	it("handles 10k duplicates with correct unique suffixes (and not quadratically slowly)", () => {
 		const parsed = parseCsv("n\n" + "x\n".repeat(10000), { delimiter: ",", hasHeader: true });
 		const t = Date.now();
 		const notes = planNotes(parsed, cfg({ fileNameTemplate: "{{n}}" }), csv);
-		expect(Date.now() - t).toBeLessThan(1500);
-		expect(new Set(notes.map((x) => x.path)).size).toBe(10000);
+		// Generous bound: only guards against pathological (quadratic) behaviour, not machine speed.
+		expect(Date.now() - t).toBeLessThan(10_000);
+		const expected = ["hours/x.md", ...Array.from({ length: 9999 }, (_, i) => `hours/x ${i + 2}.md`)];
+		expect(notes.map((x) => x.path)).toEqual(expected);
 	});
 });
 

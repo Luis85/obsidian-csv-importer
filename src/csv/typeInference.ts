@@ -1,4 +1,4 @@
-import type { ColumnConfig, FileImportConfig, FrontmatterValue, ParsedCsv, PropertyType } from "../types";
+import type { ColumnConfig, FileImportConfig, FrontmatterValue, HeaderDrift, ParsedCsv, PropertyType } from "../types";
 
 export interface InferenceOptions {
 	decimalSeparator: "." | ",";
@@ -12,6 +12,16 @@ export interface ConversionOptions {
 	listSeparator: string;
 	/** Round numbers to this many decimals (trailing zeros stripped). null/undefined keeps the source precision. */
 	precision?: number | null;
+}
+
+/** Conversion options derived from a file's import config. */
+export function conversionOptionsOf(cfg: FileImportConfig): ConversionOptions {
+	return { decimalSeparator: cfg.decimalSeparator, listSeparator: cfg.listSeparator, precision: cfg.numberPrecision };
+}
+
+/** Inference options derived from a file's import config. */
+export function inferenceOptionsOf(cfg: FileImportConfig, midnightAsDate: boolean): InferenceOptions {
+	return { decimalSeparator: cfg.decimalSeparator, midnightAsDate, listSeparator: cfg.listSeparator };
 }
 
 /**
@@ -107,7 +117,7 @@ function parseDatePart(s: string): string | null {
 }
 
 /** Recognize a date or datetime string. Timezone and fractional seconds are dropped. */
-export function parseDateValue(raw: string): ParsedDate | null {
+function parseDateValue(raw: string): ParsedDate | null {
 	const s = raw.trim();
 	const date = parseDatePart(s);
 	if (date) return { kind: "date", date };
@@ -336,7 +346,7 @@ export function reconcileColumns(existing: ColumnConfig[], parsed: ParsedCsv, op
  * with one separator but not with the other votes for that separator.
  * Returns null when the data gives no evidence either way.
  */
-export function detectDecimalSeparator(parsed: ParsedCsv): "." | "," | null {
+function detectDecimalSeparator(parsed: ParsedCsv): "." | "," | null {
 	let comma = 0;
 	let dot = 0;
 	for (let c = 0; c < parsed.headers.length; c++) {
@@ -373,11 +383,7 @@ export function prepareConfig(
 	if (config.columns.length === 0) {
 		config.decimalSeparator = detectDecimalSeparator(parsed) ?? config.decimalSeparator;
 	}
-	config.columns = reconcileColumns(config.columns, parsed, {
-		decimalSeparator: config.decimalSeparator,
-		midnightAsDate,
-		listSeparator: config.listSeparator,
-	});
+	config.columns = reconcileColumns(config.columns, parsed, inferenceOptionsOf(config, midnightAsDate));
 	return config;
 }
 
@@ -385,7 +391,7 @@ export function prepareConfig(
  * Compare saved column sources with the current headers. `added`: headers without a saved column;
  * `removed`: saved column sources no longer in the file. Both empty when `columns` is empty (not configured yet).
  */
-export function detectHeaderDrift(columns: ColumnConfig[], parsed: ParsedCsv): { added: string[]; removed: string[] } {
+export function detectHeaderDrift(columns: ColumnConfig[], parsed: ParsedCsv): HeaderDrift {
 	if (columns.length === 0) return { added: [], removed: [] };
 	const saved = new Set(columns.map((c) => c.source));
 	const current = new Set(parsed.headers);

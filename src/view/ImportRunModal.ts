@@ -1,11 +1,11 @@
-import { Modal, Notice, normalizePath, setIcon } from "obsidian";
+import { Modal, Notice, normalizePath } from "obsidian";
 import type { App } from "obsidian";
-import type { ImportResult, NoteOutcome, RowOutcome } from "../types";
+import type { HeaderDrift, ImportResult, NoteOutcome, RowOutcome } from "../types";
+import { ROW_REASON, emptyResult } from "../core/result";
+import { errorMessage, plural } from "../core/util";
+import { renderCallout } from "./dom";
 
-export interface HeaderDrift {
-	added: string[];
-	removed: string[];
-}
+export type { HeaderDrift };
 
 /** What the dialog needs from the plugin; keeps it free of vault logic. */
 export interface ImportRunControls {
@@ -83,7 +83,7 @@ export class ImportRunModal extends Modal {
 	onClose(): void {
 		this.stop = true;
 		this.contentEl.empty();
-		this.resolveClosed(this.finished ?? this.latest ?? emptyResult());
+		this.resolveClosed(this.finished ?? this.latest ?? emptyResult(true));
 	}
 
 	// --- phases ---
@@ -96,7 +96,7 @@ export class ImportRunModal extends Modal {
 		try {
 			result = await this.ctl.preview();
 		} catch (e) {
-			this.reset().createDiv({ cls: "csv-importer-run-error", text: `Preview failed: ${errText(e)}` });
+			this.reset().createDiv({ cls: "csv-importer-run-error", text: `Preview failed: ${errorMessage(e)}` });
 			this.buttons([{ text: "Close", onClick: () => this.close() }]);
 			return;
 		}
@@ -111,7 +111,7 @@ export class ImportRunModal extends Modal {
 		const actionable = result.created + result.updated;
 		this.buttons([
 			{
-				text: actionable > 0 ? `Import ${actionable} ${actionable === 1 ? "note" : "notes"}` : "Import",
+				text: actionable > 0 ? `Import ${plural(actionable, "note", "notes")}` : "Import",
 				cta: true,
 				disabled: result.rows.length === 0,
 				onClick: () => void this.runImport(),
@@ -158,7 +158,7 @@ export class ImportRunModal extends Modal {
 		} catch (e) {
 			this.running = false;
 			stopBtn.disabled = true;
-			this.reset().createDiv({ cls: "csv-importer-run-error", text: `Import failed: ${errText(e)}` });
+			this.reset().createDiv({ cls: "csv-importer-run-error", text: `Import failed: ${errorMessage(e)}` });
 			this.buttons([{ text: "Close", onClick: () => this.close() }]);
 		}
 	}
@@ -181,10 +181,13 @@ export class ImportRunModal extends Modal {
 			buttons.push({
 				text: "Undo import",
 				onClick: () => {
-					void this.ctl.undo().then(() => {
-						this.undoable = false;
-						if (!this.ctl.canUndo()) this.close();
-					});
+					void this.ctl
+						.undo()
+						.then(() => {
+							this.undoable = false;
+							if (!this.ctl.canUndo()) this.close();
+						})
+						.catch((e: unknown) => new Notice(`Undo failed: ${errorMessage(e)}`));
 				},
 			});
 		}
@@ -224,10 +227,7 @@ export class ImportRunModal extends Modal {
 
 	private renderWarnings(el: HTMLElement, r: ImportResult): void {
 		if (!r.warnings || r.warnings.length === 0) return;
-		const box = el.createDiv({ cls: "csv-importer-callout mod-warning", attr: { role: "status" } });
-		setIcon(box.createSpan({ cls: "csv-importer-callout-icon" }), "alert-triangle");
-		const list = box.createDiv({ cls: "csv-importer-callout-text" });
-		for (const w of r.warnings) list.createDiv({ text: w });
+		renderCallout(el, "warning", r.warnings);
 	}
 
 	private renderStats(el: HTMLElement, r: ImportResult): void {
@@ -259,7 +259,7 @@ export class ImportRunModal extends Modal {
 			const main = item.createDiv({ cls: "csv-importer-run-item-main" });
 			main.createDiv({ cls: "csv-importer-run-path", text: `Row ${r.row}: ${r.path}` });
 			const detail: string[] = [];
-			if (r.reason && r.reason !== "would create") detail.push(r.reason);
+			if (r.reason && r.reason !== ROW_REASON.wouldCreate) detail.push(r.reason);
 			if (r.outcome === "updated" && r.changed?.length) detail.push(`changes ${r.changed.join(", ")}`);
 			if (r.preserved?.length) detail.push(`keeps your edits to ${r.preserved.join(", ")}`);
 			if (detail.length > 0) main.createDiv({ cls: "csv-importer-run-detail", text: detail.join(" · ") });
@@ -313,17 +313,9 @@ export class ImportRunModal extends Modal {
 			await this.app.workspace.getLeaf("tab").openFile(file);
 			this.close();
 		} catch (e) {
-			new Notice(`Could not save the report: ${errText(e)}`);
+			new Notice(`Could not save the report: ${errorMessage(e)}`);
 		}
 	}
-}
-
-function errText(e: unknown): string {
-	return e instanceof Error ? e.message : String(e);
-}
-
-function emptyResult(): ImportResult {
-	return { created: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0, cancelled: false, dryRun: true, rows: [], warnings: [], errors: [] };
 }
 
 function doneTitle(r: ImportResult): string {

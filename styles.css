@@ -338,7 +338,7 @@
 	min-height: 32px;
 }
 
-.is-hidden {
+.csv-importer-hidden {
 	display: none;
 }
 
@@ -578,7 +578,7 @@
 	align-items: center;
 }
 
-.csv-importer-col-template-box.is-hidden {
+.csv-importer-col-template-box.csv-importer-hidden {
 	display: none;
 }
 

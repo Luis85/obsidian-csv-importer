@@ -67,10 +67,6 @@ export class ConfigStore {
 		return Object.keys(this.files);
 	}
 
-	count(): number {
-		return Object.keys(this.files).length;
-	}
-
 	/** Snapshot for serialization. */
 	toRecord(): Record<string, FileImportConfig> {
 		return clone(this.files);

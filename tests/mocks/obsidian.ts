@@ -1,5 +1,5 @@
 /**
- * Minimal in-memory stand-in for the parts of the Obsidian API used by src/import/importer.ts.
+ * Minimal in-memory stand-in for the parts of the Obsidian API used by the import code (src/import/vaultGateway.ts, importer.ts and the Obsidian adapters).
  * Frontmatter is parsed with the `yaml` package (YAML 1.2 core schema, close to Obsidian's behaviour:
  * dates stay strings, numbers become numbers).
  */

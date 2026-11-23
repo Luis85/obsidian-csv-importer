@@ -1,42 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "yaml";
 import { parseCsv } from "../src/csv/parser";
 import { prepareConfig } from "../src/csv/typeInference";
-import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../src/defaults";
-import { applyUndoToSnapshot, writeNotes } from "../src/import/importer";
-import { planNotes } from "../src/import/noteBuilder";
-import type { FileImportConfig, ImportSnapshot } from "../src/types";
-import { MockApp, TFile } from "./mocks/obsidian";
-import type { App } from "obsidian";
+import { applyUndoToSnapshot } from "../src/import/importer";
+import { setup } from "./helpers/harness";
 
 const CSV_V1 = "id,date,role,hours\n1,2026-10-20,Dev,4\n2,2026-10-21,Tester,2,5\n";
 const CSV_V2 = "id,date,role,hours\n1,2026-10-20,Dev,6\n2,2026-10-21,Lead,\n3,2026-10-22,Dev,1\n";
-
-function setup(overrides: Partial<FileImportConfig> = {}) {
-	const app = new MockApp();
-	const cfg: FileImportConfig = {
-		...createDefaultFileConfig(DEFAULT_SETTINGS),
-		fileNameTemplate: "Entry {{id}}",
-		keyColumn: "id",
-		...overrides,
-	};
-	let snapshot: ImportSnapshot = {};
-	const setSnapshot = (s: ImportSnapshot) => (snapshot = s);
-	const getSnapshot = () => snapshot;
-	const run = async (csv: string, dryRun = false) => {
-		const parsed = parseCsv(csv, cfg);
-		prepareConfig(cfg, parsed, true);
-		const notes = planNotes(parsed, cfg, { path: "Data/hours.csv", basename: "hours" });
-		const out = await writeNotes(app as unknown as App, notes, cfg, { dryRun, snapshot });
-		if (!dryRun) snapshot = out.snapshot;
-		return out;
-	};
-	const read = (path: string) => app.vault.files.get(path) ?? "";
-	const fm = (path: string) => parse(/^---\n([\s\S]*?)---/.exec(read(path))![1]) as Record<string, unknown>;
-	const editInBases = (path: string, fn: (fm: Record<string, unknown>) => void) =>
-		app.fileManager.processFrontMatter(app.vault.getAbstractFileByPath(path) as TFile, fn);
-	return { app, cfg, run, read, fm, editInBases, setSnapshot, getSnapshot };
-}
 
 describe("re-import keeps work done in Obsidian", () => {
 	it("first import creates typed notes", async () => {

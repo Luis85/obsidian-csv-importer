@@ -2,16 +2,15 @@ import { Menu, TextFileView, WorkspaceLeaf, Notice, setIcon, debounce } from "ob
 import type { CsvImporterHost } from "../host";
 import type { ColumnConfig, FileImportConfig, ParsedCsv, PropertyType } from "../types";
 import { parseCsv } from "../csv/parser";
-import { convertValue, detectHeaderDrift, prepareConfig } from "../csv/typeInference";
-import { resolveTargetFolder } from "../import/noteBuilder";
+import { detectHeaderDrift, prepareConfig } from "../csv/typeInference";
+import { errorMessage, plural } from "../core/util";
 import { ImportConfigModal } from "./ImportConfigModal";
-import { LINK_TEMPLATE, TYPE_BADGES, TYPE_LABELS, conversionOptions, delimiterLabel } from "./shared";
+import { TableRenderer } from "./TableRenderer";
+import { renderCallout, safeTargetFolder } from "./dom";
+import { TYPE_LABELS, delimiterLabel } from "./labels";
+import { LINK_TEMPLATE } from "./shared";
 
 export const VIEW_TYPE_CSV = "csv-importer-view";
-
-type SortDir = "asc" | "desc";
-
-const LONG_CELL = 40;
 
 /** Parse result cached per (text, delimiter, header, encoding) so renders do not re-parse the file. */
 interface ParseCache {
@@ -25,16 +24,6 @@ interface ParseCache {
 	lowerRows: string[] | null;
 }
 
-interface TableState {
-	entries: { row: string[]; n: number }[];
-	shown: number;
-	pageSize: number;
-	tbody: HTMLElement;
-	moreEl: HTMLElement | null;
-	parsed: ParsedCsv;
-	columns: ColumnConfig[];
-}
-
 export class CsvView extends TextFileView {
 	/** Decoded text used for display and import (may differ from the bytes Obsidian loaded). */
 	private raw = "";
@@ -42,12 +31,13 @@ export class CsvView extends TextFileView {
 	private fileData = "";
 	private pendingDecode: Promise<void> | null = null;
 	private importing = false;
-	private query = "";
-	private sortCol = -1;
-	private sortDir: SortDir = "asc";
-	private visibleCount = 0;
 	private parseCache: ParseCache | null = null;
-	private tableState: TableState | null = null;
+	private readonly table = new TableRenderer({
+		pageSize: () => this.host.settings.pageSize || 200,
+		lowerRows: (parsed) => this.lowerRows(parsed),
+		requestRender: () => this.renderBody(),
+		openTypeMenu: (ev, index) => this.openTypeMenu(ev, index),
+	});
 	private model: { cfg: FileImportConfig; parsed: ParsedCsv | null; columns: ColumnConfig[]; error: string | null } | null = null;
 
 	private toolbarEl: HTMLElement | null = null;
@@ -57,8 +47,7 @@ export class CsvView extends TextFileView {
 	private loadCounter = 0;
 
 	private readonly onSearch = debounce((value: string) => {
-		this.query = value.trim().toLowerCase();
-		this.visibleCount = 0;
+		this.table.setQuery(value);
 		this.renderBody();
 	}, 200, true);
 
@@ -93,9 +82,7 @@ export class CsvView extends TextFileView {
 		this.fileData = data;
 		this.raw = data;
 		if (clear) {
-			this.query = "";
-			this.sortCol = -1;
-			this.visibleCount = 0;
+			this.table.reset();
 		}
 		this.render();
 		const pending = this.redecodeIfNeeded();
@@ -121,7 +108,7 @@ export class CsvView extends TextFileView {
 				this.render();
 			}
 		} catch (e) {
-			new Notice(`Could not read the file: ${e instanceof Error ? e.message : String(e)}`);
+			new Notice(`Could not read the file: ${errorMessage(e)}`);
 		}
 	}
 
@@ -130,9 +117,7 @@ export class CsvView extends TextFileView {
 		this.pendingDecode = null;
 		this.fileData = "";
 		this.raw = "";
-		this.query = "";
-		this.sortCol = -1;
-		this.visibleCount = 0;
+		this.table.reset();
 		this.render();
 	}
 
@@ -167,7 +152,7 @@ export class CsvView extends TextFileView {
 			if (!this.file) return;
 			await this.host.importFile(this.file, this.raw);
 		} catch (e) {
-			new Notice(`Import failed: ${e instanceof Error ? e.message : String(e)}`);
+			new Notice(`Import failed: ${errorMessage(e)}`);
 		} finally {
 			this.importing = false;
 			this.render();
@@ -204,7 +189,7 @@ export class CsvView extends TextFileView {
 			try {
 				columns = prepareConfig(cfg, parsed, this.host.settings.midnightAsDate).columns;
 			} catch (e) {
-				error = e instanceof Error ? e.message : String(e);
+				error = errorMessage(e);
 				parsed = null;
 			}
 		}
@@ -226,7 +211,7 @@ export class CsvView extends TextFileView {
 			try {
 				parsed = parseCsv(this.raw, { delimiter: cfg.delimiter, hasHeader: cfg.hasHeader });
 			} catch (e) {
-				error = e instanceof Error ? e.message : String(e);
+				error = errorMessage(e);
 			}
 		}
 		const next: ParseCache = { raw: this.raw, delimiter: cfg.delimiter, hasHeader: cfg.hasHeader, encoding: cfg.encoding, parsed, error, lowerRows: null };
@@ -251,12 +236,7 @@ export class CsvView extends TextFileView {
 		const parts: string[] = [];
 		if (drift.added.length) parts.push(`Added: ${drift.added.join(", ")}.`);
 		if (drift.removed.length) parts.push(`Removed: ${drift.removed.join(", ")}.`);
-		const banner = slot.createDiv({ cls: "csv-importer-banner mod-warning", attr: { role: "status" } });
-		setIcon(banner.createSpan({ cls: "csv-importer-banner-icon" }), "alert-triangle");
-		banner.createSpan({
-			cls: "csv-importer-banner-text",
-			text: `Columns changed since the import settings were saved. ${parts.join(" ")}`,
-		});
+		const banner = renderCallout(slot, "banner-warning", [`Columns changed since the import settings were saved. ${parts.join(" ")}`]);
 		const btn = banner.createEl("button", { cls: "csv-importer-btn", text: "Review" });
 		btn.addClass("mod-cta");
 		btn.addEventListener("click", () => this.openConfig());
@@ -265,27 +245,16 @@ export class CsvView extends TextFileView {
 	private renderFirstImportHint(cfg: FileImportConfig, parsed: ParsedCsv | null): void {
 		const slot = this.bannerEl;
 		if (!slot || !parsed || parsed.rows.length === 0 || cfg.lastImport || !this.file) return;
-		let folder = "";
-		try {
-			folder = resolveTargetFolder(cfg, this.file.path);
-		} catch {
-			folder = "";
-		}
-		const hint = slot.createDiv({ cls: "csv-importer-banner is-info" });
-		setIcon(hint.createSpan({ cls: "csv-importer-banner-icon" }), "info");
-		hint.createSpan({
-			cls: "csv-importer-banner-text",
-			text: `Notes will be created in ${folder || "a folder next to this file"}. Column types were detected automatically. Click a type to change it.`,
-		});
+		const folder = safeTargetFolder(cfg, this.file.path);
+		renderCallout(slot, "banner-info", [
+			`Notes will be created in ${folder || "a folder next to this file"}. Column types were detected automatically. Click a type to change it.`,
+		]);
 	}
 
 	private renderParserWarnings(parsed: ParsedCsv | null): void {
 		const slot = this.bannerEl;
 		if (!slot || !parsed || parsed.warnings.length === 0) return;
-		const banner = slot.createDiv({ cls: "csv-importer-banner mod-warning", attr: { role: "status" } });
-		setIcon(banner.createSpan({ cls: "csv-importer-banner-icon" }), "alert-triangle");
-		const text = banner.createDiv({ cls: "csv-importer-banner-text" });
-		for (const w of parsed.warnings) text.createDiv({ text: w });
+		renderCallout(slot, "banner-warning", parsed.warnings);
 	}
 
 	private async runUndo(): Promise<void> {
@@ -294,7 +263,7 @@ export class CsvView extends TextFileView {
 		try {
 			await this.host.undoLastImport(file);
 		} catch (e) {
-			new Notice(`Undo failed: ${e instanceof Error ? e.message : String(e)}`);
+			new Notice(`Undo failed: ${errorMessage(e)}`);
 		}
 		this.render();
 	}
@@ -305,8 +274,7 @@ export class CsvView extends TextFileView {
 		if (!body || !m) return;
 		body.empty();
 		const { cfg, parsed, columns, error } = m;
-		this.tableState = null;
-		if (error) {
+				if (error) {
 			const box = body.createDiv({ cls: "csv-importer-empty csv-importer-error" });
 			box.createDiv({ text: `Could not read this file as a table: ${error}. Try another delimiter or encoding in Configure import.` });
 			const btn = box.createEl("button", { cls: "csv-importer-btn", text: "Configure import" });
@@ -317,7 +285,7 @@ export class CsvView extends TextFileView {
 			body.createDiv({ cls: "csv-importer-empty", text: "This file has no rows yet. Add data to the CSV, then reopen it." });
 			return;
 		}
-		this.renderTable(body, parsed, columns, cfg);
+		this.table.render(body, parsed, columns, cfg);
 	}
 
 	private renderToolbar(el: HTMLElement, cfg: FileImportConfig, parsed: ParsedCsv | null): void {
@@ -327,7 +295,7 @@ export class CsvView extends TextFileView {
 		const stats = el.createDiv({ cls: "csv-importer-stats" });
 		stats.setText(
 			parsed
-				? `${rowCount} ${rowCount === 1 ? "row" : "rows"} · ${colCount} ${colCount === 1 ? "column" : "columns"} · ${delimiterLabel(parsed.delimiter)}`
+				? `${plural(rowCount, "row", "rows")} · ${plural(colCount, "column", "columns")} · ${delimiterLabel(parsed.delimiter)}`
 				: "No data",
 		);
 
@@ -336,7 +304,7 @@ export class CsvView extends TextFileView {
 			type: "search",
 			attr: { placeholder: "Filter rows in all columns…", "aria-label": "Filter rows" },
 		});
-		search.value = this.query;
+		search.value = this.table.query;
 		search.addEventListener("input", () => this.onSearch(search.value));
 
 		const spacer = el.createDiv({ cls: "csv-importer-spacer" });
@@ -364,158 +332,11 @@ export class CsvView extends TextFileView {
 
 		const importBtn = el.createEl("button", { cls: "csv-importer-btn mod-cta" });
 		setIcon(importBtn.createSpan({ cls: "csv-importer-btn-icon" }), "file-plus");
-		importBtn.createSpan({ text: `Import ${rowCount} ${rowCount === 1 ? "row" : "rows"} as ${rowCount === 1 ? "note" : "notes"}` });
+		importBtn.createSpan({ text: `Import ${plural(rowCount, "row", "rows")} as ${rowCount === 1 ? "note" : "notes"}` });
 		importBtn.disabled = this.importing || rowCount === 0;
 		importBtn.addEventListener("click", () => void this.runImport());
 		this.importBtn = importBtn;
 		if (this.importing) this.importBtn.disabled = true;
-	}
-
-	private renderTable(body: HTMLElement, parsed: ParsedCsv, columns: ColumnConfig[], cfg: FileImportConfig): void {
-		const conv = conversionOptions(cfg);
-		let entries = parsed.rows.map((row, i) => ({ row, n: i + 1 }));
-
-		if (this.query) {
-			const q = this.query;
-			const lower = this.lowerRows(parsed);
-			entries = entries.filter((e, i) => lower[i].includes(q));
-		}
-
-		if (this.sortCol >= 0 && this.sortCol < parsed.headers.length) {
-			const idx = this.sortCol;
-			const dir = this.sortDir === "asc" ? 1 : -1;
-			const isNum = columns[idx]?.type === "number";
-			if (isNum) {
-				const keyed = entries.map((e) => {
-					const v = convertValue(e.row[idx] ?? "", "number", conv);
-					return { e, v: typeof v === "number" ? v : null };
-				});
-				keyed.sort((a, b) => {
-					if (a.v === null && b.v === null) return 0;
-					if (a.v === null) return 1;
-					if (b.v === null) return -1;
-					return (a.v - b.v) * dir;
-				});
-				entries = keyed.map((k) => k.e);
-			} else {
-				const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-				entries.sort((a, b) => collator.compare(a.row[idx] ?? "", b.row[idx] ?? "") * dir);
-			}
-		}
-
-		if (this.query) {
-			body.createDiv({
-				cls: "csv-importer-filter-info",
-				text: `${entries.length} of ${parsed.rows.length} rows match`,
-			});
-		}
-		if (entries.length === 0) {
-			body.createDiv({ cls: "csv-importer-empty", text: this.query ? "No rows match the filter." : "This file has no rows yet. Add data to the CSV, then reopen it." });
-		}
-
-		const pageSize = Math.max(1, this.host.settings.pageSize || 200);
-
-		const scroller = body.createDiv({ cls: "csv-importer-scroll" });
-		const table = scroller.createEl("table", { cls: "csv-importer-table" });
-		const thead = table.createEl("thead");
-		const hr = thead.createEl("tr");
-		hr.createEl("th", { cls: "csv-importer-rownum", text: "#" });
-		parsed.headers.forEach((h, i) => {
-			const col = columns[i];
-			const th = hr.createEl("th", { cls: "csv-importer-th" });
-			const excluded = !!col && !col.include;
-			if (excluded) th.addClass("is-excluded");
-			if (col?.type === "number") th.addClass("is-numeric");
-			th.setAttr("tabindex", "0");
-			th.setAttr("role", "columnheader");
-			th.setAttr("aria-sort", this.sortCol === i ? (this.sortDir === "asc" ? "ascending" : "descending") : "none");
-			th.setAttr("title", `${excluded ? `${h} (excluded). ` : ""}Click to sort. Click again to reverse, a third time to clear.`);
-			const inner = th.createDiv({ cls: "csv-importer-th-inner" });
-			inner.createSpan({ cls: "csv-importer-th-name", text: h });
-			if (col) {
-				const badge = inner.createSpan({
-					cls: `csv-importer-badge csv-importer-badge-${col.type} is-clickable`,
-					attr: {
-						title: `${TYPE_LABELS[col.type]}${excluded ? " (excluded)" : ""}. Click to change the property type`,
-						role: "button",
-						tabindex: "0",
-						"data-col": String(i),
-						"aria-haspopup": "menu",
-						"aria-label": `Property type of ${h}: ${TYPE_LABELS[col.type]}. Click to change the property type`,
-					},
-				});
-				badge.createSpan({ text: TYPE_BADGES[col.type] });
-				if (col.valueTemplate) setIcon(badge.createSpan({ cls: "csv-importer-badge-link" }), "link");
-				setIcon(badge.createSpan({ cls: "csv-importer-badge-chevron" }), "chevron-down");
-				badge.addEventListener("click", (ev: MouseEvent) => {
-					ev.stopPropagation();
-					this.openTypeMenu(ev, i);
-				});
-				badge.addEventListener("keydown", (ev: KeyboardEvent) => {
-					if (ev.key === "Enter" || ev.key === " ") {
-						ev.preventDefault();
-						ev.stopPropagation();
-						const r = badge.getBoundingClientRect();
-						this.openTypeMenu(new MouseEvent("click", { clientX: r.left, clientY: r.bottom }), i);
-					}
-				});
-			}
-			const sortIcon = inner.createSpan({ cls: "csv-importer-sort-icon" });
-			if (this.sortCol === i) setIcon(sortIcon, this.sortDir === "asc" ? "arrow-up" : "arrow-down");
-			const toggle = () => this.toggleSort(i);
-			th.addEventListener("click", toggle);
-			th.addEventListener("keydown", (ev: KeyboardEvent) => {
-				if (ev.key === "Enter" || ev.key === " ") {
-					ev.preventDefault();
-					toggle();
-				}
-			});
-		});
-
-		const tbody = table.createEl("tbody");
-		const state: TableState = { entries, shown: 0, pageSize, tbody, moreEl: null, parsed, columns };
-		this.tableState = state;
-		this.appendRows(state, Math.max(this.visibleCount, pageSize));
-		state.moreEl = body.createDiv({ cls: "csv-importer-more" });
-		this.updateMore(state);
-	}
-
-	/** Append rows up to `target` without re-rendering what is already shown. */
-	private appendRows(state: TableState, target: number): void {
-		const end = Math.min(state.entries.length, target);
-		const frag = createFragment();
-		for (let r = state.shown; r < end; r++) {
-			const { row, n } = state.entries[r];
-			const tr = createEl("tr");
-			tr.createEl("td", { cls: "csv-importer-rownum", text: String(n) });
-			for (let c = 0; c < state.parsed.headers.length; c++) {
-				const col = state.columns[c];
-				const text = row[c] ?? "";
-				const td = tr.createEl("td", { text });
-				if (text.length > LONG_CELL) td.setAttr("title", text);
-				if (col && !col.include) td.addClass("is-excluded");
-				if (col?.type === "number") td.addClass("is-numeric");
-			}
-			frag.appendChild(tr);
-		}
-		state.tbody.appendChild(frag);
-		state.shown = Math.max(state.shown, end);
-	}
-
-	private updateMore(state: TableState): void {
-		const more = state.moreEl;
-		if (!more) return;
-		more.empty();
-		if (state.shown >= state.entries.length) return;
-		const btn = more.createEl("button", {
-			cls: "csv-importer-btn",
-			text: `Show more (${state.shown} of ${state.entries.length})`,
-		});
-		btn.addEventListener("click", () => {
-			this.visibleCount = state.shown + state.pageSize;
-			this.appendRows(state, this.visibleCount);
-			this.updateMore(state);
-		});
 	}
 
 	private openTypeMenu(ev: MouseEvent, index: number): void {
@@ -563,22 +384,10 @@ export class CsvView extends TextFileView {
 			mutate(col);
 			await this.host.saveFileConfig(file, cfg);
 		} catch (e) {
-			new Notice(`Could not save the column setting: ${e instanceof Error ? e.message : String(e)}`);
+			new Notice(`Could not save the column setting: ${errorMessage(e)}`);
 		}
 		this.render();
 		// render() rebuilds the header: put keyboard focus back on the badge that was used.
 		this.contentEl.querySelector<HTMLElement>(`.csv-importer-badge[data-col="${index}"]`)?.focus();
-	}
-
-	private toggleSort(i: number): void {
-		if (this.sortCol !== i) {
-			this.sortCol = i;
-			this.sortDir = "asc";
-		} else if (this.sortDir === "asc") {
-			this.sortDir = "desc";
-		} else {
-			this.sortCol = -1;
-		}
-		this.renderBody();
 	}
 }
