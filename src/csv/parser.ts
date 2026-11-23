@@ -1,4 +1,5 @@
 import type { DelimiterOption, ParsedCsv } from "../types";
+import { stripBom } from "./encoding";
 
 type Delim = Exclude<DelimiterOption, "auto">;
 const CANDIDATES: Delim[] = [",", ";", "\t", "|"];
@@ -75,15 +76,9 @@ function parseRecords(
 	return records;
 }
 
-function stripBom(text: string): string {
-	let i = 0;
-	while (text.charCodeAt(i) === 0xfeff) i++;
-	return i > 0 ? text.slice(i) : text;
-}
-
 /** Guess the delimiter by consistency of field counts across the first lines (quote-aware). Defaults to ",". */
 export function detectDelimiter(text: string): Delim {
-	text = stripBom(text);
+	text = stripBom(text, true);
 	let best: Delim = ",";
 	let bestScore = -1;
 	let bestCount = 0;
@@ -131,7 +126,7 @@ function uniqueHeaders(raw: string[]): string[] {
  * Non-fatal problems are reported in `warnings` (always an array).
  */
 export function parseCsv(text: string, opts: { delimiter: DelimiterOption; hasHeader: boolean }): ParsedCsv {
-	text = stripBom(text);
+	text = stripBom(text, true);
 	const delimiter: Delim = opts.delimiter === "auto" ? detectDelimiter(text) : opts.delimiter;
 	const info = { unterminatedAt: -1 };
 	const records = parseRecords(text, delimiter, Infinity, info);
@@ -159,9 +154,10 @@ export function parseCsv(text: string, opts: { delimiter: DelimiterOption; hasHe
 	let blank = 0;
 	for (let ri = 0; ri < records.length; ri++) {
 		const r = records[ri];
+		if (!r) continue;
 		let allBlank = true;
 		for (let i = 0; i < r.length; i++) {
-			if (r[i].trim() !== "") {
+			if ((r[i] ?? "").trim() !== "") {
 				allBlank = false;
 				break;
 			}

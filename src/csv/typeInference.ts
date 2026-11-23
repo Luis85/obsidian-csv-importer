@@ -1,10 +1,17 @@
-import type { ColumnConfig, FileImportConfig, FrontmatterValue, ParsedCsv, PropertyType } from "../types";
+import type { ColumnConfig, DateOrder, FileImportConfig, FrontmatterValue, HeaderDrift, ParsedCsv, PropertyType } from "../types";
+
+/** Capture group of a regex match; the patterns used here always set the groups read through this. */
+function grp(m: RegExpExecArray, i: number): string {
+	return m[i] ?? "";
+}
 
 export interface InferenceOptions {
 	decimalSeparator: "." | ",";
 	/** Infer `date` instead of `datetime` when all times are 00:00(:00). */
 	midnightAsDate: boolean;
 	listSeparator: string;
+	/** How ambiguous slash dates are read (default "auto"). */
+	dateOrder?: DateOrder;
 }
 
 export interface ConversionOptions {
@@ -12,6 +19,20 @@ export interface ConversionOptions {
 	listSeparator: string;
 	/** Round numbers to this many decimals (trailing zeros stripped). null/undefined keeps the source precision. */
 	precision?: number | null;
+	/** Number columns: strip currency symbols, percent signs and space thousands separators before parsing. */
+	stripUnits?: boolean;
+	/** How ambiguous slash dates are read (default "auto": per value, ambiguous values stay text). */
+	dateOrder?: DateOrder;
+}
+
+/** Conversion options derived from a file's import config. */
+export function conversionOptionsOf(cfg: FileImportConfig): ConversionOptions {
+	return { decimalSeparator: cfg.decimalSeparator, listSeparator: cfg.listSeparator, precision: cfg.numberPrecision, dateOrder: cfg.dateOrder };
+}
+
+/** Inference options derived from a file's import config. */
+export function inferenceOptionsOf(cfg: FileImportConfig, midnightAsDate: boolean): InferenceOptions {
+	return { decimalSeparator: cfg.decimalSeparator, midnightAsDate, listSeparator: cfg.listSeparator, dateOrder: cfg.dateOrder };
 }
 
 /**
@@ -37,20 +58,33 @@ export function formatNumber(n: number, precision?: number | null): string {
 			// Too small for toFixed (would round to 0): keep exponent form, always with a decimal point (YAML float).
 			str = `${m[1]}${m[2]}.${m[3] ?? "0"}e${m[4]}`;
 		} else if (exp < 0) str = n.toFixed(mantDigits - exp);
-		else str = (m[1] + m[2] + (m[3] ?? "")).padEnd(m[1].length + 1 + exp, "0");
+		else str = (grp(m, 1) + grp(m, 2) + (m[3] ?? "")).padEnd(grp(m, 1).length + 1 + exp, "0");
 	}
 	return str === "-0" ? "0" : str;
 }
 
 // ---------------------------------------------------------------- numbers
 
+const UNIT_WORDS_RE = /\b(?:CHF|EUR|USD|GBP)\b/gi;
+const GROUPED_SPACES_RE = /^([+-]?\d{1,3}(?:[ \u00a0\u202f]\d{3})+)(?=[.,]\d+$|$)/;
+
+/** Remove currency symbols/codes, percent signs and space-like thousands separators from a numeric cell. */
+export function stripNumberUnits(raw: string): string {
+	let s = raw.replace(/[\u20ac$\u00a3\u00a5%]/g, "").replace(UNIT_WORDS_RE, "").trim();
+	const g = GROUPED_SPACES_RE.exec(s);
+	if (g) s = grp(g, 1).replace(/[ \u00a0\u202f]/g, "") + s.slice(grp(g, 1).length);
+	return s.replace(/^([+-])\s+/, "$1");
+}
+
 /**
  * Parse a number honoring the decimal separator. Thousands grouping (the other separator, groups of 3)
  * is accepted. In `strict` mode (used for inference) values with leading zeros ("007") or more than
  * 15 significant digits (IDs, phone numbers) are rejected so they stay text.
+ * With `stripUnits`, currency symbols/codes, "%" and space / NBSP / U+202F thousands separators are removed first.
  */
-export function parseNumber(raw: string, decimalSeparator: "." | ",", strict = false): number | null {
-	const s = raw.trim();
+export function parseNumber(raw: string, decimalSeparator: "." | ",", strict = false, stripUnits = false): number | null {
+	let s = raw.trim();
+	if (stripUnits) s = stripNumberUnits(s);
 	if (s === "") return null;
 	const thousands = decimalSeparator === "." ? "\\," : "\\.";
 	const decimal = decimalSeparator === "." ? "\\." : ",";
@@ -82,23 +116,39 @@ export interface ParsedDate {
 	time?: string;
 }
 
-const DATE_RE = /^(?:(\d{4})-(\d{2})-(\d{2})|(\d{4})\/(\d{2})\/(\d{2})|(\d{2})\.(\d{2})\.(\d{4}))$/;
-const DATE_SRC = "(\\d{4}-\\d{2}-\\d{2}|\\d{4}/\\d{2}/\\d{2}|\\d{2}\\.\\d{2}\\.\\d{4})";
-const DATETIME_RE = new RegExp(
-	`^${DATE_SRC}[T ](\\d{1,2}):(\\d{2})(?::(\\d{2})(?:[.,]\\d+)?)?\\s*(Z|[+-]\\d{2}(?::?\\d{2})?)?$`,
-);
+/** "none": slash dates are rejected (ambiguous column). */
+type SlashOrder = "dmy" | "mdy" | "auto" | "none";
+
+const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const YMD_SLASH_RE = /^(\d{4})\/(\d{2})\/(\d{2})$/;
+const DOT_RE = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+const DASH_DMY_RE = /^(\d{1,2})-(\d{1,2})-(\d{4})$/;
+const SLASH_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+const NAME_DMY_RE = /^(\d{1,2})\.?\s+([A-Za-zÄäÖöÜü]+)\.?,?\s+(\d{4})$/;
+const NAME_MDY_RE = /^([A-Za-zÄäÖöÜü]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/;
+const DATETIME_RE = /^(.+?)[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:[.,]\d+)?)?\s*(Z|[+-]\d{2}(?::?\d{2})?)?$/;
+
+const MONTHS: Record<string, number> = {};
+[
+	["jan", "january", "januar", "jänner", "janner"],
+	["feb", "february", "februar"],
+	["mar", "march", "mär", "märz", "maerz", "marz"],
+	["apr", "april"],
+	["may", "mai"],
+	["jun", "june", "juni"],
+	["jul", "july", "juli"],
+	["aug", "august"],
+	["sep", "sept", "september"],
+	["oct", "october", "okt", "oktober"],
+	["nov", "november"],
+	["dec", "december", "dez", "dezember"],
+].forEach((names, i) => names.forEach((n) => (MONTHS[n] = i + 1)));
 
 function pad(n: number | string, len = 2): string {
 	return String(n).padStart(len, "0");
 }
 
-function parseDatePart(s: string): string | null {
-	const m = DATE_RE.exec(s);
-	if (!m) return null;
-	let y: number, mo: number, d: number;
-	if (m[1]) [y, mo, d] = [+m[1], +m[2], +m[3]];
-	else if (m[4]) [y, mo, d] = [+m[4], +m[5], +m[6]];
-	else [y, mo, d] = [+m[9], +m[8], +m[7]];
+function ymd(y: number, mo: number, d: number): string | null {
 	if (mo < 1 || mo > 12 || d < 1) return null;
 	const dim = new Date(Date.UTC(2000, mo, 0)).getUTCDate(); // days in month for leap year 2000
 	const days = mo === 2 && !(y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 28 : dim;
@@ -106,27 +156,81 @@ function parseDatePart(s: string): string | null {
 	return `${pad(y, 4)}-${pad(mo)}-${pad(d)}`;
 }
 
-/** Recognize a date or datetime string. Timezone and fractional seconds are dropped. */
-export function parseDateValue(raw: string): ParsedDate | null {
-	const s = raw.trim();
-	const date = parseDatePart(s);
-	if (date) return { kind: "date", date };
+function parseDatePart(s: string, order: SlashOrder): string | null {
+	let m = ISO_RE.exec(s) ?? YMD_SLASH_RE.exec(s);
+	if (m) return ymd(+grp(m, 1), +grp(m, 2), +grp(m, 3));
+	m = DOT_RE.exec(s) ?? DASH_DMY_RE.exec(s);
+	if (m) return ymd(+grp(m, 3), +grp(m, 2), +grp(m, 1));
+	m = SLASH_RE.exec(s);
+	if (m) {
+		const a = +grp(m, 1);
+		const b = +grp(m, 2);
+		let o: SlashOrder = order;
+		if (o === "auto") o = a === b || a > 12 ? "dmy" : b > 12 ? "mdy" : "none";
+		if (o === "dmy") return ymd(+grp(m, 3), b, a);
+		if (o === "mdy") return ymd(+grp(m, 3), a, b);
+		return null;
+	}
+	m = NAME_DMY_RE.exec(s);
+	if (m) {
+		const mo = MONTHS[grp(m, 2).toLowerCase()];
+		return mo ? ymd(+grp(m, 3), mo, +grp(m, 1)) : null;
+	}
+	m = NAME_MDY_RE.exec(s);
+	if (m) {
+		const mo = MONTHS[grp(m, 1).toLowerCase()];
+		return mo ? ymd(+grp(m, 3), mo, +grp(m, 2)) : null;
+	}
+	return null;
+}
+
+/** Split off a trailing time of day; `date` is the remaining date text. */
+function splitTime(s: string): { date: string; h: number; mi: number; sec: number; tz: string | undefined } | null {
 	const m = DATETIME_RE.exec(s);
 	if (!m) return null;
-	const d = parseDatePart(m[1]);
+	return { date: grp(m, 1), h: +grp(m, 2), mi: +grp(m, 3), sec: m[4] === undefined ? 0 : +grp(m, 4), tz: m[5] };
+}
+
+/**
+ * Decide how slash dates (`03/04/2026`) of a column are read. Explicit "dmy"/"mdy" win. "auto": day-first when a
+ * value has a first part > 12, month-first when one has a second part > 12; null when both or neither
+ * (ambiguous: the column should stay text).
+ */
+export function resolveDateOrder(values: string[], dateOrder: DateOrder = "auto"): "dmy" | "mdy" | null {
+	if (dateOrder !== "auto") return dateOrder;
+	let first = false;
+	let second = false;
+	for (const raw of values) {
+		const v = raw.trim();
+		if (!v.includes("/")) continue;
+		const m = SLASH_RE.exec(splitTime(v)?.date ?? v);
+		if (!m) continue;
+		if (+grp(m, 1) > 12) first = true;
+		if (+grp(m, 2) > 12) second = true;
+	}
+	if (first && !second) return "dmy";
+	if (second && !first) return "mdy";
+	return null;
+}
+
+/** Recognize a date or datetime string. Timezone and fractional seconds are dropped. */
+function parseDateValue(raw: string, order: SlashOrder = "auto"): ParsedDate | null {
+	const s = raw.trim();
+	const date = parseDatePart(s, order);
+	if (date) return { kind: "date", date };
+	const t = splitTime(s);
+	if (!t) return null;
+	const d = parseDatePart(t.date, order);
 	if (!d) return null;
-	const h = +m[2];
-	const mi = +m[3];
-	const sec = m[4] === undefined ? 0 : +m[4];
-	if (h > 23 || mi > 59 || sec > 59) return null;
-	return { kind: "datetime", date: d, time: `${pad(h)}:${pad(mi)}:${pad(sec)}` };
+	if (t.h > 23 || t.mi > 59 || t.sec > 59) return null;
+	return { kind: "datetime", date: d, time: `${pad(t.h)}:${pad(t.mi)}:${pad(t.sec)}` };
 }
 
 /** True when at least one value is a datetime carrying a `Z` / UTC-offset suffix (which conversion drops). */
 export function hasTimezoneOffsets(values: string[]): boolean {
 	for (const v of values) {
-		const m = DATETIME_RE.exec(v.trim());
-		if (m && m[5] !== undefined && parseDatePart(m[1]) !== null) return true;
+		const t = splitTime(v.trim());
+		if (t && t.tz !== undefined && parseDatePart(t.date, "auto") !== null) return true;
 	}
 	return false;
 }
@@ -169,15 +273,29 @@ function parseBool(raw: string): boolean | null {
 
 // ---------------------------------------------------------------- API
 
+interface Inferred {
+	type: PropertyType;
+	stripUnits: boolean;
+}
+
 /**
  * Single pass over `count` values (via `get`) deciding the column type. Empty values are ignored.
- * Order: checkbox, number, date, datetime, else text.
+ * Order: checkbox, number, date, datetime, else text. A column that is numeric only after stripping units
+ * (currency, percent, space thousands) is a number with `stripUnits`.
  */
-function inferFrom(count: number, get: (i: number) => string, opts: InferenceOptions): PropertyType {
+function inferFrom(count: number, get: (i: number) => string, opts: InferenceOptions): Inferred {
+	let order: SlashOrder = "none";
+	{
+		const vals: string[] = [];
+		for (let i = 0; i < count; i++) vals.push(get(i));
+		order = resolveDateOrder(vals, opts.dateOrder ?? "auto") ?? "none";
+	}
 	let n = 0;
 	let allBool = true;
 	let anyNotNo = false;
 	let allNum = true;
+	let allNumU = true;
+	let anyUnit = false;
 	let allDate = true;
 	let anyTime = false;
 	let allMidnight = true;
@@ -189,41 +307,57 @@ function inferFrom(count: number, get: (i: number) => string, opts: InferenceOpt
 			if (parseBool(v) === null) allBool = false;
 			else if (v !== "no" && v !== "No" && v !== "NO") anyNotNo = true;
 		}
-		if (allNum && parseNumber(v, opts.decimalSeparator, true) === null) allNum = false;
+		if (allNumU) {
+			if (parseNumber(v, opts.decimalSeparator, true) !== null) {
+				// plain number
+			} else if (parseNumber(v, opts.decimalSeparator, true, true) !== null) {
+				anyUnit = true;
+				allNum = false;
+			} else {
+				allNumU = false;
+				allNum = false;
+			}
+		}
 		if (allDate) {
-			const d = parseDateValue(v);
+			const d = parseDateValue(v, order);
 			if (d === null) allDate = false;
 			else if (d.kind === "datetime") {
 				anyTime = true;
 				if (d.time !== "00:00:00") allMidnight = false;
 			}
 		}
-		if (!allBool && !allNum && !allDate) return "text";
+		if (!allBool && !allNumU && !allDate) return { type: "text", stripUnits: false };
 	}
-	if (n === 0) return "text";
+	if (n === 0) return { type: "text", stripUnits: false };
 	// A column of only bare "no" is far more likely a text/word column than a checkbox.
-	if (allBool && anyNotNo) return "checkbox";
-	if (allNum) return "number";
+	if (allBool && anyNotNo) return { type: "checkbox", stripUnits: false };
+	if (allNum) return { type: "number", stripUnits: false };
+	if (allNumU && anyUnit) return { type: "number", stripUnits: true };
 	if (allDate) {
-		if (!anyTime) return "date";
-		if (opts.midnightAsDate && allMidnight) return "date";
-		return "datetime";
+		if (!anyTime) return { type: "date", stripUnits: false };
+		if (opts.midnightAsDate && allMidnight) return { type: "date", stripUnits: false };
+		return { type: "datetime", stripUnits: false };
 	}
-	return "text";
+	return { type: "text", stripUnits: false };
 }
 
 /**
  * Infer the property type of a column from its raw (string) values. Empty values are ignored.
  * Order: checkbox (true/false/yes/no), number, date, datetime, else text. `list` is never inferred.
  * Strict: "+49..." and exponents ("1e5") are text; a column of only bare "no" is text.
+ * Values with units ("12 %", "1.234,56 EUR") only count as number via the column's `stripUnits` (see buildColumnConfigs).
  */
 export function inferColumnType(values: string[], opts: InferenceOptions): PropertyType {
-	return inferFrom(values.length, (i) => values[i], opts);
+	return inferFrom(values.length, (i) => values[i] ?? "", opts).type;
 }
 
-function inferColumn(parsed: ParsedCsv, index: number, opts: InferenceOptions): PropertyType {
+function inferColumn(parsed: ParsedCsv, index: number, opts: InferenceOptions): Inferred {
 	const rows = parsed.rows;
-	return inferFrom(rows.length, (i) => rows[i][index] ?? "", opts);
+	return inferFrom(rows.length, (i) => rows[i]?.[index] ?? "", opts);
+}
+
+function inferredFields(inf: Inferred): { type: PropertyType; stripUnits?: true } {
+	return inf.stripUnits ? { type: inf.type, stripUnits: true } : { type: inf.type };
 }
 
 /**
@@ -237,7 +371,7 @@ export function convertValue(raw: string, type: PropertyType, opts: ConversionOp
 	if (t === "") return null;
 	switch (type) {
 		case "number": {
-			const n = parseNumber(t, opts.decimalSeparator, false);
+			const n = parseNumber(t, opts.decimalSeparator, false, opts.stripUnits);
 			if (n === null) return t;
 			const p = opts.precision;
 			return p !== null && p !== undefined ? Number(formatNumber(n, p)) : n;
@@ -247,11 +381,11 @@ export function convertValue(raw: string, type: PropertyType, opts: ConversionOp
 			return b === null ? t : b;
 		}
 		case "date": {
-			const d = parseDateValue(t) ?? parseExcelSerial(t, opts.decimalSeparator);
+			const d = parseDateValue(t, opts.dateOrder ?? "auto") ?? parseExcelSerial(t, opts.decimalSeparator);
 			return d ? d.date : t;
 		}
 		case "datetime": {
-			const d = parseDateValue(t) ?? parseExcelSerial(t, opts.decimalSeparator);
+			const d = parseDateValue(t, opts.dateOrder ?? "auto") ?? parseExcelSerial(t, opts.decimalSeparator);
 			return d ? `${d.date}T${d.time ?? "00:00:00"}` : t;
 		}
 		case "list": {
@@ -300,7 +434,7 @@ export function buildColumnConfigs(parsed: ParsedCsv, opts: InferenceOptions): C
 		source,
 		index,
 		property: uniqueName(toPropertyName(source), used),
-		type: inferColumn(parsed, index, opts),
+		...inferredFields(inferColumn(parsed, index, opts)),
 		include: true,
 	}));
 }
@@ -325,7 +459,7 @@ export function reconcileColumns(existing: ColumnConfig[], parsed: ParsedCsv, op
 			source,
 			index,
 			property: uniqueName(toPropertyName(source), used),
-			type: inferColumn(parsed, index, opts),
+			...inferredFields(inferColumn(parsed, index, opts)),
 			include: true,
 		};
 	});
@@ -336,7 +470,7 @@ export function reconcileColumns(existing: ColumnConfig[], parsed: ParsedCsv, op
  * with one separator but not with the other votes for that separator.
  * Returns null when the data gives no evidence either way.
  */
-export function detectDecimalSeparator(parsed: ParsedCsv): "." | "," | null {
+function detectDecimalSeparator(parsed: ParsedCsv): "." | "," | null {
 	let comma = 0;
 	let dot = 0;
 	for (let c = 0; c < parsed.headers.length; c++) {
@@ -347,8 +481,8 @@ export function detectDecimalSeparator(parsed: ParsedCsv): "." | "," | null {
 			const v = (r[c] ?? "").trim();
 			if (v === "") continue;
 			seen = true;
-			if (asDot && parseNumber(v, ".", true) === null) asDot = false;
-			if (asComma && parseNumber(v, ",", true) === null) asComma = false;
+			if (asDot && parseNumber(v, ".", true, true) === null) asDot = false;
+			if (asComma && parseNumber(v, ",", true, true) === null) asComma = false;
 			if (!asDot && !asComma) break;
 		}
 		if (!seen) continue;
@@ -373,11 +507,7 @@ export function prepareConfig(
 	if (config.columns.length === 0) {
 		config.decimalSeparator = detectDecimalSeparator(parsed) ?? config.decimalSeparator;
 	}
-	config.columns = reconcileColumns(config.columns, parsed, {
-		decimalSeparator: config.decimalSeparator,
-		midnightAsDate,
-		listSeparator: config.listSeparator,
-	});
+	config.columns = reconcileColumns(config.columns, parsed, inferenceOptionsOf(config, midnightAsDate));
 	return config;
 }
 
@@ -385,7 +515,7 @@ export function prepareConfig(
  * Compare saved column sources with the current headers. `added`: headers without a saved column;
  * `removed`: saved column sources no longer in the file. Both empty when `columns` is empty (not configured yet).
  */
-export function detectHeaderDrift(columns: ColumnConfig[], parsed: ParsedCsv): { added: string[]; removed: string[] } {
+export function detectHeaderDrift(columns: ColumnConfig[], parsed: ParsedCsv): HeaderDrift {
 	if (columns.length === 0) return { added: [], removed: [] };
 	const saved = new Set(columns.map((c) => c.source));
 	const current = new Set(parsed.headers);

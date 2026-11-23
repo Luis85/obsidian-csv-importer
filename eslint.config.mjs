@@ -12,7 +12,7 @@ export default defineConfig([
 		"esbuild.config.mjs",
 		"version-bump.mjs",
 		"scripts/**",
-		"vitest.config.ts",
+		"ui-preview/**",
 	]),
 	...obsidianmd.configs.recommended,
 	{
@@ -22,6 +22,23 @@ export default defineConfig([
 				projectService: {
 					allowDefaultProject: ["eslint.config.*"],
 				},
+				tsconfigRootDir: import.meta.dirname,
+			},
+		},
+	},
+	{
+		files: ["src/**/*.ts"],
+		rules: {
+			"obsidianmd/ui/sentence-case": ["warn", { enforceCamelCaseLower: true }],
+		},
+	},
+	{
+		// Tests and the vitest config use tsconfig.test.json (Node types).
+		files: ["tests/**/*.ts", "vitest.config.ts"],
+		languageOptions: {
+			parserOptions: {
+				projectService: false,
+				project: ["./tsconfig.test.json"],
 				tsconfigRootDir: import.meta.dirname,
 			},
 		},

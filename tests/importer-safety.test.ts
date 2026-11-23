@@ -1,47 +1,16 @@
-import { describe, expect, it } from "vitest";
-import { parse } from "yaml";
+import { describe, expect, it, vi } from "vitest";
 import { parseCsv } from "../src/csv/parser";
 import { prepareConfig } from "../src/csv/typeInference";
 import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../src/defaults";
 import { applyUndo, applyUndoToSnapshot, KEY_WARNING, UNDO_TRUNCATED_WARNING, writeNotes } from "../src/import/importer";
 import { planNotes } from "../src/import/noteBuilder";
-import type { FileImportConfig, ImportSnapshot, UndoManifest } from "../src/types";
+import type { FileImportConfig, UndoManifest } from "../src/types";
+import { setup } from "./helpers/harness";
 import { MockApp } from "./mocks/obsidian";
 import type { App } from "obsidian";
 
 const CSV = "id,role\n1,Dev\n2,Tester\n";
 const CSV_V2 = "id,role\n1,Lead\n2,Tester\n3,New\n";
-
-function setup(overrides: Partial<FileImportConfig> = {}) {
-	const app = new MockApp();
-	const cfg: FileImportConfig = {
-		...createDefaultFileConfig(DEFAULT_SETTINGS),
-		fileNameTemplate: "Entry {{id}}",
-		keyColumn: "id",
-		...overrides,
-	};
-	let snapshot: ImportSnapshot = {};
-	const run = async (csv: string, opts: { dryRun?: boolean; snapshot?: ImportSnapshot; warnings?: string[]; undoCap?: number } = {}) => {
-		const parsed = parseCsv(csv, cfg);
-		prepareConfig(cfg, parsed, true);
-		const notes = planNotes(parsed, cfg, { path: "Data/hours.csv", basename: "hours" });
-		const out = await writeNotes(app as unknown as App, notes, cfg, { snapshot, ...opts });
-		if (!opts.dryRun) snapshot = out.snapshot;
-		return out;
-	};
-	const put = async (path: string, text: string) => {
-		const parts = path.split("/").slice(0, -1);
-		let cur = "";
-		for (const p of parts) {
-			cur = cur ? `${cur}/${p}` : p;
-			if (!app.vault.getAbstractFileByPath(cur)) await app.vault.createFolder(cur);
-		}
-		await app.vault.create(path, text);
-	};
-	const read = (path: string) => app.vault.files.get(path) ?? "";
-	const fm = (path: string) => parse(/^---\n([\s\S]*?)---/.exec(read(path))![1]) as Record<string, unknown>;
-	return { app, cfg, run, put, read, fm, getSnapshot: () => snapshot, setSnapshot: (s: ImportSnapshot) => (snapshot = s) };
-}
 
 const FOREIGN = "---\nid: 1\nrole: Mine\n---\nmy own note\n";
 
@@ -82,7 +51,7 @@ describe("S1 ownership", () => {
 		const t = setup();
 		await t.run(CSV);
 		t.app.vault.rename("Data/hours/Entry 1.md", "Data/hours/Moved.md");
-		t.setSnapshot({ ...t.getSnapshot(), "Data/hours/Moved.md": t.getSnapshot()["Data/hours/Entry 1.md"] });
+		t.setSnapshot({ ...t.getSnapshot(), "Data/hours/Moved.md": t.getSnapshot()["Data/hours/Entry 1.md"]! });
 		const { result } = await t.run(CSV_V2);
 		expect(t.fm("Data/hours/Moved.md").role).toBe("Lead");
 		expect(result.skipped).toBe(0);
@@ -166,7 +135,7 @@ describe("S4 case-insensitive paths", () => {
 		const dry = await t.run(CSV, { dryRun: true });
 		const real = await t.run(CSV);
 		expect(dry.result.rows.map((r) => [r.path, r.outcome])).toEqual(real.result.rows.map((r) => [r.path, r.outcome]));
-		expect(dry.result.rows[0].path).toBe("Data/hours/entry 1.md");
+		expect(dry.result.rows[0]!.path).toBe("Data/hours/entry 1.md");
 		expect([...t.app.vault.files.keys()].filter((k) => k.toLowerCase() === "data/hours/entry 1.md")).toHaveLength(1);
 	});
 
@@ -175,8 +144,8 @@ describe("S4 case-insensitive paths", () => {
 		await t.put("Data/hours/ENTRY 1.md", "mine");
 		const dry = await t.run(CSV, { dryRun: true });
 		const real = await t.run(CSV);
-		expect(real.result.rows[0].path).toBe("Data/hours/Entry 1 1.md");
-		expect(dry.result.rows[0].path).toBe(real.result.rows[0].path);
+		expect(real.result.rows[0]!.path).toBe("Data/hours/Entry 1 1.md");
+		expect(dry.result.rows[0]!.path).toBe(real.result.rows[0]!.path);
 		expect(t.read("Data/hours/ENTRY 1.md")).toBe("mine");
 	});
 
@@ -355,12 +324,19 @@ describe("checkpoints", () => {
 		prepareConfig(t.cfg, parsed, true);
 		const notes = planNotes(parsed, t.cfg, { path: "Data/hours.csv", basename: "hours" });
 		let finished = false;
-		await writeNotes(t.app as unknown as App, notes, t.cfg, {
-			onCheckpoint: async () => {
-				await new Promise((r) => setTimeout(r, 30));
-				finished = true;
-			},
-		});
+		vi.useFakeTimers();
+		try {
+			const run = writeNotes(t.app as unknown as App, notes, t.cfg, {
+				onCheckpoint: async () => {
+					await new Promise((r) => setTimeout(r, 30));
+					finished = true;
+				},
+			});
+			await vi.advanceTimersByTimeAsync(100);
+			await run;
+		} finally {
+			vi.useRealTimers();
+		}
 		expect(finished).toBe(true);
 	});
 });

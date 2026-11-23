@@ -1,42 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "yaml";
 import { parseCsv } from "../src/csv/parser";
 import { prepareConfig } from "../src/csv/typeInference";
-import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../src/defaults";
-import { applyUndoToSnapshot, writeNotes } from "../src/import/importer";
-import { planNotes } from "../src/import/noteBuilder";
-import type { FileImportConfig, ImportSnapshot } from "../src/types";
-import { MockApp, TFile } from "./mocks/obsidian";
-import type { App } from "obsidian";
+import { applyUndoToSnapshot } from "../src/import/importer";
+import { setup } from "./helpers/harness";
 
 const CSV_V1 = "id,date,role,hours\n1,2026-10-20,Dev,4\n2,2026-10-21,Tester,2,5\n";
 const CSV_V2 = "id,date,role,hours\n1,2026-10-20,Dev,6\n2,2026-10-21,Lead,\n3,2026-10-22,Dev,1\n";
-
-function setup(overrides: Partial<FileImportConfig> = {}) {
-	const app = new MockApp();
-	const cfg: FileImportConfig = {
-		...createDefaultFileConfig(DEFAULT_SETTINGS),
-		fileNameTemplate: "Entry {{id}}",
-		keyColumn: "id",
-		...overrides,
-	};
-	let snapshot: ImportSnapshot = {};
-	const setSnapshot = (s: ImportSnapshot) => (snapshot = s);
-	const getSnapshot = () => snapshot;
-	const run = async (csv: string, dryRun = false) => {
-		const parsed = parseCsv(csv, cfg);
-		prepareConfig(cfg, parsed, true);
-		const notes = planNotes(parsed, cfg, { path: "Data/hours.csv", basename: "hours" });
-		const out = await writeNotes(app as unknown as App, notes, cfg, { dryRun, snapshot });
-		if (!dryRun) snapshot = out.snapshot;
-		return out;
-	};
-	const read = (path: string) => app.vault.files.get(path) ?? "";
-	const fm = (path: string) => parse(/^---\n([\s\S]*?)---/.exec(read(path))![1]) as Record<string, unknown>;
-	const editInBases = (path: string, fn: (fm: Record<string, unknown>) => void) =>
-		app.fileManager.processFrontMatter(app.vault.getAbstractFileByPath(path) as TFile, fn);
-	return { app, cfg, run, read, fm, editInBases, setSnapshot, getSnapshot };
-}
 
 describe("re-import keeps work done in Obsidian", () => {
 	it("first import creates typed notes", async () => {
@@ -201,5 +170,47 @@ describe("key matching uses the value actually written", () => {
 		expect(t.app.vault.files.has("Data/hours/Entry 1.md")).toBe(false);
 		expect(t.fm("Data/hours/Renamed.md").hours).toBe(6);
 		expect(result.created).toBe(1);
+	});
+});
+
+describe("Phase 3 warnings and fill-only", () => {
+	it("warns about duplicate keys in the CSV (plural aware)", async () => {
+		const t = setup();
+		const { result } = await t.run("id,role\n1,A\n1,B\n1,C\n2,D\n", true);
+		expect(result.warnings).toContain('2 rows share a key with another row (e.g. "1"). Only the first is imported.');
+		const one = await setup().run("id,role\n1,A\n1,B\n", true);
+		expect(one.result.warnings).toContain('1 row shares a key with another row (e.g. "1"). Only the first is imported.');
+	});
+
+	it("warns about notes in the vault sharing a key, and prefers the non-conflict copy", async () => {
+		const t = setup({ conflict: "update", adoptExistingNotes: true });
+		await t.put("Data/hours/Entry 1 (conflicted copy).md", "---\nid: 1\nrole: X\n---\n");
+		await t.put("Data/hours/Entry 1.md", "---\nid: 1\nrole: X\n---\n");
+		const { result } = await t.run("id,role\n1,Dev\n", true);
+		expect(result.warnings.some((w) => w.startsWith("2 notes in the target folder share a key"))).toBe(true);
+		const real = await t.run("id,role\n1,Dev\n");
+		expect(real.result.rows[0]!.path).toBe("Data/hours/Entry 1.md");
+	});
+
+	it("warns on very large imports", async () => {
+		const t = setup();
+		const csv = "id\n" + Array.from({ length: 5001 }, (_, i) => i + 1).join("\n") + "\n";
+		const { result } = await t.run(csv, true);
+		expect(result.warnings).toContain(
+			"This import creates or updates 5001 notes. Very large numbers of notes can slow down the vault and Bases.",
+		);
+	});
+
+	it("fills extra properties only when missing on update", async () => {
+		const t = setup({
+			conflict: "update",
+			extraProperties: [{ property: "status", type: "text", defaultValue: "open" }],
+		});
+		await t.run("id,role\n1,Dev\n2,Dev\n");
+		expect(t.fm("Data/hours/Entry 1.md").status).toBe("open");
+		await t.editInBases("Data/hours/Entry 1.md", (fm) => (fm.status = "done"));
+		await t.run("id,role\n1,Lead\n2,Dev\n");
+		expect(t.fm("Data/hours/Entry 1.md").status).toBe("done");
+		expect(t.fm("Data/hours/Entry 1.md").role).toBe("Lead");
 	});
 });

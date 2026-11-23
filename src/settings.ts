@@ -1,7 +1,21 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
-import type { Plugin } from "obsidian";
+import { App, Notice, PluginSettingTab } from "obsidian";
+import type { Plugin, Setting, SettingDefinitionItem } from "obsidian";
 import { confirmDialog } from "./view/ConfirmModal";
-import type { ConflictStrategy, CsvEncoding, DelimiterOption, EmptyValueMode, PluginSettings } from "./types";
+import type { PluginSettings } from "./types";
+import {
+	CONFLICT_OPTIONS,
+	DECIMAL_OPTIONS,
+	DELIMITER_OPTIONS,
+	EMPTY_VALUE_OPTIONS,
+	ENCODING_LABELS,
+	LINK_NOTES_TO_CSV,
+	NAME,
+	OPEN_CSV_IMPORTS,
+	PAGE_SIZE_ERROR,
+	RESET_ALL_SETTINGS,
+	SETTINGS_DESC,
+	SETTINGS_HEADINGS,
+} from "./view/labels";
 
 export { DEFAULT_SETTINGS, createDefaultFileConfig } from "./defaults";
 
@@ -10,258 +24,172 @@ export interface SettingsHost {
 	settings: PluginSettings;
 	saveSettings(): Promise<void>;
 	forgetAllFileConfigs(): Promise<void>;
+	/** Opens the CSV imports view. Optional: the settings tab hides the button when missing. */
+	openImportIndex?(): void | Promise<void>;
 }
 
 export class CsvImporterSettingTab extends PluginSettingTab {
+	/**
+	 * `plugin` is only passed to PluginSettingTab. Settings are read through `host` (typed as SettingsHost, not
+	 * Plugin) so the code never touches Plugin.settings, which only exists in Obsidian 1.13+.
+	 */
 	constructor(
 		app: App,
-		private readonly host: Plugin & SettingsHost,
+		plugin: Plugin,
+		private readonly host: SettingsHost,
 	) {
-		super(app, host);
+		super(app, plugin);
 	}
 
-	display(): void {
-		const { containerEl } = this;
+	/** Declarative settings (Obsidian 1.13+, the minimum app version): they appear in the settings search. */
+	override getSettingDefinitions(): SettingDefinitionItem[] {
+		const group = (heading: string, items: SettingDefinitionItem[]): SettingDefinitionItem => ({
+			type: "group",
+			heading,
+			items: items as never,
+		});
+		const toggle = (key: keyof PluginSettings, name: string, desc?: string): SettingDefinitionItem => ({
+			name,
+			desc,
+			control: { type: "toggle", key },
+		});
+		const dropdown = (key: keyof PluginSettings, name: string, options: Record<string, string>, desc?: string): SettingDefinitionItem => ({
+			name,
+			desc,
+			control: { type: "dropdown", key, options },
+		});
+		const text = (key: keyof PluginSettings, name: string, desc: string, placeholder?: string): SettingDefinitionItem => ({
+			name,
+			desc,
+			control: { type: "text", key, placeholder },
+		});
+		const reading: SettingDefinitionItem[] = [
+			dropdown("defaultEncoding", NAME.encoding, ENCODING_LABELS, SETTINGS_DESC.encoding),
+			dropdown("defaultDelimiter", NAME.delimiter, DELIMITER_OPTIONS, SETTINGS_DESC.delimiter),
+			toggle("defaultHasHeader", NAME.hasHeader),
+			dropdown("defaultDecimalSeparator", NAME.decimal, DECIMAL_OPTIONS, SETTINGS_DESC.decimal),
+			{
+				name: NAME.listSeparator,
+				desc: SETTINGS_DESC.listSeparator,
+				render: (setting) => this.listSeparatorControl(setting),
+			},
+			dropdown("defaultEmptyValues", NAME.emptyCells, EMPTY_VALUE_OPTIONS, SETTINGS_DESC.emptyCells),
+			toggle("midnightAsDate", "Treat midnight timestamps as dates", SETTINGS_DESC.midnight),
+		];
+		const notes: SettingDefinitionItem[] = [
+			text("defaultTargetFolder", NAME.targetFolder, SETTINGS_DESC.targetFolder, "Example: Imports/data"),
+			text("defaultFileNameTemplate", NAME.fileName, SETTINGS_DESC.fileName),
+			{
+				name: NAME.body,
+				desc: SETTINGS_DESC.body,
+				render: (setting) => this.bodyControl(setting),
+			},
+			text("defaultTags", NAME.tags, SETTINGS_DESC.tags),
+			toggle("defaultAddSourceLink", LINK_NOTES_TO_CSV, SETTINGS_DESC.sourceLink),
+			toggle("defaultCreateBase", NAME.createBase, SETTINGS_DESC.createBase),
+		];
+		const reimport: SettingDefinitionItem[] = [
+			dropdown("defaultConflict", NAME.conflict, CONFLICT_OPTIONS, SETTINGS_DESC.conflict),
+			toggle("defaultProtectEdits", NAME.protectEdits, SETTINGS_DESC.protectEdits),
+			toggle("defaultKeepValuesOnEmpty", NAME.keepOnEmpty, SETTINGS_DESC.keepOnEmpty),
+		];
+		const table: SettingDefinitionItem[] = [
+			{
+				name: "Rows shown per page",
+				desc: SETTINGS_DESC.pageSize,
+				render: (setting) => this.pageSizeControl(setting),
+			},
+		];
+		const result: SettingDefinitionItem[] = [
+			{ name: "", desc: SETTINGS_DESC.intro, searchable: false },
+			group(SETTINGS_HEADINGS.reading, reading),
+			group(SETTINGS_HEADINGS.notes, notes),
+			group(SETTINGS_HEADINGS.reimport, reimport),
+			group(SETTINGS_HEADINGS.table, table),
+		];
+		if (this.host.openImportIndex) {
+			result.push(
+				group(SETTINGS_HEADINGS.imports, [
+					{ name: OPEN_CSV_IMPORTS, desc: SETTINGS_DESC.imports, action: () => void this.host.openImportIndex?.() },
+				]),
+			);
+		}
+		result.push(
+			group(SETTINGS_HEADINGS.danger, [
+				{ name: RESET_ALL_SETTINGS, desc: SETTINGS_DESC.reset, action: () => this.confirmReset() },
+			]),
+		);
+		return result;
+	}
+
+	override getControlValue(key: string): unknown {
+		return (this.host.settings as unknown as Record<string, unknown>)[key];
+	}
+
+	override async setControlValue(key: string, value: unknown): Promise<void> {
+		(this.host.settings as unknown as Record<string, unknown>)[key] = value;
+		await this.host.saveSettings();
+	}
+
+	private confirmReset(): void {
+		void confirmDialog(
+			this.app,
+			"Reset all import settings?",
+			"This removes the saved import settings of all CSV files. This cannot be undone.",
+			"Reset all",
+			true,
+		).then((ok) => {
+			if (!ok) return;
+			void this.host.forgetAllFileConfigs().then(() => new Notice("Import settings reset."));
+		});
+	}
+
+	/** Single-character input, 4em wide and centered. */
+	private listSeparatorControl(setting: Setting): void {
 		const s = this.host.settings;
-		const save = (): void => {
-			void this.host.saveSettings();
-		};
-		containerEl.empty();
+		setting.addText((t) => {
+			t.inputEl.addClass("csv-importer-input-char");
+			t.setValue(s.defaultListSeparator).onChange((v) => {
+				s.defaultListSeparator = v;
+				void this.host.saveSettings();
+			});
+		});
+	}
 
-		new Setting(containerEl)
-			.setDesc("Defaults for CSV files you have not configured yet. Each file keeps its own settings once you save them.");
+	/** Full-width textarea below its row. */
+	private bodyControl(setting: Setting): void {
+		const s = this.host.settings;
+		setting.settingEl.addClass("csv-importer-setting-stacked");
+		setting.addTextArea((t) => {
+			t.inputEl.rows = 4;
+			t.setValue(s.defaultBodyTemplate).onChange((v) => {
+				s.defaultBodyTemplate = v;
+				void this.host.saveSettings();
+			});
+		});
+	}
 
-		new Setting(containerEl).setName("Reading CSV files").setHeading();
-
-		new Setting(containerEl)
-			.setName("Encoding")
-			.setDesc("Auto detects UTF-8, UTF-16 and Windows-1252.")
-			.addDropdown((d) =>
-				d
-					.addOptions({ auto: "Auto", "utf-8": "UTF-8", "utf-16le": "UTF-16 LE", "utf-16be": "UTF-16 BE", "windows-1252": "Windows-1252" })
-					.setValue(s.defaultEncoding)
-					.onChange((v) => {
-						s.defaultEncoding = v as CsvEncoding;
-						save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Delimiter")
-			.setDesc("Column separator. Automatic detection looks at the file content.")
-			.addDropdown((d) =>
-				d
-					.addOptions({ auto: "Detect automatically", ",": "Comma", ";": "Semicolon", "\t": "Tab", "|": "Pipe" })
-					.setValue(s.defaultDelimiter)
-					.onChange((v) => {
-						s.defaultDelimiter = v as DelimiterOption;
-						save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("First row contains column names")
-			.addToggle((t) =>
-				t.setValue(s.defaultHasHeader).onChange((v) => {
-					s.defaultHasHeader = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Decimal separator")
-			.setDesc("Used when reading numbers, for example 0,625 in many European exports.")
-			.addDropdown((d) =>
-				d
-					.addOptions({ ".": "Dot", ",": "Comma" })
-					.setValue(s.defaultDecimalSeparator)
-					.onChange((v) => {
-						s.defaultDecimalSeparator = v as "." | ",";
-						save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("List separator")
-			.setDesc("Splits cell values of list columns into items.")
-			.addText((t) =>
-				t.setValue(s.defaultListSeparator).onChange((v) => {
-					s.defaultListSeparator = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Empty cells")
-			.setDesc("How empty cells are written into the properties of a note.")
-			.addDropdown((d) =>
-				d
-					.addOptions({ empty: "Leave property empty", omit: "Omit property" })
-					.setValue(s.defaultEmptyValues)
-					.onChange((v) => {
-						s.defaultEmptyValues = v as EmptyValueMode;
-						save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Treat midnight timestamps as dates")
-			.setDesc("Detect a date instead of a date and time when every time in a column is 00:00:00.")
-			.addToggle((t) =>
-				t.setValue(s.midnightAsDate).onChange((v) => {
-					s.midnightAsDate = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl).setName("Creating notes").setHeading();
-
-		new Setting(containerEl)
-			.setName("Target folder")
-			.setDesc("Leave empty to create notes in a folder named like the CSV file, next to it.")
-			.addText((t) =>
-				t
-					.setPlaceholder("Example: Imports/data")
-					.setValue(s.defaultTargetFolder)
-					.onChange((v) => {
-						s.defaultTargetFolder = v.trim();
-						save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("File name template")
-			.setDesc("Use {{Column name}} for cell values, {{row}} for the row number and {{file}} for the CSV name.")
-			.addText((t) =>
-				t.setValue(s.defaultFileNameTemplate).onChange((v) => {
-					s.defaultFileNameTemplate = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Body template")
-			.setDesc("Text placed below the properties. Supports the same placeholders.")
-			.addTextArea((t) =>
-				t.setValue(s.defaultBodyTemplate).onChange((v) => {
-					s.defaultBodyTemplate = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Comma-separated tags")
-			.setDesc("Added to every imported note.")
-			.addText((t) =>
-				t.setValue(s.defaultTags).onChange((v) => {
-					s.defaultTags = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Add link to the CSV file")
-			.setDesc("Writes a source property that links back to the CSV file.")
-			.addToggle((t) =>
-				t.setValue(s.defaultAddSourceLink).onChange((v) => {
-					s.defaultAddSourceLink = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Create a base")
-			.setDesc("Create a .base file next to the target folder that shows the imported notes as a table.")
-			.addToggle((t) =>
-				t.setValue(s.defaultCreateBase).onChange((v) => {
-					s.defaultCreateBase = v;
-					save();
-				}),
-			);
-
-
-		new Setting(containerEl).setName("Existing notes").setHeading();
-
-		new Setting(containerEl)
-			.setName("When a note already exists")
-			.setDesc("Update properties keeps properties you added in Obsidian and the note body. Replace whole note overwrites the note completely.")
-			.addDropdown((d) =>
-				d
-					.addOptions({
-						update: "Update properties",
-						skip: "Skip",
-						rename: "Create a copy",
-						overwrite: "Replace whole note",
-					})
-					.setValue(s.defaultConflict)
-					.onChange((v) => {
-						s.defaultConflict = v as ConflictStrategy;
-						save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Keep values edited in Obsidian")
-			.setDesc("When updating, a CSV property you changed in Obsidian keeps your value.")
-			.addToggle((t) =>
-				t.setValue(s.defaultProtectEdits).onChange((v) => {
-					s.defaultProtectEdits = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Keep values when the CSV cell is empty")
-			.setDesc("When updating, an empty cell does not clear a value in the note.")
-			.addToggle((t) =>
-				t.setValue(s.defaultKeepValuesOnEmpty).onChange((v) => {
-					s.defaultKeepValuesOnEmpty = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl).setName("Table view").setHeading();
-
-		const pageSetting = new Setting(containerEl)
-			.setName("Rows shown per page")
-			.setDesc("Maximum number of rows rendered in the table before showing more.");
-		const pageError = pageSetting.descEl.createDiv({ cls: "csv-importer-field-error" });
+	/** Number input, 8em wide, validated from 10 to 100000. */
+	private pageSizeControl(setting: Setting): void {
+		const s = this.host.settings;
+		const pageError = setting.descEl.createDiv({ cls: "csv-importer-field-error" });
 		pageError.hide();
-		pageSetting.addText((t) =>
+		setting.addText((t) => {
+			t.inputEl.addClass("csv-importer-input-number");
+			t.inputEl.inputMode = "numeric";
 			t.setValue(String(s.pageSize)).onChange((v) => {
 				const n = Math.floor(Number(v));
 				if (Number.isFinite(n) && n >= 10 && n <= 100000) {
 					s.pageSize = n;
 					t.inputEl.removeClass("csv-importer-invalid");
 					pageError.hide();
-					save();
+					void this.host.saveSettings();
 				} else {
 					t.inputEl.addClass("csv-importer-invalid");
-					pageError.setText("Enter a whole number from 10 to 100000.");
+					pageError.setText(PAGE_SIZE_ERROR);
 					pageError.show();
 				}
-			}),
-		);
-
-		new Setting(containerEl).setName("Data").setHeading();
-
-		new Setting(containerEl)
-			.setName("Reset all import settings")
-			.setDesc("Removes the saved import settings of every CSV file. Imported notes are not affected.")
-			.addButton((b) => {
-				b.setButtonText("Reset all").onClick(() => {
-					void confirmDialog(
-						this.app,
-						"Reset all import settings?",
-						"This removes the saved import settings of all CSV files. This cannot be undone.",
-						"Reset all",
-						true,
-					).then((ok) => {
-						if (!ok) return;
-						void this.host.forgetAllFileConfigs().then(() => new Notice("Import settings reset."));
-					});
-				});
-				b.buttonEl.addClass("mod-warning");
 			});
+		});
 	}
 }

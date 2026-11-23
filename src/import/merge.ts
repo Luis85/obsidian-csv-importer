@@ -47,6 +47,12 @@ export interface MergeInput {
 	snapshot: Record<string, string> | undefined;
 	protectEdits: boolean;
 	keepValuesOnEmpty: boolean;
+	/**
+	 * Fill-only keys (extra properties): written only when the existing value is empty or the key is missing;
+	 * otherwise left alone, regardless of protectEdits / keepValuesOnEmpty. Their snapshot entry is the hash of
+	 * the value written, or of the existing value.
+	 */
+	fillOnly?: string[];
 }
 
 export interface MergeResult {
@@ -68,6 +74,7 @@ export interface MergeResult {
  */
 export function mergeFrontmatter(input: MergeInput): MergeResult {
 	const { existing, planned, managed, snapshot, protectEdits, keepValuesOnEmpty } = input;
+	const fill = new Set(input.fillOnly ?? []);
 	const set: Record<string, FrontmatterValue> = {};
 	const preserved: string[] = [];
 	const out: Record<string, string> = {};
@@ -75,9 +82,22 @@ export function mergeFrontmatter(input: MergeInput): MergeResult {
 		const prev = snapshot?.[k];
 		if (prev !== undefined) out[k] = prev;
 	};
+	for (const k of fill) {
+		const c = existing[k];
+		const p: FrontmatterValue = Object.prototype.hasOwnProperty.call(planned, k) ? (planned[k] ?? null) : null;
+		if (!isEmpty(c)) {
+			out[k] = valueHash(c);
+		} else if (!isEmpty(p) || (Object.prototype.hasOwnProperty.call(planned, k) && !Object.prototype.hasOwnProperty.call(existing, k))) {
+			set[k] = p;
+			out[k] = valueHash(p);
+		} else {
+			out[k] = valueHash(c);
+		}
+	}
 	for (const k of managed) {
+		if (fill.has(k)) continue;
 		const has = Object.prototype.hasOwnProperty.call(planned, k);
-		const p: FrontmatterValue = has ? planned[k] : null;
+		const p: FrontmatterValue = has ? (planned[k] ?? null) : null;
 		const c = existing[k];
 		const pEmpty = isEmpty(p);
 		const cEmpty = isEmpty(c);

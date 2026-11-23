@@ -19,8 +19,14 @@ function utf16Heuristic(u: Uint8Array): "utf-16le" | "utf-16be" | null {
 	return null;
 }
 
-function stripBom(s: string): string {
-	return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
+/** Remove a leading BOM (U+FEFF); with `all`, every consecutive leading BOM. */
+export function stripBom(s: string, all = false): string {
+	let i = 0;
+	while (s.charCodeAt(i) === 0xfeff) {
+		i++;
+		if (!all) break;
+	}
+	return i > 0 ? s.slice(i) : s;
 }
 
 /**

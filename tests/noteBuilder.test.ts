@@ -10,33 +10,7 @@ import {
 } from "../src/import/noteBuilder";
 import { parseCsv } from "../src/csv/parser";
 import { buildColumnConfigs, suggestKeyColumn } from "../src/csv/typeInference";
-import type { FileImportConfig } from "../src/types";
-
-function cfg(over: Partial<FileImportConfig> = {}): FileImportConfig {
-	return {
-		delimiter: "auto",
-		hasHeader: true,
-		decimalSeparator: ".",
-		targetFolder: "",
-		fileNameTemplate: "{{file}} {{row}}",
-		bodyTemplate: "",
-		conflict: "skip",
-		tags: "",
-		addSourceLink: false,
-		listSeparator: ",",
-		emptyValues: "empty",
-		numberPrecision: null,
-		keyColumn: "",
-		adoptExistingNotes: false,
-		encoding: "auto",
-		protectEdits: true,
-		keepValuesOnEmpty: true,
-		createBase: false,
-		columns: [],
-		lastImport: null,
-		...over,
-	};
-}
+import { cfg } from "./helpers/harness";
 
 describe("renderTemplate", () => {
 	const ctx = { headers: ["Name", "Age"], row: ["Ann", " 5 "], rowNumber: 3, fileBasename: "people" };
@@ -93,25 +67,26 @@ describe("planNotes", () => {
 			frontmatter: { Name: "A", Qty: 1.5, Done: true },
 			body: "Qty: 1.5",
 			row: 1,
+			fillOnly: [],
 			types: { Name: "text", Qty: "number", Done: "checkbox" },
 			key: null,
 		});
-		expect(notes[1].frontmatter).toEqual({ Name: "B", Qty: null, Done: false });
+		expect(notes[1]!.frontmatter).toEqual({ Name: "B", Qty: null, Done: false });
 	});
 
 	it("respects include=false and uses configured columns", () => {
 		const parsed = parseCsv("a,b\n1,2", { delimiter: ",", hasHeader: true });
 		const columns = buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: false, listSeparator: "," });
-		columns[0].include = false;
-		columns[1].type = "text";
-		columns[1].property = "B";
-		const [n] = planNotes(parsed, cfg({ columns }), csv);
+		columns[0]!.include = false;
+		columns[1]!.type = "text";
+		columns[1]!.property = "B";
+		const n = planNotes(parsed, cfg({ columns }), csv)[0]!;
 		expect(n.frontmatter).toEqual({ B: "2" });
 	});
 
 	it("adds tags and source link", () => {
 		const parsed = parseCsv("a\n1", { delimiter: ",", hasHeader: true });
-		const [n] = planNotes(parsed, cfg({ tags: " #foo, bar baz ,, foo ", addSourceLink: true }), csv);
+		const n = planNotes(parsed, cfg({ tags: " #foo, bar baz ,, foo ", addSourceLink: true }), csv)[0]!;
 		expect(n.frontmatter.tags).toEqual(["foo", "bar-baz"]);
 		expect(n.frontmatter.source).toBe("[[Data/hours.csv]]");
 	});
@@ -119,8 +94,8 @@ describe("planNotes", () => {
 	it("merges config tags with a tags column", () => {
 		const parsed = parseCsv("tags\n\"x, #y\"", { delimiter: ",", hasHeader: true });
 		const columns = buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: false, listSeparator: "," });
-		columns[0].type = "list";
-		const [n] = planNotes(parsed, cfg({ columns, tags: "imported" }), csv);
+		columns[0]!.type = "list";
+		const n = planNotes(parsed, cfg({ columns, tags: "imported" }), csv)[0]!;
 		expect(n.frontmatter.tags).toEqual(["x", "y", "imported"]);
 	});
 
@@ -133,13 +108,13 @@ describe("planNotes", () => {
 
 	it("uses no leading slash for the vault root", () => {
 		const parsed = parseCsv("a\n1", { delimiter: ",", hasHeader: true });
-		const [n] = planNotes(parsed, cfg({ targetFolder: "/" }), csv);
+		const n = planNotes(parsed, cfg({ targetFolder: "/" }), csv)[0]!;
 		expect(n.path).toBe("hours 1.md");
 	});
 
 	it("uses a custom target folder", () => {
 		const parsed = parseCsv("a\n1", { delimiter: ",", hasHeader: true });
-		const [n] = planNotes(parsed, cfg({ targetFolder: "Out/Put/" }), csv);
+		const n = planNotes(parsed, cfg({ targetFolder: "Out/Put/" }), csv)[0]!;
 		expect(n.path).toBe("Out/Put/hours 1.md");
 	});
 });
@@ -229,10 +204,10 @@ describe("end to end", () => {
 		const opts = { decimalSeparator: dec, midnightAsDate: true, listSeparator: "," };
 		const columns = buildColumnConfigs(parsed, opts);
 		expect(columns.map((c) => c.type)).toEqual(["date", "text", "text", "number", "number"]);
-		const [note] = planNotes(parsed, cfg({ columns, decimalSeparator: dec, fileNameTemplate: "{{Beschreibung}}" }), {
+		const note = planNotes(parsed, cfg({ columns, decimalSeparator: dec, fileNameTemplate: "{{Beschreibung}}" }), {
 			path: "hours.csv",
 			basename: "hours",
-		});
+		})[0]!;
 		return serializeNote(note.frontmatter, note.body, note.types);
 	};
 
@@ -266,7 +241,7 @@ describe("end to end", () => {
 	it("without midnightAsDate the datetime is kept", () => {
 		const parsed = parseCsv("Datum;Tage\n2026-11-18 00:00:00;5", { delimiter: "auto", hasHeader: true });
 		const columns = buildColumnConfigs(parsed, { decimalSeparator: ",", midnightAsDate: false, listSeparator: "," });
-		const [note] = planNotes(parsed, cfg({ columns, decimalSeparator: "," }), { path: "h.csv", basename: "h" });
+		const note = planNotes(parsed, cfg({ columns, decimalSeparator: "," }), { path: "h.csv", basename: "h" })[0]!;
 		expect(serializeNote(note.frontmatter, "", note.types)).toContain("Datum: 2026-11-18T00:00:00\n");
 	});
 });
@@ -296,7 +271,7 @@ describe("tags / aliases / cssclasses normalization", () => {
 	it("normalizes text columns into lists", () => {
 		const parsed = parseCsv("tags,aliases,cssclasses\n\"#a, #b c ,a\",\"X, Y,,X\",wide\n", { delimiter: ",", hasHeader: true });
 		const columns = buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: false, listSeparator: ";" });
-		const [n] = planNotes(parsed, cfg({ columns }), csv);
+		const n = planNotes(parsed, cfg({ columns }), csv)[0]!;
 		expect(n.frontmatter["tags"]).toEqual(["a", "b", "c"]);
 		expect(n.frontmatter["aliases"]).toEqual(["X", "Y"]);
 		expect(n.frontmatter["cssclasses"]).toEqual(["wide"]);
@@ -306,14 +281,14 @@ describe("tags / aliases / cssclasses normalization", () => {
 	it("list-typed tags: spaces become dashes; merged with config tags", () => {
 		const parsed = parseCsv("tags\n#my tag;#x\n", { delimiter: ",", hasHeader: true });
 		const columns = buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: false, listSeparator: ";" });
-		columns[0].type = "list";
-		const [n] = planNotes(parsed, cfg({ columns, listSeparator: ";", tags: "x, new" }), csv);
+		columns[0]!.type = "list";
+		const n = planNotes(parsed, cfg({ columns, listSeparator: ";", tags: "x, new" }), csv)[0]!;
 		expect(n.frontmatter["tags"]).toEqual(["my-tag", "x", "new"]);
 	});
 	it("empty cell -> empty property or omitted", () => {
 		const parsed = parseCsv("tags,n\n,1\n", { delimiter: ",", hasHeader: true });
-		expect(planNotes(parsed, cfg(), csv)[0].frontmatter["tags"]).toBeNull();
-		expect("tags" in planNotes(parsed, cfg({ emptyValues: "omit" }), csv)[0].frontmatter).toBe(false);
+		expect(planNotes(parsed, cfg(), csv)[0]!.frontmatter["tags"]).toBeNull();
+		expect("tags" in planNotes(parsed, cfg({ emptyValues: "omit" }), csv)[0]!.frontmatter).toBe(false);
 	});
 });
 
@@ -333,7 +308,7 @@ describe("S2 sourceLinkProperty", () => {
 	});
 	it("planNotes keeps the source column and writes the link elsewhere", () => {
 		const parsed = parseCsv("source,b\nweb,1", { delimiter: ",", hasHeader: true });
-		const [n] = planNotes(parsed, cfg({ addSourceLink: true }), csv);
+		const n = planNotes(parsed, cfg({ addSourceLink: true }), csv)[0]!;
 		expect(n.frontmatter["source"]).toBe("web");
 		expect(n.frontmatter["source_csv"]).toBe("[[hours.csv]]");
 	});
@@ -384,16 +359,18 @@ describe("S4 file names", () => {
 		const notes = planNotes(parsed, cfg({ fileNameTemplate: "{{n}}" }), csv);
 		const lower = notes.map((x) => x.path.toLowerCase());
 		expect(new Set(lower).size).toBe(4);
-		expect(notes[0].path).toBe("hours/A.md");
-		expect(notes[1].path).toBe("hours/a 2.md");
-		expect(notes[2].path).toBe("hours/A 2 2.md");
+		expect(notes[0]!.path).toBe("hours/A.md");
+		expect(notes[1]!.path).toBe("hours/a 2.md");
+		expect(notes[2]!.path).toBe("hours/A 2 2.md");
 	});
-	it("handles 10k duplicates quickly", () => {
+	it("handles 10k duplicates with correct unique suffixes (and not quadratically slowly)", () => {
 		const parsed = parseCsv("n\n" + "x\n".repeat(10000), { delimiter: ",", hasHeader: true });
 		const t = Date.now();
 		const notes = planNotes(parsed, cfg({ fileNameTemplate: "{{n}}" }), csv);
-		expect(Date.now() - t).toBeLessThan(1500);
-		expect(new Set(notes.map((x) => x.path)).size).toBe(10000);
+		// Generous bound: only guards against pathological (quadratic) behaviour, not machine speed.
+		expect(Date.now() - t).toBeLessThan(10_000);
+		const expected = ["hours/x.md", ...Array.from({ length: 9999 }, (_, i) => `hours/x ${i + 2}.md`)];
+		expect(notes.map((x) => x.path)).toEqual(expected);
 	});
 });
 
@@ -412,7 +389,7 @@ describe("S8 target folder", () => {
 	});
 	it("placeholder values with .. stay safe", () => {
 		const parsed = parseCsv("a\n..", { delimiter: ",", hasHeader: true });
-		const [n] = planNotes(parsed, cfg({ targetFolder: "x/{{a}}" }), csv);
+		const n = planNotes(parsed, cfg({ targetFolder: "x/{{a}}" }), csv)[0]!;
 		expect(n.path.startsWith("x/")).toBe(true);
 		expect(n.path).not.toContain("..");
 	});

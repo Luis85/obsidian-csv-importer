@@ -80,3 +80,10 @@ describe("ImportStorage robustness", () => {
 		expect(await again.loadSnapshot("b.csv")).toEqual({ "M/1.md": { x: "1" } });
 	});
 });
+
+describe("data versioning", () => {
+	it("exports the history warning text", async () => {
+		const { HISTORY_NOT_SAVED_WARNING } = await import("../src/import/importer");
+		expect(HISTORY_NOT_SAVED_WARNING).toContain("import history could not be saved");
+	});
+});

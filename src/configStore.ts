@@ -31,7 +31,9 @@ export class ConfigStore {
 	/** Moves a config to a new path. Returns true when something changed. */
 	async rename(oldPath: string, newPath: string): Promise<boolean> {
 		if (oldPath === newPath || !this.has(oldPath)) return false;
-		this.files[newPath] = this.files[oldPath];
+		const cfg = this.files[oldPath];
+		if (!cfg) return false;
+		this.files[newPath] = cfg;
 		delete this.files[oldPath];
 		await this.persist();
 		return true;
@@ -43,7 +45,9 @@ export class ConfigStore {
 		const moved = Object.keys(this.files).filter((p) => p.startsWith(prefix));
 		if (moved.length === 0) return false;
 		for (const p of moved) {
-			this.files[newFolder + "/" + p.slice(prefix.length)] = this.files[p];
+			const cfg = this.files[p];
+			if (!cfg) continue;
+			this.files[newFolder + "/" + p.slice(prefix.length)] = cfg;
 			delete this.files[p];
 		}
 		await this.persist();
@@ -65,10 +69,6 @@ export class ConfigStore {
 	/** Vault paths of all stored file configs. */
 	paths(): string[] {
 		return Object.keys(this.files);
-	}
-
-	count(): number {
-		return Object.keys(this.files).length;
 	}
 
 	/** Snapshot for serialization. */

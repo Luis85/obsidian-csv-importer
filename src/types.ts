@@ -9,6 +9,38 @@ export type PropertyType = "text" | "number" | "checkbox" | "date" | "datetime" 
 /** Delimiter option. "auto" means detect from file content. */
 export type DelimiterOption = "auto" | "," | ";" | "\t" | "|";
 
+/**
+ * How ambiguous slash dates like 03/04/2026 are read. "auto": day-first if any value in the column has a
+ * first part > 12, month-first if any has a second part > 12, otherwise the column stays text (ambiguous).
+ */
+export type DateOrder = "auto" | "dmy" | "mdy";
+
+/** Comparison used by the optional row filter. */
+export type RowFilterOp = "equals" | "notEquals" | "contains" | "notContains" | "empty" | "notEmpty" | "greaterThan" | "lessThan";
+
+/** Import only rows matching this condition (on the raw cell, numbers compared numerically when both parse). */
+export interface RowFilter {
+	/** Source header of the column to test. */
+	column: string;
+	op: RowFilterOp;
+	/** Comparison value (ignored for empty / notEmpty). Case-insensitive for text comparisons. */
+	value: string;
+}
+
+/**
+ * A property that is not in the CSV but added to every imported note (e.g. `status: open`).
+ * The default is a template: `{{Column}}`, `{{row}}`, `{{file}}`, `{{today}}` (YYYY-MM-DD) and
+ * `{{now}}` (YYYY-MM-DDTHH:mm:ss) are replaced, then the text is converted to `type`.
+ * It only fills in: it is written when a note is created, and on re-import only when the note does not
+ * have the property or it is empty. Values set in Obsidian are never overwritten.
+ */
+export interface ExtraProperty {
+	property: string;
+	type: PropertyType;
+	/** Default value template; empty string = empty property. For lists: items separated by the list separator. */
+	defaultValue: string;
+}
+
 /** How empty cells are written into frontmatter. */
 export type EmptyValueMode = "empty" | "omit";
 
@@ -41,6 +73,11 @@ export interface ColumnConfig {
 	type: PropertyType;
 	/** Whether the column is written into frontmatter. */
 	include: boolean;
+	/**
+	 * Number columns: strip currency symbols/codes, percent signs and surrounding units before parsing
+	 * (e.g. "1.234,56 €", "$1,234.56", "12 %"). Inference sets it when a column only parses with it.
+	 */
+	stripUnits?: boolean;
 	/**
 	 * Optional value transform applied after type conversion, e.g. `[[{{value}}]]` to turn the cell into a wikilink.
 	 * `{{value}}` (alias `$value`) is the converted cell value; `{{Other column}}`, `{{row}}`, `{{file}}` also work.
@@ -86,6 +123,20 @@ export interface FileImportConfig {
 	 * still updated and no duplicates are created. Empty string = match by file path.
 	 */
 	keyColumn: string;
+	/**
+	 * Composite key: source headers whose values are joined with " | " to identify a row (for sources without
+	 * an ID, e.g. date + amount + description). When non-empty it replaces `keyColumn`; the joined value is
+	 * stored in the property named by `keyProperty`.
+	 */
+	keyColumns: string[];
+	/** Property that stores the composite key (only used when keyColumns has 2+ entries). */
+	keyProperty: string;
+	/** How ambiguous slash dates are read. */
+	dateOrder: DateOrder;
+	/** Optional row filter; null imports all rows. */
+	rowFilter: RowFilter | null;
+	/** Properties added to every note that are not columns of the CSV. */
+	extraProperties: ExtraProperty[];
 	encoding: CsvEncoding;
 	/**
 	 * Update mode: a CSV property whose value was changed in Obsidian since the last import keeps the
@@ -135,6 +186,8 @@ export interface PluginSettings {
 
 /** Shape of data.json. */
 export interface PluginData {
+	/** Schema version of data.json (current: 1). Missing = pre-versioned data. */
+	version: number;
 	settings: PluginSettings;
 	/** Per-file configs keyed by CSV vault path. */
 	files: Record<string, FileImportConfig>;
@@ -168,10 +221,18 @@ export interface PlannedNote {
 	body: string;
 	/** 1-based data row number. */
 	row: number;
+	/** Keys of `frontmatter` that come from extra properties (fill-only on update, see ExtraProperty). */
+	fillOnly: string[];
 	/** Property types of the frontmatter keys (columns + `tags` -> list, `source` -> text). Used by serializeNote. */
 	types: Record<string, PropertyType>;
 	/** Key for matching existing notes: `{ property, value }` when config.keyColumn is set and the cell is non-empty. */
 	key: { property: string; value: string } | null;
+}
+
+/** Columns added/removed since the import settings were saved. */
+export interface HeaderDrift {
+	added: string[];
+	removed: string[];
 }
 
 /** Outcome of one planned note. */
@@ -209,6 +270,8 @@ export interface UndoManifest {
 	 * whose current content no longer matches (edited after the import) and reports them instead.
 	 */
 	writtenHashes?: Record<string, string>;
+	/** True when the import was too large to record every previous note content (undo is partial). */
+	truncated?: boolean;
 }
 
 /** Summary of an import run. */

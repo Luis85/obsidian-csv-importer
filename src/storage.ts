@@ -1,5 +1,6 @@
 import { normalizePath } from "obsidian";
 import type { App } from "obsidian";
+import { parentOf } from "./core/util";
 import type { ImportSnapshot, UndoManifest } from "./types";
 
 /** Cheap per-CSV entry of imports/index.json: what exists, without reading the (large) state files. */
@@ -37,11 +38,6 @@ function hashPath(s: string): string {
 	return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0");
 }
 
-function parentOf(path: string): string {
-	const i = path.lastIndexOf("/");
-	return i < 0 ? "" : path.slice(0, i);
-}
-
 function dirsOf(paths: Iterable<string>): string[] | null {
 	const set = new Set<string>();
 	for (const p of paths) {
@@ -53,6 +49,26 @@ function dirsOf(paths: Iterable<string>): string[] | null {
 
 function undoPaths(u: UndoManifest | null): string[] {
 	return u ? [...u.created, ...u.modified.map((m) => m.path)] : [];
+}
+
+/** Moves every reference to a note in an undo manifest to its new path (in place). Returns true when the note was listed. */
+export function rekeyUndo(manifest: UndoManifest, oldPath: string, newPath: string): boolean {
+	let hit = manifest.created.includes(oldPath);
+	manifest.created = manifest.created.map((p) => (p === oldPath ? newPath : p));
+	for (const m of manifest.modified) {
+		if (m.path === oldPath) {
+			m.path = newPath;
+			hit = true;
+		}
+	}
+	for (const map of [manifest.writtenHashes, manifest.snapshotBefore]) {
+		if (map && Object.prototype.hasOwnProperty.call(map, oldPath)) {
+			const v = map[oldPath];
+			if (v !== undefined) map[newPath] = v;
+			delete map[oldPath];
+		}
+	}
+	return hit;
 }
 
 /**
@@ -100,8 +116,7 @@ export class ImportStorage {
 				} catch (e) {
 					// Corrupt or half-written index: rebuild it from the state files.
 					console.error("CSV Importer: import index is unreadable, rebuilding it", e);
-					this.index.clear();
-					await this.migrate();
+					await this.rebuildIndex();
 					return;
 				}
 				for (const [csvPath, e] of Object.entries(data)) {
@@ -114,14 +129,27 @@ export class ImportStorage {
 				}
 				return;
 			}
-			await this.migrate();
+			await this.migrateLegacy();
 		} catch (e) {
 			console.error("CSV Importer: could not read stored import state", e);
 		}
 	}
 
-	/** Old layout: `<hash>.json` held {csvPath, snapshot, undo}. Also rebuilds a lost index. */
-	private async migrate(): Promise<void> {
+	/** Rebuilds a corrupt index from the state files (current and old layout alike). */
+	private async rebuildIndex(): Promise<void> {
+		this.index.clear();
+		await this.scanStateFiles();
+		await this.flushScanned();
+	}
+
+	/** Old layout (no index yet): `<hash>.json` held {csvPath, snapshot, undo}. Reads it and writes the new layout. */
+	private async migrateLegacy(): Promise<void> {
+		await this.scanStateFiles();
+		await this.flushScanned();
+	}
+
+	/** Reads every `<hash>.json` in the imports folder into the index and the cache (marked dirty). */
+	private async scanStateFiles(): Promise<void> {
 		const adapter = this.app.vault.adapter;
 		const listing = await adapter.list(this.dir);
 		for (const path of listing.files) {
@@ -150,6 +178,10 @@ export class ImportStorage {
 				// Unreadable state of one CSV: that CSV starts fresh.
 			}
 		}
+	}
+
+	/** Writes the scanned state files and the index in the new layout. */
+	private async flushScanned(): Promise<void> {
 		for (const csvPath of [...this.cache.keys()]) void this.persist(csvPath).catch(() => undefined);
 		await this.persistIndex();
 	}
@@ -306,11 +338,6 @@ export class ImportStorage {
 		return this.index.get(csvPath)?.hasUndo === true;
 	}
 
-	/** Synchronous; only returns a manifest that has been loaded or saved already. */
-	getUndo(csvPath: string): UndoManifest | null {
-		return this.cache.get(csvPath)?.undo ?? null;
-	}
-
 	async rename(oldCsvPath: string, newCsvPath: string): Promise<void> {
 		await this.init();
 		if (oldCsvPath === newCsvPath || !this.index.has(oldCsvPath)) return;
@@ -335,6 +362,13 @@ export class ImportStorage {
 		await this.persistIndex();
 	}
 
+	/** Forgets the snapshot and undo state of a CSV but keeps it as a known (empty) entry. */
+	async clearImportState(csvPath: string): Promise<void> {
+		await this.init();
+		await this.saveUndo(csvPath, null);
+		await this.saveSnapshot(csvPath, {});
+	}
+
 	/** Re-keys snapshot entries and undo references after a note was renamed or moved. */
 	async renameNote(oldNotePath: string, newNotePath: string): Promise<void> {
 		await this.init();
@@ -350,7 +384,8 @@ export class ImportStorage {
 			if (snapMaybe) {
 				const snap = await this.loadSnapshot(csvPath);
 				if (Object.prototype.hasOwnProperty.call(snap, oldNotePath)) {
-					snap[newNotePath] = snap[oldNotePath];
+					const prev = snap[oldNotePath];
+					if (prev !== undefined) snap[newNotePath] = prev;
 					delete snap[oldNotePath];
 					l.snapDirty = true;
 					if (idx.snapDirs && !idx.snapDirs.includes(newDir)) {
@@ -362,22 +397,7 @@ export class ImportStorage {
 			if (undoMaybe) {
 				const undo = await this.loadUndo(csvPath);
 				if (undo) {
-					let hit = undo.created.includes(oldNotePath);
-					undo.created = undo.created.map((p) => (p === oldNotePath ? newNotePath : p));
-					for (const m of undo.modified) {
-						if (m.path === oldNotePath) {
-							m.path = newNotePath;
-							hit = true;
-						}
-					}
-					if (undo.writtenHashes && Object.prototype.hasOwnProperty.call(undo.writtenHashes, oldNotePath)) {
-						undo.writtenHashes[newNotePath] = undo.writtenHashes[oldNotePath];
-						delete undo.writtenHashes[oldNotePath];
-					}
-					if (undo.snapshotBefore && Object.prototype.hasOwnProperty.call(undo.snapshotBefore, oldNotePath)) {
-						undo.snapshotBefore[newNotePath] = undo.snapshotBefore[oldNotePath];
-						delete undo.snapshotBefore[oldNotePath];
-					}
+					const hit = rekeyUndo(undo, oldNotePath, newNotePath);
 					if (hit) {
 						l.undoDirty = true;
 						if (idx.undoDirs && !idx.undoDirs.includes(newDir)) {

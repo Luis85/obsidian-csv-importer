@@ -1,5 +1,5 @@
 /**
- * Minimal in-memory stand-in for the parts of the Obsidian API used by src/import/importer.ts.
+ * Minimal in-memory stand-in for the parts of the Obsidian API used by the import code (src/import/vaultGateway.ts, importer.ts and the Obsidian adapters).
  * Frontmatter is parsed with the `yaml` package (YAML 1.2 core schema, close to Obsidian's behaviour:
  * dates stay strings, numbers become numbers).
  */
@@ -38,8 +38,8 @@ export class TFolder extends TAbstractFile {
 function splitFrontmatter(text: string): { fm: Record<string, unknown>; body: string } {
 	const m = /^---\n([\s\S]*?)\n?---\n?([\s\S]*)$/.exec(text);
 	if (!m) return { fm: {}, body: text };
-	const fm = (parse(m[1]) ?? {}) as Record<string, unknown>;
-	return { fm, body: m[2] };
+	const fm = (parse(m[1]!) ?? {}) as Record<string, unknown>;
+	return { fm, body: m[2] ?? "" };
 }
 
 /** In-memory vault.adapter (dir/file listing by path prefix). `mkdirDelay` simulates slow I/O to expose races. */
@@ -184,3 +184,18 @@ export type App = MockApp;
 export function requireApiVersion(_version: string): boolean {
 	return true;
 }
+
+/** Notice stand-in: records messages in `Notice.messages`. */
+export class Notice {
+	static messages: string[] = [];
+	constructor(message: string, _timeout?: number) {
+		Notice.messages.push(message);
+	}
+	setMessage(_message: string): this {
+		return this;
+	}
+	hide(): void {}
+}
+
+/** Only referenced as a value by `instanceof`/`extends` in modules the tests stub out. */
+export class MarkdownView {}
