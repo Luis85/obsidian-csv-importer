@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+- Submission guide rewritten for the community directory portal (community.obsidian.md), which replaced pull requests to obsidian-releases: claim flow, scorecard severities, re-review, current requirements and README disclosures.
+
 ## 0.2.0
 ### Features
 - **CSV imports index**: a ribbon icon and command **Open CSV imports** open a list of every configured CSV with last import, note count and status. Re-import, configure, open the base or undo from the list, re-import everything at once, and **Delete imported notes** (moves only the notes this import owns to the trash) or **Remove from index**.

@@ -74,8 +74,8 @@ Tests are in `tests/` and run with vitest. `tests/mocks/obsidian.ts` is a mock o
 `npm run lint` runs three checks, in this order:
 
 1. `eslint .` with `eslint-plugin-obsidianmd` (the rules the community plugin review applies). Typical points: sentence case UI text, no `innerHTML`, no default hotkeys, `vault.process` instead of `vault.modify`, no stray `console.log`.
-2. `stylelint styles.css` (`.stylelintrc.json`), mainly to catch duplicate declarations, which the review bot reports.
-3. `node scripts/check-api-versions.mjs`. It uses the TypeScript compiler to report every Obsidian API (method or property) whose `@since` is newer than `minAppVersion` in `manifest.json` and is not guarded by `requireApiVersion`. Why: the review bot checks this, but `eslint-plugin-obsidianmd`'s `no-unsupported-api` rule only checks methods, not plain properties (for example `Plugin.settings`). Run it alone with `npm run lint:api`; `npm run lint:css` runs Stylelint alone.
+2. `stylelint styles.css` (`.stylelintrc.json`), mainly to catch duplicate declarations, which the community directory review reports.
+3. `node scripts/check-api-versions.mjs`. It uses the TypeScript compiler to report every Obsidian API (method or property) whose `@since` is newer than `minAppVersion` in `manifest.json` and is not guarded by `requireApiVersion`. Why: the community directory review checks this, but `eslint-plugin-obsidianmd`'s `no-unsupported-api` rule only checks methods, not plain properties (for example `Plugin.settings`). Run it alone with `npm run lint:api`; `npm run lint:css` runs Stylelint alone.
 
 `minAppVersion` is 1.15.1. Raising it relaxes the API check; lowering it can make the check fail. See [docs/SUBMISSION.md](docs/SUBMISSION.md) for the full checklist.
 
@@ -115,4 +115,4 @@ Notes:
 - Run the workflow from a branch. The selected ref must be a branch, not a tag; the workflow pushes the release commit to it. The workflow file must exist on the default branch to be run manually.
 - If the branch is protected, allow `github-actions[bot]` to push.
 - Alternatives that do not bump the version: push a tag equal to the `manifest.json` version (`git push origin 1.2.3`), or publish a release in the GitHub UI with such a tag. Both build and attach the files.
-- To submit to the community catalog, see [docs/SUBMISSION.md](docs/SUBMISSION.md).
+- To publish to the community directory (community.obsidian.md), see [docs/SUBMISSION.md](docs/SUBMISSION.md).
