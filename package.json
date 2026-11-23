@@ -9,10 +9,11 @@
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint . && stylelint styles.css",
+    "lint": "eslint . && stylelint styles.css && node scripts/check-api-versions.mjs",
     "typecheck": "tsc -noEmit -skipLibCheck",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
-    "lint:css": "stylelint styles.css"
+    "lint:css": "stylelint styles.css",
+    "lint:api": "node scripts/check-api-versions.mjs"
   },
   "keywords": [
     "obsidian",
