@@ -5,8 +5,8 @@ import { errorMessage } from "../../core/util";
 import {
 	CONFIG_DESC,
 	DATE_ORDER_OPTIONS,
-	DECIMAL_OPTIONS_DIALOG,
-	DELIMITER_OPTIONS_DIALOG,
+	DECIMAL_OPTIONS,
+	DELIMITER_OPTIONS,
 	EMPTY_VALUE_OPTIONS,
 	ENCODING_LABELS,
 	NAME,
@@ -98,7 +98,7 @@ export class AdvancedSection {
 			.setDesc(CONFIG_DESC.delimiter)
 			.addDropdown((d) =>
 				d
-					.addOptions(DELIMITER_OPTIONS_DIALOG)
+					.addOptions(DELIMITER_OPTIONS)
 					.setValue(cfg.delimiter)
 					.onChange((v) => {
 						cfg.delimiter = v as DelimiterOption;
@@ -119,7 +119,7 @@ export class AdvancedSection {
 			.setDesc(CONFIG_DESC.decimal)
 			.addDropdown((d) =>
 				d
-					.addOptions(DECIMAL_OPTIONS_DIALOG)
+					.addOptions(DECIMAL_OPTIONS)
 					.setValue(cfg.decimalSeparator)
 					.onChange((v) => {
 						cfg.decimalSeparator = v as "." | ",";

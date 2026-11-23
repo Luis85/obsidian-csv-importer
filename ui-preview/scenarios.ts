@@ -324,7 +324,7 @@ export const scenarios = {
 			side.createDiv({ cls: "tab-group", text: "Community plugins" });
 			side.createDiv({ cls: "tab-header is-active", text: "CSV Importer" });
 			const content = modal.createDiv({ cls: "modal-content vertical-tab-content-container" });
-			const tab = new CsvImporterSettingTab(app, host);
+			const tab = new CsvImporterSettingTab(app, {} as never, host);
 			content.appendChild(tab.containerEl);
 			tab.display();
 		},

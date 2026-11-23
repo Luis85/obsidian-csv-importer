@@ -714,3 +714,18 @@ body.is-phone .view-header {
 	box-shadow: var(--shadow-s);
 	font-size: var(--font-ui-small);
 }
+
+/* Native callout styling (Obsidian ships this in app.css). */
+.callout {
+	--callout-color: 8, 109, 221;
+	margin: 1em 0;
+	padding: 12px 12px 12px 24px;
+	border-radius: var(--radius-s);
+	background: rgba(var(--callout-color), 0.1);
+	mix-blend-mode: normal;
+}
+.callout[data-callout="warning"] { --callout-color: 233, 151, 63; }
+.callout[data-callout="error"] { --callout-color: 233, 49, 71; }
+.callout-title { display: flex; gap: 4px; align-items: center; color: rgb(var(--callout-color)); font-weight: 600; }
+.callout-icon { display: flex; }
+.callout-content { padding-top: 4px; }

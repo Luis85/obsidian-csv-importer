@@ -236,25 +236,25 @@ export class CsvView extends TextFileView {
 		const parts: string[] = [];
 		if (drift.added.length) parts.push(`Added: ${drift.added.join(", ")}.`);
 		if (drift.removed.length) parts.push(`Removed: ${drift.removed.join(", ")}.`);
-		const banner = renderCallout(slot, "banner-warning", [`Columns changed since the import settings were saved. ${parts.join(" ")}`]);
-		const btn = banner.createEl("button", { cls: "csv-importer-btn", text: "Review" });
-		btn.addClass("mod-cta");
-		btn.addEventListener("click", () => this.openConfig());
+		renderCallout(slot, "warning", {
+			items: [`Columns changed since the import settings were saved. ${parts.join(" ")}`],
+			action: { label: "Review", onClick: () => this.openConfig() },
+		});
 	}
 
 	private renderFirstImportHint(cfg: FileImportConfig, parsed: ParsedCsv | null): void {
 		const slot = this.bannerEl;
 		if (!slot || !parsed || parsed.rows.length === 0 || cfg.lastImport || !this.file) return;
 		const folder = safeTargetFolder(cfg, this.file.path);
-		renderCallout(slot, "banner-info", [
-			`Notes will be created in ${folder || "a folder next to this file"}. Column types were detected automatically. Click a type to change it.`,
-		]);
+		renderCallout(slot, "info", {
+			items: [`Notes will be created in ${folder || "a folder next to this file"}. Column types were detected automatically. Click a type to change it.`],
+		});
 	}
 
 	private renderParserWarnings(parsed: ParsedCsv | null): void {
 		const slot = this.bannerEl;
 		if (!slot || !parsed || parsed.warnings.length === 0) return;
-		renderCallout(slot, "banner-warning", parsed.warnings);
+		renderCallout(slot, "warning", { items: parsed.warnings });
 	}
 
 	private async runUndo(): Promise<void> {

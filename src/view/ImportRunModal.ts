@@ -227,7 +227,7 @@ export class ImportRunModal extends Modal {
 
 	private renderWarnings(el: HTMLElement, r: ImportResult): void {
 		if (!r.warnings || r.warnings.length === 0) return;
-		renderCallout(el, "warning", r.warnings);
+		renderCallout(el, "warning", { items: r.warnings });
 	}
 
 	private renderStats(el: HTMLElement, r: ImportResult): void {

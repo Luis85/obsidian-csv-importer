@@ -170,6 +170,8 @@ An active filter adds the bullet "Importing 4 of 6 rows (Rolle equals Softwareen
 - `labels.ts`: unified option maps and all §8 strings.
 - `styles.css`: split into marked blocks `/* === owner:shared|config|table-run|index-settings === */`. Each owner edits only its own block; only C edits `shared`.
 
+Block names (final, as used in `styles.css`): `owner:shared` (C only), `owner:config` (A), `owner:table-run` (B), `owner:index-settings` (C). The file header in `styles.css` repeats this. Step 0 is done: helpers `renderCallout/badge/iconButton/relPath` are in `src/view/dom.ts`, option maps and §8 strings are in `src/view/labels.ts`.
+
 | Owner | Files | Scope |
 |---|---|---|
 | **A: Settings dialog** | `ImportConfigModal.ts`, `config/*` (new `Tabs.ts`, `ColumnRow.ts`, `copy.ts`) | §2 |

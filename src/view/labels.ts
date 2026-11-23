@@ -29,24 +29,17 @@ export const ENCODING_LABELS: Record<CsvEncoding, string> = {
 	"windows-1252": "Windows-1252",
 };
 
-/** Delimiter choices. The settings tab spells out automatic detection; the import dialog keeps it short. */
-export const DELIMITER_OPTIONS_SETTINGS: Record<string, string> = {
+/** Delimiter choices, one map for the settings tab and the import settings dialog. */
+export const DELIMITER_OPTIONS: Record<string, string> = {
 	auto: "Detect automatically",
 	",": "Comma",
 	";": "Semicolon",
 	"\t": "Tab",
 	"|": "Pipe",
 };
-export const DELIMITER_OPTIONS_DIALOG: Record<string, string> = {
-	auto: "Auto",
-	",": "Comma",
-	";": "Semicolon",
-	"\t": "Tab",
-	"|": "Pipe",
-};
 
-export const DECIMAL_OPTIONS_SETTINGS: Record<string, string> = { ".": "Dot", ",": "Comma" };
-export const DECIMAL_OPTIONS_DIALOG: Record<string, string> = { ".": "Dot (0.625)", ",": "Comma (0,625)" };
+/** Decimal separator choices with an example, shared by the settings tab and the dialog. */
+export const DECIMAL_OPTIONS: Record<string, string> = { ".": "Dot (0.625)", ",": "Comma (0,625)" };
 
 export const EMPTY_VALUE_OPTIONS: Record<EmptyValueMode, string> = {
 	empty: "Leave property empty",
@@ -168,3 +161,84 @@ export const DATE_ORDER_OPTIONS: Record<DateOrder, string> = {
 	dmy: "Day first (DD/MM/YYYY)",
 	mdy: "Month first (MM/DD/YYYY)",
 };
+
+/**
+ * Copy from docs/UI-SPEC.md section 8 ("Copy changes"). Views reference these instead of inline strings.
+ * Functions take plain values so they stay trivially testable.
+ */
+
+/** Primary import button: "Import 7 rows" (was "Import 7 rows as notes"). */
+export function importRowsLabel(count: number): string {
+	return `Import ${count} ${count === 1 ? "row" : "rows"}`;
+}
+
+/** Drift callout text: "The CSV has new or missing columns: + Tage, − Kostenstelle." */
+export function driftMessage(added: string[], removed: string[]): string {
+	const parts = [...added.map((c) => `+ ${c}`), ...removed.map((c) => `\u2212 ${c}`)];
+	return `The CSV has new or missing columns: ${parts.join(", ")}.`;
+}
+export const REVIEW_COLUMNS = "Review columns";
+
+/** Column options (replaces the "Template…" pill). */
+export const COLUMN_OPTIONS = "Options";
+export const VALUE_TEMPLATE = "Value template";
+export const IGNORE_UNITS = "Ignore units (\u20ac, %, kg)";
+
+/** Dialog footer: "Save and import" becomes "Import now"; it also saves. */
+export const IMPORT_NOW = "Import now";
+export const SAVE = "Save";
+export const CANCEL = "Cancel";
+export const CONFIGURE = "Configure";
+export const CLOSE = "Close";
+
+/** Key matching. */
+export const MATCH_NOTES_BY = "Match notes by";
+export function suggestedKey(column: string): string {
+	return `Suggested: ${column} (unique in every row)`;
+}
+
+/** Row filter. */
+export const FILTER_ROWS = "Filter rows";
+export const FILTER_ROWS_WHERE = "Import rows where";
+
+/** Run list row: "timesheet 3.md \u00b7 row 3". Pass the file name only (see relPath() for folder-relative paths). */
+export function runRowLabel(name: string, row: number): string {
+	return `${name} \u00b7 row ${row}`;
+}
+
+/** Index empty state. The hint is the full sentence; the title is the heading above it. */
+export const NO_IMPORTS_TITLE = "No imports yet";
+export const NO_IMPORTS_HINT = "Open a CSV file and choose Import to set one up.";
+export const NO_IMPORTS_YET = `${NO_IMPORTS_TITLE}. ${NO_IMPORTS_HINT}`;
+
+/** Source link toggle (was "Add link to the CSV file" / "Add source link"). */
+export const LINK_NOTES_TO_CSV = "Link notes to the CSV";
+
+/** Other strings named in the spec (sections 3, 4, 5, 6). */
+export const NO_ROWS = "This file has no rows.";
+export function noRowsMatch(query: string): string {
+	return `No rows match \u201c${query}\u201d`;
+}
+export const IMPORT_FINISHED = "Import finished";
+export const IMPORT_BUTTON = "Import";
+export const REIMPORT_BUTTON = "Re-import";
+export const REIMPORT_ALL = "Re-import all";
+export const CSV_MISSING = "CSV missing";
+export const OPEN_CSV_IMPORTS = "Open CSV imports";
+export const RESET_ALL_SETTINGS = "Reset all import settings\u2026";
+/** Settings tab section headings (spec section 6). */
+export const SETTINGS_HEADINGS = {
+	reading: "Reading files",
+	notes: "New notes",
+	reimport: "Re-import",
+	table: "Table view",
+	imports: "Imports",
+	danger: "Danger zone",
+} as const;
+/** Tab names of the import settings dialog (spec section 2). */
+export const CONFIG_TABS = {
+	columns: "Columns",
+	notes: "Notes",
+	reimport: "Re-import",
+	file: "File & rows",
+} as const;

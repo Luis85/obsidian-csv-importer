@@ -60,7 +60,7 @@ export class ImportConfigModal extends Modal {
 		this.warningsEl.empty();
 		const warnings = this.draft.parsed?.warnings ?? [];
 		if (warnings.length === 0) return;
-		renderCallout(this.warningsEl, "warning", warnings);
+		renderCallout(this.warningsEl, "warning", { items: warnings });
 	}
 
 	private build(): void {

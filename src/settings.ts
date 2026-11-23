@@ -4,8 +4,8 @@ import { confirmDialog } from "./view/ConfirmModal";
 import type { ConflictStrategy, CsvEncoding, DelimiterOption, EmptyValueMode, PluginSettings } from "./types";
 import {
 	CONFLICT_OPTIONS,
-	DECIMAL_OPTIONS_SETTINGS,
-	DELIMITER_OPTIONS_SETTINGS,
+	DECIMAL_OPTIONS,
+	DELIMITER_OPTIONS,
 	EMPTY_VALUE_OPTIONS,
 	ENCODING_LABELS,
 	NAME,
@@ -65,9 +65,9 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			{ name: "", desc: SETTINGS_DESC.intro, searchable: false },
 			group("Reading CSV files", [
 				dropdown("defaultEncoding", NAME.encoding, ENCODING_LABELS, SETTINGS_DESC.encoding),
-				dropdown("defaultDelimiter", NAME.delimiter, DELIMITER_OPTIONS_SETTINGS, SETTINGS_DESC.delimiter),
+				dropdown("defaultDelimiter", NAME.delimiter, DELIMITER_OPTIONS, SETTINGS_DESC.delimiter),
 				toggle("defaultHasHeader", NAME.hasHeader),
-				dropdown("defaultDecimalSeparator", NAME.decimal, DECIMAL_OPTIONS_SETTINGS, SETTINGS_DESC.decimal),
+				dropdown("defaultDecimalSeparator", NAME.decimal, DECIMAL_OPTIONS, SETTINGS_DESC.decimal),
 				text("defaultListSeparator", NAME.listSeparator, SETTINGS_DESC.listSeparator),
 				dropdown("defaultEmptyValues", NAME.emptyCells, EMPTY_VALUE_OPTIONS, SETTINGS_DESC.emptyCells),
 				toggle("midnightAsDate", "Treat midnight timestamps as dates", SETTINGS_DESC.midnight),
@@ -170,7 +170,7 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			.setDesc(SETTINGS_DESC.delimiter)
 			.addDropdown((d) =>
 				d
-					.addOptions(DELIMITER_OPTIONS_SETTINGS)
+					.addOptions(DELIMITER_OPTIONS)
 					.setValue(s.defaultDelimiter)
 					.onChange((v) => {
 						s.defaultDelimiter = v as DelimiterOption;
@@ -192,7 +192,7 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			.setDesc(SETTINGS_DESC.decimal)
 			.addDropdown((d) =>
 				d
-					.addOptions(DECIMAL_OPTIONS_SETTINGS)
+					.addOptions(DECIMAL_OPTIONS)
 					.setValue(s.defaultDecimalSeparator)
 					.onChange((v) => {
 						s.defaultDecimalSeparator = v as "." | ",";
