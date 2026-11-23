@@ -193,11 +193,15 @@ Copy `main.js`, `manifest.json` and `styles.css` into `<vault>/.obsidian/plugins
 
 ## Release process
 
-1. Update `CHANGELOG.md`.
-2. Run `npm version patch` (or `minor` / `major`). This bumps `package.json`, `manifest.json` and `versions.json` and creates a git tag without a `v` prefix.
-3. Push the commit and the tag: `git push && git push --tags`.
-   Alternatively, publish a release in the GitHub UI with a new tag equal to the `manifest.json` version (e.g. `0.1.0`); the workflow attaches the build files to it.
-4. The [release workflow](.github/workflows/release.yml) checks that the tag equals the `manifest.json` version, builds, tests and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`.
+Releases are fully automated by the [release workflow](.github/workflows/release.yml).
+
+1. Add your changes under a `## Unreleased` heading in `CHANGELOG.md` (it is renamed to the version on release and used as release notes).
+2. Run the **Release** workflow from the Actions tab (or `gh workflow run release.yml -f version=minor`, or let an agent trigger it through the GitHub API). Choose `patch`, `minor`, `major`, an explicit `x.y.z`, or `current` to release the version already in `manifest.json`.
+3. The workflow bumps `package.json`, `manifest.json` and `versions.json`, runs lint, tests and build, commits `Release x.y.z`, pushes the tag (no `v` prefix) and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`. BRAT picks the new release up automatically.
+
+The workflow must exist on the default branch to be run manually, and it pushes the release commit to the branch it runs on; allow `github-actions[bot]` to push if the branch is protected.
+
+Pushing a tag equal to the `manifest.json` version, or publishing a release with such a tag in the GitHub UI, also builds and attaches the files (without bumping).
 
 To submit the plugin to the community catalog, see [docs/SUBMISSION.md](docs/SUBMISSION.md).
 
