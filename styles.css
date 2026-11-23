@@ -235,7 +235,6 @@
 	flex-direction: column;
 	width: min(900px, 95vw);
 	max-width: 95vw;
-	max-height: 90vh;
 	max-height: 90dvh;
 }
 
@@ -451,7 +450,6 @@
 	.modal.csv-importer-modal {
 		width: 100vw;
 		max-width: 100vw;
-		height: 100vh;
 		height: 100dvh;
 		max-height: 100dvh;
 		border-radius: 0;
@@ -889,12 +887,8 @@
 	display: none;
 }
 
-.csv-importer-badge {
+.csv-importer-index-badges .csv-importer-badge {
 	padding: 0 var(--size-4-2);
-	border-radius: var(--radius-s);
-	background: var(--background-modifier-hover);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
 }
 
 .csv-importer-badge.mod-warning {

@@ -18,7 +18,7 @@ export function plural(n: number, one: string, many: string): string {
 
 /** Random RFC 4122 version 4 UUID (uses crypto.randomUUID when available, else crypto.getRandomValues). */
 export function uuidV4(): string {
-	const c = globalThis.crypto;
+	const c = window.crypto;
 	if (c && typeof c.randomUUID === "function") return c.randomUUID();
 	const b = new Uint8Array(16);
 	c.getRandomValues(b);

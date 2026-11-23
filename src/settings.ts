@@ -23,11 +23,16 @@ export interface SettingsHost {
 }
 
 export class CsvImporterSettingTab extends PluginSettingTab {
+	/**
+	 * `plugin` is only passed to PluginSettingTab. Settings are read through `host` (typed as SettingsHost, not
+	 * Plugin) so the code never touches Plugin.settings, which only exists in Obsidian 1.13+.
+	 */
 	constructor(
 		app: App,
-		private readonly host: Plugin & SettingsHost,
+		plugin: Plugin,
+		private readonly host: SettingsHost,
 	) {
-		super(app, host);
+		super(app, plugin);
 	}
 
 	/**

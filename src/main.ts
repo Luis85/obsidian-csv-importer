@@ -49,7 +49,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 		this.registerView(VIEW_TYPE_IMPORT_INDEX, (leaf) => new ImportIndexView(leaf, this));
 		this.addRibbonIcon("table-properties", "Open CSV imports", () => void this.openImportIndex());
 
-		this.addSettingTab(new CsvImporterSettingTab(this.app, this));
+		this.addSettingTab(new CsvImporterSettingTab(this.app, this, this));
 		registerVaultEvents(this, this.store, this.storage);
 		this.registerCommands();
 		this.registerMenus();

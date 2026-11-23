@@ -56,3 +56,12 @@ After the PR is opened, a validation bot checks the entry and the release (manif
 - Fix findings in the plugin repo, publish a new release if needed, and push to the PR branch or re-trigger by commenting as instructed by the bot.
 - A human reviewer takes over after the bot checks pass; reviews can take weeks.
 - Run `npm run lint` locally first to catch most issues before submitting.
+
+## Lessons from the first automated review (0.1.0)
+
+The review bot checks more than `eslint-plugin-obsidianmd`'s recommended config locally reports. Before each release, check:
+
+- `npm run lint` passes: ESLint and Stylelint, with no warnings.
+- The settings tab never reads properties through the `Plugin` type that are newer than `minAppVersion`. `Plugin.settings` is `@since 1.13.0`, so a plugin's own `settings` field must be read through its own type, not through `Plugin`.
+- The release has artifact attestations for `main.js` and `styles.css`. The Release workflow creates them, so check that the attestation step passed.
+- `styles.css` has no duplicate properties, such as `vh` fallbacks before `dvh` values.

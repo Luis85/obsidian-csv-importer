@@ -9,6 +9,7 @@ import { CsvView } from "../src/view/CsvView";
 import { ImportConfigModal } from "../src/view/ImportConfigModal";
 import { ImportRunModal } from "../src/view/ImportRunModal";
 import { CsvImporterSettingTab } from "../src/settings";
+import { ImportIndexView } from "../src/view/ImportIndexView";
 import { DEFAULT_SETTINGS, createDefaultFileConfig } from "../src/defaults";
 import { parseCsv } from "../src/csv/parser";
 import { prepareConfig } from "../src/csv/typeInference";
@@ -144,6 +145,59 @@ function driftedConfig(host, text) {
 	return cfg;
 }
 
+
+/** Saved config with 2 extra properties (one {{uuid}} ID), a composite key and an active row filter. */
+function extrasConfig(host, text) {
+	const cfg = createDefaultFileConfig(host.settings);
+	const parsed = parseCsv(text, { delimiter: cfg.delimiter, hasHeader: cfg.hasHeader });
+	prepareConfig(cfg, parsed, host.settings.midnightAsDate);
+	cfg.extraProperties = [
+		{ property: "id", type: "text", defaultValue: "{{uuid}}" },
+		{ property: "status", type: "text", defaultValue: "open" },
+	];
+	cfg.keyColumns = ["Datum", "Rolle"];
+	cfg.keyColumn = "";
+	cfg.keyProperty = "import_key";
+	cfg.rowFilter = { column: "Rolle", op: "equals", value: "Softwareentwickler" };
+	cfg.conflict = "update";
+	cfg.lastImport = LAST_IMPORT;
+	return cfg;
+}
+
+const INDEX_ITEMS = [
+	{ csvPath: "Data/timesheet.csv", fileName: "timesheet.csv", exists: true, targetFolder: "Data/timesheet", lastImport: Date.now() - 2 * 3600e3, hasUndo: true, basePath: "Data/timesheet/timesheet.base" },
+	{ csvPath: "Finanzen/Konto/umsaetze-2026-10.csv", fileName: "umsaetze-2026-10.csv", exists: true, targetFolder: "Finanzen/Buchungen", lastImport: Date.now() - 3 * 86400e3, hasUndo: false, basePath: null },
+	{ csvPath: "Archiv/kunden-export.csv", fileName: "kunden-export.csv", exists: false, targetFolder: "CRM/Kunden", lastImport: Date.now() - 40 * 86400e3, hasUndo: false, basePath: "CRM/Kunden/kunden-export.base" },
+	{ csvPath: "books.csv", fileName: "books.csv", exists: true, targetFolder: "", lastImport: null, hasUndo: false, basePath: null },
+];
+const INDEX_COUNTS = { "Data/timesheet.csv": 8, "Finanzen/Konto/umsaetze-2026-10.csv": 214, "Archiv/kunden-export.csv": 57, "books.csv": 0 };
+
+async function mountIndex(items) {
+	const app = new App();
+	app.vault.getFileByPath = () => null;
+	document.body.empty();
+	const frame = document.body.createDiv({ cls: "app-frame" });
+	const strip = frame.createDiv({ cls: "tab-strip" });
+	strip.createDiv({ cls: "tab" }).createSpan({ text: "CSV imports" });
+	const leaf = new WorkspaceLeaf(app);
+	frame.appendChild(leaf.containerEl);
+	const host = {
+		app,
+		listImports: async () => items,
+		countImportedNotes: async (p) => INDEX_COUNTS[p] ?? 0,
+		reimport: async () => {},
+		reimportAll: async () => {},
+		configureImport: async () => {},
+		undoImport: async () => {},
+		deleteImportedNotes: async () => 0,
+		removeFromIndex: async () => false,
+	};
+	const view = new ImportIndexView(leaf, host);
+	view.refreshHeader();
+	await view.onOpen();
+	await sleep(150);
+}
+
 export const scenarios = {
 	"a-table-first-import": {
 		title: "Table view, first import hint (timesheet-de.csv)",
@@ -168,6 +222,47 @@ export const scenarios = {
 			const { app, file } = mountTableView(host, timesheetEn);
 			new ImportConfigModal(app, host, file, timesheetEn).open();
 			await sleep(400);
+		},
+	},
+	"c-config-extras": {
+		title: "Import settings dialog: extra properties (ID uuid), composite key, row filter",
+		async mount() {
+			const host = new FakeHost(timesheetEn);
+			const { app, file } = mountTableView(host, timesheetEn);
+			host.configs.set(file.path, extrasConfig(host, timesheetEn));
+			new ImportConfigModal(app, host, file, timesheetEn).open();
+			await sleep(300);
+			const d = document.querySelector("details.csv-importer-advanced");
+			if (d) d.open = true;
+			await sleep(200);
+		},
+	},
+	"c-config-extras-filter": {
+		title: "Import settings dialog: active row filter (scrolled into view)",
+		async mount() {
+			const host = new FakeHost(timesheetEn);
+			const { app, file } = mountTableView(host, timesheetEn);
+			host.configs.set(file.path, extrasConfig(host, timesheetEn));
+			new ImportConfigModal(app, host, file, timesheetEn).open();
+			await sleep(300);
+			const d = document.querySelector("details.csv-importer-advanced");
+			if (d) d.open = true;
+			await sleep(200);
+			const fc = document.querySelector(".csv-importer-filter-count");
+			if (fc) fc.scrollIntoView({ block: "center" });
+			await sleep(100);
+		},
+	},
+	"h-index": {
+		title: "CSV imports index view (4 imports, one missing CSV, one with undo)",
+		async mount() {
+			await mountIndex(INDEX_ITEMS);
+		},
+	},
+	"h-index-empty": {
+		title: "CSV imports index view, empty state",
+		async mount() {
+			await mountIndex([]);
 		},
 	},
 	"d-config-advanced": {

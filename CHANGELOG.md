@@ -13,6 +13,11 @@
 - Preview warnings for duplicate keys in the CSV, duplicate notes in the vault (e.g. sync conflict copies), very large imports, active row filters and extra properties that clash with columns.
 - Settings appear in Obsidian's settings search (1.13+).
 
+### Marketplace review fixes
+- Release assets (`main.js`, `styles.css`) carry GitHub artifact attestations (build provenance).
+- The settings tab no longer touches `Plugin.settings` (an Obsidian 1.13 API) and implements the declarative settings API with a fallback for older versions.
+- Removed duplicate CSS declarations; styles are now checked with Stylelint in CI.
+
 ### Reliability
 - Saved data has a schema version and old configurations are migrated.
 - If notes were written but the import history could not be saved, the import reports a warning instead of failing.

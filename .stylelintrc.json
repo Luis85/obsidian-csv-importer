@@ -1,0 +1,16 @@
+{
+	"rules": {
+		"declaration-block-no-duplicate-properties": true,
+		"declaration-block-no-duplicate-custom-properties": true,
+		"declaration-block-no-shorthand-property-overrides": true,
+		"no-duplicate-selectors": true,
+		"block-no-empty": true,
+		"color-no-invalid-hex": true,
+		"property-no-unknown": true,
+		"unit-no-unknown": true,
+		"selector-pseudo-class-no-unknown": true,
+		"at-rule-no-unknown": true,
+		"function-calc-no-unspaced-operator": true,
+		"font-family-no-duplicate-names": true
+	}
+}
