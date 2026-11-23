@@ -198,6 +198,8 @@ export interface UndoManifest {
 	created: string[];
 	/** Notes modified by the import with their full previous content. */
 	modified: { path: string; content: string }[];
+	/** Snapshot entries of the modified notes as they were before the import, restored on undo. */
+	snapshotBefore?: ImportSnapshot;
 }
 
 /** Summary of an import run. */

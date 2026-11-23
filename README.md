@@ -152,7 +152,7 @@ Importing opens a dialog that first shows a preview without writing anything: ho
 
 Notes are matched in one of two ways:
 
-- **Key column** (recommended): pick a column with unique values, such as an ID. Notes in the target folder whose property matches the value are updated, even if you renamed or moved them within that folder.
+- **Key column** (recommended): pick a column with unique values, such as an ID. Notes in the target folder whose property matches the value are updated, even if you renamed or moved them within that folder. The key column is always written to the notes, even if you excluded it from the import, because it has to be stored to find the note again.
 - **File name**: without a key column, notes with the same generated file name are updated. Use a file name template that is stable and unique per row (for example `{{Datum}} {{Rolle}}`).
 
 If the CSV's columns changed since you configured the file, the table view and the import dialog show a warning.

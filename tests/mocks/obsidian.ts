@@ -42,7 +42,43 @@ function splitFrontmatter(text: string): { fm: Record<string, unknown>; body: st
 	return { fm, body: m[2] };
 }
 
+/** In-memory vault.adapter (dir/file listing by path prefix). `mkdirDelay` simulates slow I/O to expose races. */
+export class MockAdapter {
+	data = new Map<string, string>();
+	dirs = new Set<string>();
+	writes = 0;
+	mkdirCalls = 0;
+	async exists(p: string): Promise<boolean> {
+		return this.dirs.has(p) || this.data.has(p);
+	}
+	async mkdir(p: string): Promise<void> {
+		this.mkdirCalls++;
+		await Promise.resolve();
+		if (this.dirs.has(p)) throw new Error("Folder already exists.");
+		this.dirs.add(p);
+	}
+	async read(p: string): Promise<string> {
+		const v = this.data.get(p);
+		if (v === undefined) throw new Error("ENOENT");
+		return v;
+	}
+	async write(p: string, d: string): Promise<void> {
+		await Promise.resolve();
+		const dir = p.slice(0, p.lastIndexOf("/"));
+		if (dir && !this.dirs.has(dir)) throw new Error("ENOENT: no such directory");
+		this.writes++;
+		this.data.set(p, d);
+	}
+	async remove(p: string): Promise<void> {
+		this.data.delete(p);
+	}
+	async list(dir: string): Promise<{ files: string[]; folders: string[] }> {
+		return { files: [...this.data.keys()].filter((k) => k.startsWith(dir + "/")), folders: [] };
+	}
+}
+
 export class MockVault {
+	adapter = new MockAdapter();
 	files = new Map<string, string>();
 	private nodes = new Map<string, TAbstractFile>();
 	private root = new TFolder("");

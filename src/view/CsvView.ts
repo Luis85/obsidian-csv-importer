@@ -11,7 +11,11 @@ export const VIEW_TYPE_CSV = "csv-importer-view";
 type SortDir = "asc" | "desc";
 
 export class CsvView extends TextFileView {
+	/** Decoded text used for display and import (may differ from the bytes Obsidian loaded). */
 	private raw = "";
+	/** Exact data Obsidian gave us in setViewData; returned from getViewData so nothing is rewritten. */
+	private fileData = "";
+	private pendingDecode: Promise<void> | null = null;
 	private importing = false;
 	private query = "";
 	private sortCol = -1;
@@ -50,10 +54,16 @@ export class CsvView extends TextFileView {
 	}
 
 	getViewData(): string {
-		return this.raw;
+		return this.fileData;
+	}
+
+	/** The view is strictly read-only: never write the (possibly re-decoded) text back to the CSV. */
+	save(_clear?: boolean): Promise<void> {
+		return Promise.resolve();
 	}
 
 	setViewData(data: string, clear: boolean): void {
+		this.fileData = data;
 		this.raw = data;
 		if (clear) {
 			this.query = "";
@@ -61,7 +71,11 @@ export class CsvView extends TextFileView {
 			this.visibleCount = 0;
 		}
 		this.render();
-		void this.redecodeIfNeeded();
+		const pending = this.redecodeIfNeeded();
+		this.pendingDecode = pending;
+		void pending.finally(() => {
+			if (this.pendingDecode === pending) this.pendingDecode = null;
+		});
 	}
 
 	/** Obsidian reads text files as UTF-8; re-read with the configured encoding when that is wrong. */
@@ -70,7 +84,7 @@ export class CsvView extends TextFileView {
 		if (!file) return;
 		const id = ++this.loadCounter;
 		const enc = this.host.getFileConfig(file).encoding;
-		const suspicious = (enc !== "utf-8" && enc !== "auto") || this.raw.includes("\uFFFD");
+		const suspicious = enc !== "utf-8" || this.raw.includes("\uFFFD") || this.raw.includes("\u0000");
 		if (!suspicious) return;
 		try {
 			const text = await this.host.readCsv(file);
@@ -86,6 +100,8 @@ export class CsvView extends TextFileView {
 
 	clear(): void {
 		this.loadCounter++;
+		this.pendingDecode = null;
+		this.fileData = "";
 		this.raw = "";
 		this.query = "";
 		this.sortCol = -1;
@@ -112,6 +128,8 @@ export class CsvView extends TextFileView {
 		this.importing = true;
 		this.updateImportButton();
 		try {
+			if (this.pendingDecode) await this.pendingDecode;
+			if (!this.file) return;
 			await this.host.importFile(this.file, this.raw);
 		} catch (e) {
 			new Notice(`Import failed: ${e instanceof Error ? e.message : String(e)}`);

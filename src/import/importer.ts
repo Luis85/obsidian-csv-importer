@@ -3,6 +3,7 @@ import type { App } from "obsidian";
 import type {
 	ColumnConfig,
 	FileImportConfig,
+	FrontmatterValue,
 	ImportResult,
 	ImportSnapshot,
 	PlannedNote,
@@ -12,7 +13,7 @@ import type {
 	TypeRegistrationResult,
 } from "../types";
 import { mergeFrontmatter, valueHash } from "./merge";
-import { serializeNote } from "./noteBuilder";
+import { formatValue, serializeNote } from "./noteBuilder";
 
 const YIELD_EVERY = 25;
 
@@ -69,10 +70,27 @@ function buildKeyIndex(app: App, folders: Set<string>, property: string): Map<st
 		seen.add(file.path);
 		const v: unknown = app.metadataCache.getFileCache(file)?.frontmatter?.[property];
 		if (v === undefined || v === null) continue;
-		const key = typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : JSON.stringify(v);
+		if (Array.isArray(v) || typeof v === "object") continue;
+		const key = formatValue(v as FrontmatterValue);
 		if (!index.has(key)) index.set(key, file);
 	}
 	return index;
+}
+
+/**
+ * Snapshot after undoing a run: entries of created notes are dropped; modified notes get the entry they had
+ * before the run back (or none if they had none). Manifests without `snapshotBefore` drop modified entries.
+ */
+export function applyUndoToSnapshot(snapshot: ImportSnapshot, manifest: UndoManifest): ImportSnapshot {
+	const out: ImportSnapshot = {};
+	for (const [p, v] of Object.entries(snapshot)) out[p] = { ...v };
+	for (const p of manifest.created) delete out[p];
+	for (const m of manifest.modified) {
+		const before = manifest.snapshotBefore;
+		if (before && Object.prototype.hasOwnProperty.call(before, m.path)) out[m.path] = { ...before[m.path] };
+		else delete out[m.path];
+	}
+	return out;
 }
 
 export interface WriteOptions {
@@ -129,7 +147,7 @@ export async function writeNotes(
 	};
 	const snapshot: ImportSnapshot = {};
 	for (const [p, v] of Object.entries(opts.snapshot ?? {})) snapshot[p] = { ...v };
-	const undo: UndoManifest = { csvPath: "", timestamp: Date.now(), created: [], modified: [] };
+	const undo: UndoManifest = { csvPath: "", timestamp: Date.now(), created: [], modified: [], snapshotBefore: {} };
 	const touched = new Set<string>();
 	const reserved = new Set<string>();
 	const folders = new Set<string>();
@@ -159,6 +177,9 @@ export async function writeNotes(
 		if (touched.has(file.path)) return;
 		touched.add(file.path);
 		undo.modified.push({ path: file.path, content: await app.vault.read(file) });
+		if (Object.prototype.hasOwnProperty.call(snapshot, file.path)) {
+			(undo.snapshotBefore ??= {})[file.path] = { ...snapshot[file.path] };
+		}
 	};
 	const free = (path: string): string => {
 		const dot = path.lastIndexOf(".");

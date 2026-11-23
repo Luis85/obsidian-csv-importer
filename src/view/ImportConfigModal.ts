@@ -48,7 +48,7 @@ const ENCODING_LABELS: Record<CsvEncoding, string> = {
 };
 
 const KEY_DESC =
-	"Re-imports update the note whose property matches this column, even if the note was renamed. Use a column with unique values, like an ID.";
+	"Re-imports update the note whose property matches this column, even if the note was renamed. Use a column with unique values, like an ID. The key column is always written to the notes.";
 
 function cloneConfig(cfg: FileImportConfig): FileImportConfig {
 	return { ...cfg, columns: cfg.columns.map((c) => ({ ...c })) };

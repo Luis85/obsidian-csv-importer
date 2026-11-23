@@ -30,6 +30,7 @@ export class ImportStorage {
 	private readonly dir: string;
 	private cache = new Map<string, StoredImport>();
 	private ready: Promise<void> | null = null;
+	private writes = new Map<string, { tail: Promise<void>; queued: Promise<void> | null }>();
 
 	constructor(
 		private readonly app: App,
@@ -72,10 +73,40 @@ export class ImportStorage {
 		}
 	}
 
-	private async persist(entry: StoredImport): Promise<void> {
+	/**
+	 * Writes are serialized per CSV and coalesced: while one write is in flight, further requests share a single
+	 * follow-up write that serializes the latest in-memory state.
+	 */
+	private persist(entry: StoredImport): Promise<void> {
+		const key = entry.csvPath;
+		let st = this.writes.get(key);
+		if (!st) {
+			st = { tail: Promise.resolve(), queued: null };
+			this.writes.set(key, st);
+		}
+		if (st.queued) return st.queued;
+		const state = st;
+		const p = state.tail.then(() => {
+			state.queued = null;
+			return this.writeEntry(key);
+		});
+		state.queued = p;
+		state.tail = p.catch(() => undefined);
+		return p;
+	}
+
+	private async writeEntry(csvPath: string): Promise<void> {
+		const entry = this.cache.get(csvPath);
+		if (!entry) return; // deleted or renamed meanwhile
 		const adapter = this.app.vault.adapter;
-		if (!(await adapter.exists(this.dir))) await adapter.mkdir(this.dir);
-		await adapter.write(this.fileFor(entry.csvPath), JSON.stringify(entry));
+		if (!(await adapter.exists(this.dir))) {
+			try {
+				await adapter.mkdir(this.dir);
+			} catch (e) {
+				if (!(await adapter.exists(this.dir))) throw e;
+			}
+		}
+		await adapter.write(this.fileFor(csvPath), JSON.stringify(entry));
 	}
 
 	private entry(csvPath: string): StoredImport {
@@ -116,8 +147,8 @@ export class ImportStorage {
 		await this.init();
 		const e = this.cache.get(oldCsvPath);
 		if (!e || oldCsvPath === newCsvPath) return;
-		await this.removeFile(oldCsvPath);
 		this.cache.delete(oldCsvPath);
+		await this.removeFile(oldCsvPath);
 		e.csvPath = newCsvPath;
 		if (e.undo) e.undo = { ...e.undo, csvPath: newCsvPath };
 		this.cache.set(newCsvPath, e);

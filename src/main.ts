@@ -9,7 +9,7 @@ import { planNotes, resolveTargetFolder } from "./import/noteBuilder";
 import { ImportStorage } from "./storage";
 import { confirmDialog } from "./view/ConfirmModal";
 import { ImportRunModal } from "./view/ImportRunModal";
-import { registerPropertyTypes, writeNotes } from "./import/importer";
+import { applyUndoToSnapshot, registerPropertyTypes, writeNotes } from "./import/importer";
 import { createDefaultFileConfig, CsvImporterSettingTab, DEFAULT_SETTINGS } from "./settings";
 import type { SettingsHost } from "./settings";
 import type { FileImportConfig, ImportResult, PluginData, PluginSettings } from "./types";
@@ -191,15 +191,25 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 					const snap = (await this.storage.load(file.path)).snapshot;
 					const out = await writeNotes(this.app, notes, cfg, { snapshot: snap, ...opts });
 					await this.storage.saveSnapshot(file.path, out.snapshot);
-					if (out.undo.created.length > 0 || out.undo.modified.length > 0) {
+					const undoable = out.undo.created.length > 0 || out.undo.modified.length > 0;
+					if (undoable) {
 						await this.storage.saveUndo(file.path, { ...out.undo, csvPath: file.path });
 					}
 					cfg.lastImport = Date.now();
 					await this.saveFileConfig(file, cfg);
 					if (cfg.createBase && staticFolder && (out.result.created > 0 || out.result.updated > 0)) {
-						await this.createBaseFile(staticFolder, cfg, file.basename);
+						const basePath = await this.createBaseFile(staticFolder, cfg, file.basename);
+						if (basePath) {
+							// Trashed by undo together with the notes it lists.
+							const stored = this.storage.getUndo(file.path);
+							await this.storage.saveUndo(file.path, {
+								...(stored && undoable ? stored : { csvPath: file.path, timestamp: Date.now(), created: [], modified: [] }),
+								created: [...(stored && undoable ? stored.created : []), basePath],
+							});
+							return { result: out.result, undoable: true };
+						}
 					}
-					return out.result;
+					return { result: out.result, undoable };
 				},
 				canUndo: () => this.canUndo(file),
 				undo: () => this.undoLastImport(file),
@@ -237,7 +247,7 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 			true,
 		);
 		if (!ok) return;
-		const { snapshot } = await this.storage.load(file.path);
+		const stored = await this.storage.load(file.path);
 		let trashed = 0;
 		let restored = 0;
 		let failed = 0;
@@ -248,7 +258,6 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 					await this.app.fileManager.trashFile(f);
 					trashed++;
 				}
-				delete snapshot[path];
 			} catch (e) {
 				failed++;
 				console.error("CSV Importer: could not trash note", path, e);
@@ -261,13 +270,12 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 					await this.app.vault.modify(f, m.content);
 					restored++;
 				}
-				delete snapshot[m.path];
 			} catch (e) {
 				failed++;
 				console.error("CSV Importer: could not restore note", m.path, e);
 			}
 		}
-		await this.storage.saveSnapshot(file.path, snapshot);
+		await this.storage.saveSnapshot(file.path, applyUndoToSnapshot(stored.snapshot, manifest));
 		await this.storage.saveUndo(file.path, null);
 		const parts = [`${trashed} removed`, `${restored} restored`];
 		if (failed > 0) parts.push(`${failed} failed`);
@@ -287,16 +295,19 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 		new Notice(lines.slice(0, 5).join("\n") + (lines.length > 5 ? `\n…and ${lines.length - 5} more.` : ""), 12000);
 	}
 
-	private async createBaseFile(folder: string, cfg: FileImportConfig, csvBasename: string): Promise<void> {
+	/** Returns the path of the created base file, or null if none was created. */
+	private async createBaseFile(folder: string, cfg: FileImportConfig, csvBasename: string): Promise<string | null> {
 		try {
 			const path = normalizePath(`${folder}.base`);
-			if (this.app.vault.getAbstractFileByPath(path)) return;
+			if (this.app.vault.getAbstractFileByPath(path)) return null;
 			const props = cfg.columns.filter((c) => c.include).map((c) => c.property);
 			await this.app.vault.create(path, buildBaseFile(folder, props, csvBasename));
 			new Notice(`Created ${path}.`);
+			return path;
 		} catch (e) {
 			console.error("CSV Importer: could not create base file", e);
 			new Notice("Could not create the base file.");
+			return null;
 		}
 	}
 

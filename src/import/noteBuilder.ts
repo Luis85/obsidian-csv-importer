@@ -168,14 +168,15 @@ export function planNotes(
 					midnightAsDate: true,
 					listSeparator: config.listSeparator,
 				});
-	const included = columns.filter((c) => c.include);
+	const keyCol = config.keyColumn ? columns.find((c) => c.source === config.keyColumn) : undefined;
+	// The key column is always written: it has to be stored in the notes to match them on later imports.
+	const included = columns.filter((c) => c.include || c === keyCol);
 	const conv = {
 		decimalSeparator: config.decimalSeparator,
 		listSeparator: config.listSeparator,
 		precision: config.numberPrecision,
 	};
 	const configTags = parseTags(config.tags);
-	const keyCol = config.keyColumn ? columns.find((c) => c.source === config.keyColumn) : undefined;
 	const used = new Set<string>();
 	const notes: PlannedNote[] = [];
 	const byIndex = new Map<number, ColumnConfig>(columns.map((c) => [c.index, c]));
@@ -238,8 +239,9 @@ export function planNotes(
 
 		let key: PlannedNote["key"] = null;
 		if (keyCol) {
-			const kv = converted.get(keyCol.index) ?? null;
-			if (kv !== null) key = { property: keyCol.property, value: formatValue(kv) };
+			// Must equal what was written for the property (after any value template).
+			const kv = fm[keyCol.property];
+			if (kv !== null && kv !== undefined && !Array.isArray(kv)) key = { property: keyCol.property, value: formatValue(kv) };
 		}
 
 		let name = sanitizeFileName(renderTemplate(config.fileNameTemplate, nameCtx));

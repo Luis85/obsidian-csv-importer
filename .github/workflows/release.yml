@@ -50,7 +50,12 @@ jobs:
         id: bump
         env:
           VERSION_INPUT: ${{ inputs.version }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
+          if [ "$REF_TYPE" != "branch" ]; then
+            echo "Run this workflow from a branch (selected ref '$GITHUB_REF_NAME' is a $REF_TYPE)." >&2
+            exit 1
+          fi
           version="$(node scripts/prepare-release.mjs "$VERSION_INPUT")"
           if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
             echo "Tag $version already exists. Choose another version." >&2
@@ -87,7 +92,7 @@ jobs:
           git add manifest.json package.json package-lock.json versions.json CHANGELOG.md
           if ! git diff --cached --quiet; then
             git commit -m "Release $tag"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+            git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
           fi
           git tag "$tag"
           git push origin "refs/tags/$tag"

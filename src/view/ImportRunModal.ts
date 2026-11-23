@@ -16,8 +16,11 @@ export interface ImportRunControls {
 	drift: HeaderDrift | null;
 	/** Dry run: computes outcomes without writing. */
 	preview(): Promise<ImportResult>;
-	/** Real run. */
-	execute(opts: { onProgress: (done: number, total: number) => void; shouldStop: () => boolean }): Promise<ImportResult>;
+	/** Real run. `undoable` is true only when THIS run created or modified notes (so undo targets this run). */
+	execute(opts: {
+		onProgress: (done: number, total: number) => void;
+		shouldStop: () => boolean;
+	}): Promise<{ result: ImportResult; undoable: boolean }>;
 	canUndo(): boolean;
 	undo(): Promise<void>;
 }
@@ -43,6 +46,7 @@ export class ImportRunModal extends Modal {
 	private stop = false;
 	private running = false;
 	private finished: ImportResult | null = null;
+	private undoable = false;
 	private latest: ImportResult | null = null;
 	private resolveClosed!: (r: ImportResult) => void;
 	readonly closed: Promise<ImportResult>;
@@ -58,6 +62,14 @@ export class ImportRunModal extends Modal {
 
 	onOpen(): void {
 		void this.showPreview();
+	}
+
+	close(): void {
+		if (this.running) {
+			new Notice("Use Stop to end the import.");
+			return;
+		}
+		super.close();
 	}
 
 	onClose(): void {
@@ -117,7 +129,7 @@ export class ImportRunModal extends Modal {
 		])[0];
 		let lastPaint = 0;
 		try {
-			const result = await this.ctl.execute({
+			const outcome = await this.ctl.execute({
 				onProgress: (done, total) => {
 					const now = Date.now();
 					if (now - lastPaint < 80 && done < total) return;
@@ -129,8 +141,9 @@ export class ImportRunModal extends Modal {
 				shouldStop: () => this.stop,
 			});
 			this.running = false;
-			this.finished = result;
-			this.showDone(result);
+			this.finished = outcome.result;
+			this.undoable = outcome.undoable;
+			this.showDone(outcome.result);
 		} catch (e) {
 			this.running = false;
 			stopBtn.disabled = true;
@@ -150,12 +163,13 @@ export class ImportRunModal extends Modal {
 		}
 		const buttons = [
 			{ text: "Save report", cta: true, onClick: () => void this.saveReport(result) },
-			...(this.ctl.canUndo()
+			...(this.undoable && this.ctl.canUndo()
 				? [
 						{
 							text: "Undo import",
 							onClick: () => {
 								void this.ctl.undo().then(() => {
+									this.undoable = false;
 									if (!this.ctl.canUndo()) this.close();
 								});
 							},
