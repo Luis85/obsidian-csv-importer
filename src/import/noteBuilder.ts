@@ -81,6 +81,13 @@ export function sanitizeFileName(name: string): string {
 	return s;
 }
 
+const LIST_PROPS = new Set(["tags", "aliases", "cssclasses"]);
+
+/** True when the configured target folder contains `{{...}}` placeholders. */
+export function hasFolderPlaceholders(config: FileImportConfig): boolean {
+	return /\{\{[^{}]*\}\}/.test(config.targetFolder);
+}
+
 function splitPath(p: string): string[] {
 	return p.replace(/\\/g, "/").split("/").filter((x) => x !== "");
 }
@@ -91,6 +98,23 @@ function splitPath(p: string): string[] {
  */
 export function resolveTargetFolder(config: FileImportConfig, csvPath: string): string {
 	if (config.targetFolder.trim() !== "") return splitPath(config.targetFolder.trim()).join("/");
+	return defaultFolder(csvPath);
+}
+
+/**
+ * Like resolveTargetFolder but renders `{{Column}}`, `{{row}}`, `{{file}}` placeholders per row.
+ * Each path segment is rendered separately and sanitized with sanitizeFileName; empty segments are dropped.
+ */
+export function resolveRowFolder(config: FileImportConfig, csvPath: string, ctx: TemplateContext): string {
+	const t = config.targetFolder.trim();
+	if (t === "") return defaultFolder(csvPath);
+	return splitPath(t)
+		.map((seg) => (/\{\{[^{}]*\}\}/.test(seg) ? sanitizeFileName(renderTemplate(seg, ctx)) : seg))
+		.filter((seg) => seg !== "")
+		.join("/");
+}
+
+function defaultFolder(csvPath: string): string {
 	const parts = splitPath(csvPath);
 	const file = parts.pop() ?? "";
 	const dot = file.lastIndexOf(".");
@@ -107,6 +131,20 @@ function parseTags(s: string): string[] {
 	return s.split(",").map(normalizeTag).filter((t) => t !== "");
 }
 
+/** Normalize a value of `tags` / `aliases` / `cssclasses` into a deduplicated list. */
+function normalizeListProp(name: string, v: FrontmatterValue): string[] {
+	const isTags = name === "tags";
+	const items: string[] = [];
+	if (v === null) return [];
+	if (Array.isArray(v)) {
+		for (const x of v) items.push(isTags ? normalizeTag(x) : x.trim());
+	} else if (typeof v === "string") {
+		if (isTags) items.push(...v.split(/[,\s]+/).map(normalizeTag));
+		else items.push(...v.split(",").map((x) => x.trim()));
+	} else items.push(String(v));
+	return [...new Set(items.filter((x) => x !== ""))];
+}
+
 /**
  * Plan one note per data row. Frontmatter contains included columns (typed via convertValue),
  * `tags` (when config.tags non-empty, merged with a `tags` column if present), and
@@ -120,7 +158,8 @@ export function planNotes(
 	config: FileImportConfig,
 	csv: { path: string; basename: string },
 ): PlannedNote[] {
-	const folder = resolveTargetFolder(config, csv.path);
+	const dynamicFolder = hasFolderPlaceholders(config);
+	const staticFolder = resolveTargetFolder(config, csv.path);
 	const columns =
 		config.columns.length > 0
 			? config.columns
@@ -163,6 +202,7 @@ export function planNotes(
 		const nameCtx: TemplateContext = { ...base, formatted: nameVals };
 		const bodyCtx: TemplateContext = { ...base, formatted: bodyVals };
 
+		const folder = dynamicFolder ? resolveRowFolder(config, csv.path, nameCtx) : staticFolder;
 		const fm: Record<string, FrontmatterValue> = {};
 		const types: Record<string, PropertyType> = {};
 		for (const col of included) {
@@ -176,14 +216,21 @@ export function planNotes(
 			fm[col.property] = v;
 			types[col.property] = type;
 		}
+		for (const name of LIST_PROPS) {
+			if (name in fm) {
+				const list = normalizeListProp(name, fm[name]);
+				if (list.length > 0) fm[name] = list;
+				else if (config.emptyValues === "omit") delete fm[name];
+				else fm[name] = null;
+				if (name in fm) types[name] = "list";
+			}
+		}
 		if (configTags.length > 0) {
 			const existing = fm["tags"];
-			let colTags: string[] = [];
-			if (Array.isArray(existing)) colTags = existing.map(normalizeTag).filter((t) => t !== "");
-			else if (typeof existing === "string") colTags = parseTags(existing);
+			const colTags = Array.isArray(existing) ? existing : [];
 			fm["tags"] = [...new Set([...colTags, ...configTags])];
+			types["tags"] = "list";
 		}
-		if ("tags" in fm) types["tags"] = "list";
 		if (config.addSourceLink) {
 			fm["source"] = `[[${csv.path}]]`;
 			types["source"] = "text";

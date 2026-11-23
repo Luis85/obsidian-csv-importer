@@ -11,9 +11,16 @@ export interface CsvImporterHost {
 	getFileConfig(file: TFile): FileImportConfig;
 	/** Persists the config for a CSV file. */
 	saveFileConfig(file: TFile, config: FileImportConfig): Promise<void>;
+	/** Reads and decodes the CSV file honoring config.encoding (handles UTF-16 / Windows-1252). */
+	readCsv(file: TFile): Promise<string>;
 	/**
-	 * Imports all rows of the given CSV using its (persisted) config.
-	 * `text` is the current file content. Shows progress/notice itself and returns the result.
+	 * Runs the import flow for the CSV (opens the import dialog: dry-run preview -> confirm -> progress with
+	 * stop -> report). `text` is the current decoded content. Resolves with the result when the dialog closes
+	 * (a dry-run-only result with dryRun=true if the user cancelled before writing).
 	 */
 	importFile(file: TFile, text: string): Promise<ImportResult>;
+	/** Whether the last import of this CSV can be undone. */
+	canUndo(file: TFile): boolean;
+	/** Reverts the last import of this CSV (asks for confirmation, shows a notice). */
+	undoLastImport(file: TFile): Promise<void>;
 }

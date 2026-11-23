@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	buildColumnConfigs,
 	convertValue,
+	detectHeaderDrift,
 	inferColumnType,
 	parseNumber,
 	reconcileColumns,
@@ -196,5 +197,19 @@ describe("buildColumnConfigs / reconcileColumns", () => {
 		const parsed = parseCsv("a,x\n1,2", { delimiter: ",", hasHeader: true });
 		const out = reconcileColumns(existing, parsed, dot);
 		expect(out.map((c) => c.property)).toEqual(["x", "x 2"]);
+	});
+});
+
+describe("detectHeaderDrift", () => {
+	const parsed = parseCsv("a,b,c\n1,2,3\n", { delimiter: ",", hasHeader: true });
+	const col = (source: string, index: number): ColumnConfig => ({ source, index, property: source, type: "text", include: true });
+	it("reports added and removed headers", () => {
+		expect(detectHeaderDrift([col("a", 0), col("x", 1), col("b", 2)], parsed)).toEqual({ added: ["c"], removed: ["x"] });
+	});
+	it("no drift", () => {
+		expect(detectHeaderDrift([col("a", 0), col("b", 1), col("c", 2)], parsed)).toEqual({ added: [], removed: [] });
+	});
+	it("empty columns -> nothing", () => {
+		expect(detectHeaderDrift([], parsed)).toEqual({ added: [], removed: [] });
 	});
 });

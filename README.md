@@ -11,7 +11,7 @@ Inspired by [obsidianmd/obsidian-importer](https://github.com/obsidianmd/obsidia
 - **Typed properties**: numbers, checkboxes, dates, datetimes, lists and text are inferred automatically and can be overridden per column.
 - **European number formats**: supports the `;` delimiter and the German decimal comma (`0,625`).
 - **Templates** for note file names and note bodies with `{{Column}}`, `{{row}}` and `{{file}}` placeholders.
-- **Conflict strategies**: skip, overwrite, update properties, or create with a numeric suffix.
+- **Existing notes**: update (keeps properties and values you added or edited in Obsidian), skip, create a copy, or overwrite. Dry-run preview, progress with Stop, report, and undo.
 - **Sensible default target folder**: a folder next to the CSV named like the CSV (`Data/hours.csv` imports into `Data/hours/`).
 - **Optional extras**: a source link property pointing back to the CSV, and tags added to every note.
 - **Re-import**: update the CSV, run the import again, and existing notes are updated.
@@ -123,25 +123,46 @@ Templates are used for the note file name and the note body.
 
 Example file name template: `{{Datum}} {{Rolle}}`. Typed values are formatted in file names (`2026-10-20 00:00:00` becomes `2026-10-20`, datetimes become `2026-10-20 14-30`). Characters that are not allowed in file names are removed.
 
-## Conflict strategies
+## Existing notes
 
-| Strategy | Behavior when the note already exists |
+Choose what happens when a row's note already exists (per file, in the import settings):
+
+| Option | Behavior |
 | --- | --- |
-| Skip | leave the note untouched |
-| Overwrite | replace the whole note (properties and body) |
-| Update properties | merge imported properties into the existing properties and keep the body |
-| Create with suffix | create a new note such as `Name 1.md` |
+| **Update** (default) | Updates only the CSV's own properties. Properties you added in Obsidian (for example in a Bases view) and the note body are always kept. Notes whose values did not change are not rewritten. |
+| Skip | Leaves existing notes untouched. |
+| Create a copy | Creates a new note such as `Name 1.md`. |
+| Overwrite | Replaces the whole note. Properties added in Obsidian and the note body are lost. |
+
+With **Update** two more options apply:
+
+- **Keep values edited in Obsidian** (on by default): if you changed a CSV property in Obsidian, re-imports keep your value. The plugin remembers which value it imported last, per note and property, so it can tell your edits from changes in the CSV.
+- **Keep values when the CSV cell is empty** (on by default): an empty cell never clears a value in the note.
+
+## Import dialog
+
+Importing opens a dialog that first shows a preview without writing anything: how many notes will be created, updated, left unchanged, skipped or fail, and which properties change or are kept per note. After **Import** it shows progress with a **Stop** button, then a report. **Save report** writes the report as a note.
+
+**Undo last import** (toolbar, command or file menu) moves notes created by the last import to the trash and restores the previous content of notes it modified.
 
 ## Re-importing
 
 1. Edit and save the CSV (keep the same file name and path).
-2. Run **Import rows from current CSV file** again.
-3. With the **Update properties** or **Overwrite** strategy, existing notes are updated instead of duplicated.
+2. Run **Import rows from current CSV file** again and check the preview.
 
 Notes are matched in one of two ways:
 
 - **Key column** (recommended): pick a column with unique values, such as an ID. Notes in the target folder whose property matches the value are updated, even if you renamed or moved them within that folder.
 - **File name**: without a key column, notes with the same generated file name are updated. Use a file name template that is stable and unique per row (for example `{{Datum}} {{Rolle}}`).
+
+If the CSV's columns changed since you configured the file, the table view and the import dialog show a warning.
+
+## More options
+
+- **Encoding**: detected automatically (UTF-8, UTF-16 with BOM, and Windows-1252 for Excel "CSV" exports), or set manually.
+- **Folders per row**: the target folder can contain placeholders, for example `Projects/{{Client}}`.
+- **Create a base**: creates a `.base` file next to the target folder that shows the imported notes as a table. Existing base files are never changed.
+- `tags`, `aliases` and `cssclasses` columns are always written as lists.
 
 ## Settings reference
 
@@ -152,9 +173,11 @@ Global settings provide defaults for CSV files you configure for the first time:
 - Decimal separator
 - Default target folder (empty = folder named like the CSV)
 - Default file name template and body template
-- Default conflict strategy
+- Default handling of existing notes, keep edited values, keep values for empty cells
 - Default tags and source link
 - List separator
+- Encoding
+- Create a base
 - Empty cells (leave property empty or omit it)
 - Treat midnight datetimes as dates
 - Register inferred types in Obsidian's property type registry

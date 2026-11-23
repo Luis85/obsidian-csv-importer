@@ -12,13 +12,19 @@ export type DelimiterOption = "auto" | "," | ";" | "\t" | "|";
 /** How empty cells are written into frontmatter. */
 export type EmptyValueMode = "empty" | "omit";
 
+/** Text encoding of the CSV file. "auto": BOM sniffing, then UTF-8, falling back to Windows-1252. */
+export type CsvEncoding = "auto" | "utf-8" | "utf-16le" | "utf-16be" | "windows-1252";
+
 /** What to do when the target note already exists. */
 export type ConflictStrategy =
 	/** Leave the existing note untouched. */
 	| "skip"
 	/** Replace the whole note (frontmatter + body). */
 	| "overwrite"
-	/** Merge imported properties into existing frontmatter, keep the body. */
+	/**
+	 * Update only the CSV's own properties; keep every other property and the body.
+	 * See FileImportConfig.protectEdits / keepValuesOnEmpty.
+	 */
 	| "update"
 	/** Create a new note with a numeric suffix: "Name 1.md". */
 	| "rename";
@@ -80,6 +86,17 @@ export interface FileImportConfig {
 	 * still updated and no duplicates are created. Empty string = match by file path.
 	 */
 	keyColumn: string;
+	encoding: CsvEncoding;
+	/**
+	 * Update mode: a CSV property whose value was changed in Obsidian since the last import keeps the
+	 * Obsidian value (detected via the snapshot of last imported values). Properties added in Obsidian
+	 * are always kept regardless of this flag.
+	 */
+	protectEdits: boolean;
+	/** Update mode: an empty CSV cell does not clear a value that exists in the note. */
+	keepValuesOnEmpty: boolean;
+	/** Create a `.base` file listing the imported notes (only if it does not exist yet). */
+	createBase: boolean;
 	/** Column configs. Empty array means "not configured yet" -> infer on open. */
 	columns: ColumnConfig[];
 	/** Epoch ms of the last import, or null. */
@@ -100,6 +117,10 @@ export interface PluginSettings {
 	defaultAddSourceLink: boolean;
 	defaultListSeparator: string;
 	defaultEmptyValues: EmptyValueMode;
+	defaultEncoding: CsvEncoding;
+	defaultProtectEdits: boolean;
+	defaultKeepValuesOnEmpty: boolean;
+	defaultCreateBase: boolean;
 	/** Infer `date` instead of `datetime` when every time component is 00:00:00. */
 	midnightAsDate: boolean;
 	/** Also register inferred types in Obsidian's property type registry (types.json). */
@@ -149,11 +170,47 @@ export interface TypeRegistrationResult {
 	conflicts: { property: string; existing: string; wanted: string }[];
 }
 
+/** Outcome of one planned note. */
+export type NoteOutcome = "created" | "updated" | "unchanged" | "skipped" | "failed";
+
+export interface RowOutcome {
+	/** 1-based data row number. */
+	row: number;
+	/** Vault path of the note (existing note path for key matches). */
+	path: string;
+	outcome: NoteOutcome;
+	/** Human readable reason for skipped/failed/unchanged, e.g. "already exists", "duplicate key". */
+	reason?: string;
+	/** Properties changed (updated/created) or that would change (dry run). */
+	changed?: string[];
+	/** Properties kept because they were edited in Obsidian since the last import. */
+	preserved?: string[];
+}
+
+/** Hash of the last imported value per property, per note. Keyed by note path. */
+export type ImportSnapshot = Record<string, Record<string, string>>;
+
+/** What is needed to revert the last import of a CSV file. */
+export interface UndoManifest {
+	csvPath: string;
+	timestamp: number;
+	/** Notes created by the import (moved to trash on undo). */
+	created: string[];
+	/** Notes modified by the import with their full previous content. */
+	modified: { path: string; content: string }[];
+}
+
 /** Summary of an import run. */
 export interface ImportResult {
 	created: number;
 	updated: number;
+	unchanged: number;
 	skipped: number;
 	failed: number;
+	/** True when the run was stopped by the user. */
+	cancelled: boolean;
+	/** True for a dry run (nothing written). */
+	dryRun: boolean;
+	rows: RowOutcome[];
 	errors: { row: number; message: string }[];
 }

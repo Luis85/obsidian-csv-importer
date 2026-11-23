@@ -322,3 +322,17 @@ export function prepareConfig(
 	});
 	return config;
 }
+
+/**
+ * Compare saved column sources with the current headers. `added`: headers without a saved column;
+ * `removed`: saved column sources no longer in the file. Both empty when `columns` is empty (not configured yet).
+ */
+export function detectHeaderDrift(columns: ColumnConfig[], parsed: ParsedCsv): { added: string[]; removed: string[] } {
+	if (columns.length === 0) return { added: [], removed: [] };
+	const saved = new Set(columns.map((c) => c.source));
+	const current = new Set(parsed.headers);
+	return {
+		added: parsed.headers.filter((h) => !saved.has(h)),
+		removed: columns.map((c) => c.source).filter((s) => !current.has(s)),
+	};
+}

@@ -2,7 +2,7 @@ import { Menu, TextFileView, WorkspaceLeaf, Notice, setIcon, debounce } from "ob
 import type { CsvImporterHost } from "../host";
 import type { ColumnConfig, FileImportConfig, ParsedCsv, PropertyType } from "../types";
 import { parseCsv } from "../csv/parser";
-import { convertValue, prepareConfig } from "../csv/typeInference";
+import { convertValue, detectHeaderDrift, prepareConfig } from "../csv/typeInference";
 import { ImportConfigModal } from "./ImportConfigModal";
 import { LINK_TEMPLATE, TYPE_BADGES, TYPE_LABELS, conversionOptions, delimiterLabel } from "./shared";
 
@@ -22,6 +22,8 @@ export class CsvView extends TextFileView {
 	private toolbarEl: HTMLElement | null = null;
 	private bodyEl: HTMLElement | null = null;
 	private importBtn: HTMLButtonElement | null = null;
+	private bannerEl: HTMLElement | null = null;
+	private loadCounter = 0;
 
 	private readonly onSearch = debounce((value: string) => {
 		this.query = value.trim().toLowerCase();
@@ -59,9 +61,31 @@ export class CsvView extends TextFileView {
 			this.visibleCount = 0;
 		}
 		this.render();
+		void this.redecodeIfNeeded();
+	}
+
+	/** Obsidian reads text files as UTF-8; re-read with the configured encoding when that is wrong. */
+	private async redecodeIfNeeded(): Promise<void> {
+		const file = this.file;
+		if (!file) return;
+		const id = ++this.loadCounter;
+		const enc = this.host.getFileConfig(file).encoding;
+		const suspicious = (enc !== "utf-8" && enc !== "auto") || this.raw.includes("\uFFFD");
+		if (!suspicious) return;
+		try {
+			const text = await this.host.readCsv(file);
+			if (id !== this.loadCounter || this.file !== file) return;
+			if (text !== this.raw) {
+				this.raw = text;
+				this.render();
+			}
+		} catch (e) {
+			new Notice(`Could not read the file: ${e instanceof Error ? e.message : String(e)}`);
+		}
 	}
 
 	clear(): void {
+		this.loadCounter++;
 		this.raw = "";
 		this.query = "";
 		this.sortCol = -1;
@@ -74,6 +98,7 @@ export class CsvView extends TextFileView {
 		this.contentEl.empty();
 		this.contentEl.addClass("csv-importer-view");
 		this.toolbarEl = this.contentEl.createDiv({ cls: "csv-importer-toolbar" });
+		this.bannerEl = this.contentEl.createDiv({ cls: "csv-importer-banner-slot" });
 		this.bodyEl = this.contentEl.createDiv({ cls: "csv-importer-body" });
 	}
 
@@ -107,6 +132,7 @@ export class CsvView extends TextFileView {
 		if (!toolbar || !body) return;
 		toolbar.empty();
 		body.empty();
+		this.bannerEl?.empty();
 
 		const file = this.file;
 		if (!file) {
@@ -125,6 +151,7 @@ export class CsvView extends TextFileView {
 			}
 		}
 
+		const persistedColumns = cfg.columns.map((c) => ({ ...c }));
 		let columns: ColumnConfig[] = [];
 		if (parsed) {
 			try {
@@ -137,7 +164,37 @@ export class CsvView extends TextFileView {
 
 		this.model = { cfg, parsed, columns, error };
 		this.renderToolbar(toolbar, cfg, parsed);
+		this.renderDriftBanner(persistedColumns, parsed);
 		this.renderBody();
+	}
+
+	private renderDriftBanner(persisted: ColumnConfig[], parsed: ParsedCsv | null): void {
+		const slot = this.bannerEl;
+		if (!slot || !parsed || persisted.length === 0) return;
+		const drift = detectHeaderDrift(persisted, parsed);
+		if (drift.added.length === 0 && drift.removed.length === 0) return;
+		const parts: string[] = [];
+		if (drift.added.length) parts.push(`added ${drift.added.join(", ")}`);
+		if (drift.removed.length) parts.push(`removed ${drift.removed.join(", ")}`);
+		const banner = slot.createDiv({ cls: "csv-importer-banner mod-warning", attr: { role: "status" } });
+		setIcon(banner.createSpan({ cls: "csv-importer-banner-icon" }), "alert-triangle");
+		banner.createSpan({
+			cls: "csv-importer-banner-text",
+			text: `Columns changed since you configured this file: ${parts.join(", ")}. Review the import settings.`,
+		});
+		const btn = banner.createEl("button", { cls: "csv-importer-btn", text: "Review" });
+		btn.addEventListener("click", () => this.openConfig());
+	}
+
+	private async runUndo(): Promise<void> {
+		const file = this.file;
+		if (!file || this.importing) return;
+		try {
+			await this.host.undoLastImport(file);
+		} catch (e) {
+			new Notice(`Undo failed: ${e instanceof Error ? e.message : String(e)}`);
+		}
+		this.render();
 	}
 
 	private renderBody(): void {
@@ -190,6 +247,14 @@ export class CsvView extends TextFileView {
 		setIcon(configBtn.createSpan({ cls: "csv-importer-btn-icon" }), "settings");
 		configBtn.createSpan({ text: "Configure import" });
 		configBtn.addEventListener("click", () => this.openConfig());
+
+		if (this.file && this.host.canUndo(this.file)) {
+			const undoBtn = el.createEl("button", { cls: "csv-importer-btn" });
+			setIcon(undoBtn.createSpan({ cls: "csv-importer-btn-icon" }), "undo-2");
+			undoBtn.createSpan({ text: "Undo last import" });
+			undoBtn.disabled = this.importing;
+			undoBtn.addEventListener("click", () => void this.runUndo());
+		}
 
 		const importBtn = el.createEl("button", { cls: "csv-importer-btn mod-cta" });
 		setIcon(importBtn.createSpan({ cls: "csv-importer-btn-icon" }), "download");

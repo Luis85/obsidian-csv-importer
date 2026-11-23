@@ -1,6 +1,6 @@
 import { App, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { Plugin } from "obsidian";
-import type { ConflictStrategy, DelimiterOption, EmptyValueMode, PluginSettings } from "./types";
+import type { ConflictStrategy, CsvEncoding, DelimiterOption, EmptyValueMode, PluginSettings } from "./types";
 
 export { DEFAULT_SETTINGS, createDefaultFileConfig } from "./defaults";
 
@@ -59,6 +59,19 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl).setName("Defaults for new files").setHeading();
+
+		new Setting(containerEl)
+			.setName("Encoding")
+			.setDesc("Auto detects UTF-8, UTF-16 and Windows-1252.")
+			.addDropdown((d) =>
+				d
+					.addOptions({ auto: "Auto", "utf-8": "UTF-8", "utf-16le": "UTF-16 LE", "utf-16be": "UTF-16 BE", "windows-1252": "Windows-1252" })
+					.setValue(s.defaultEncoding)
+					.onChange((v) => {
+						s.defaultEncoding = v as CsvEncoding;
+						save();
+					}),
+			);
 
 		new Setting(containerEl)
 			.setName("Delimiter")
@@ -129,20 +142,51 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("When a note already exists")
+			.setName("Existing notes")
+			.setDesc("Update keeps properties you added in Obsidian and the note body. Overwrite replaces the whole note.")
 			.addDropdown((d) =>
 				d
 					.addOptions({
+						update: "Update",
 						skip: "Skip",
-						overwrite: "Overwrite the whole note",
-						update: "Update properties, keep the body",
-						rename: "Create a new note with a number suffix",
+						rename: "Create a copy",
+						overwrite: "Overwrite",
 					})
 					.setValue(s.defaultConflict)
 					.onChange((v) => {
 						s.defaultConflict = v as ConflictStrategy;
 						save();
 					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Keep values edited in Obsidian")
+			.setDesc("When updating, a CSV property you changed in Obsidian keeps your value.")
+			.addToggle((t) =>
+				t.setValue(s.defaultProtectEdits).onChange((v) => {
+					s.defaultProtectEdits = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Keep values when the CSV cell is empty")
+			.setDesc("When updating, an empty cell does not clear a value in the note.")
+			.addToggle((t) =>
+				t.setValue(s.defaultKeepValuesOnEmpty).onChange((v) => {
+					s.defaultKeepValuesOnEmpty = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Create a base")
+			.setDesc("Create a .base file next to the target folder that shows the imported notes as a table.")
+			.addToggle((t) =>
+				t.setValue(s.defaultCreateBase).onChange((v) => {
+					s.defaultCreateBase = v;
+					save();
+				}),
 			);
 
 		new Setting(containerEl)

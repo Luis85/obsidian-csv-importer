@@ -15,4 +15,9 @@
 - Key column for idempotent re-imports.
 - Change column types and link values directly from the table header.
 - Per-column value templates, e.g. `[[{{value}}]]` for wikilinks.
+- "Existing notes" option (Update, Skip, Create a copy, Overwrite). Update keeps properties added in Obsidian, the note body, values edited in Obsidian, and values for empty CSV cells; unchanged notes are not rewritten.
+- Import dialog with dry-run preview, progress with Stop, and a saveable report.
+- Undo last import.
+- Encoding detection (UTF-8, UTF-16, Windows-1252).
+- Folder placeholders such as `Projects/{{Client}}`, optional `.base` file, list normalization for tags/aliases/cssclasses, warning when CSV columns change.
 - Commands and file-menu entries for importing and configuring.

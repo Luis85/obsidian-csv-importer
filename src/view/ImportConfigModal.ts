@@ -1,7 +1,8 @@
 import { AbstractInputSuggest, App, Modal, Notice, Setting, TFile, TFolder, debounce } from "obsidian";
 import type { CsvImporterHost } from "../host";
-import type { ColumnConfig, ConflictStrategy, DelimiterOption, EmptyValueMode, FileImportConfig, FrontmatterValue, ParsedCsv, PropertyType } from "../types";
+import type { ColumnConfig, ConflictStrategy, CsvEncoding, DelimiterOption, EmptyValueMode, FileImportConfig, FrontmatterValue, ParsedCsv, PropertyType } from "../types";
 import { parseCsv } from "../csv/parser";
+import { decodeCsv } from "../csv/encoding";
 import { convertValue, inferColumnType, prepareConfig } from "../csv/typeInference";
 import { applyValueTemplate, formatValue, planNotes, resolveTargetFolder, serializeNote } from "../import/noteBuilder";
 import { LINK_TEMPLATE, TYPE_LABELS, conversionOptions, inferenceOptions } from "./shared";
@@ -32,10 +33,18 @@ class FolderSuggest extends AbstractInputSuggest<TFolder> {
 }
 
 const CONFLICT_DESCRIPTIONS: Record<ConflictStrategy, string> = {
+	update: "Update the CSV's properties. Properties you added in Obsidian and the note body are kept.",
 	skip: "Leave existing notes untouched.",
-	overwrite: "Replace the whole note, including its body.",
-	update: "Merge imported properties into the existing properties and keep the body.",
-	rename: "Create a new note with a numeric suffix.",
+	rename: "Create a new note with a numeric suffix and keep the existing note as it is.",
+	overwrite: "Replace the whole note. Properties added in Obsidian and the note body are lost.",
+};
+
+const ENCODING_LABELS: Record<CsvEncoding, string> = {
+	auto: "Auto",
+	"utf-8": "UTF-8",
+	"utf-16le": "UTF-16 LE",
+	"utf-16be": "UTF-16 BE",
+	"windows-1252": "Windows-1252",
 };
 
 const KEY_DESC =
@@ -59,6 +68,9 @@ export class ImportConfigModal extends Modal {
 	private lastTemplateField: "name" | "body" = "name";
 	private folderInput: HTMLInputElement | null = null;
 	private keySettingEl: Setting | null = null;
+	private encodingSetting: Setting | null = null;
+	private detectedEncoding: string | null = null;
+	private updateOptionsEl: HTMLElement | null = null;
 
 	private readonly refreshPreview = debounce(() => this.updatePreview(), 150, true);
 
@@ -79,6 +91,17 @@ export class ImportConfigModal extends Modal {
 		this.reparse();
 		this.build();
 		this.updatePreview();
+		if (this.cfg.encoding === "auto") void this.detectEncoding();
+	}
+
+	private async detectEncoding(): Promise<void> {
+		try {
+			const bytes = await this.app.vault.readBinary(this.file);
+			this.detectedEncoding = decodeCsv(bytes, "auto").encoding;
+			this.updateEncodingDesc();
+		} catch {
+			// hint only
+		}
 	}
 
 	onClose(): void {
@@ -119,6 +142,51 @@ export class ImportConfigModal extends Modal {
 		);
 	}
 
+	private renderUpdateOptions(): void {
+		const box = this.updateOptionsEl;
+		if (!box) return;
+		box.empty();
+		if (this.cfg.conflict !== "update") return;
+		new Setting(box)
+			.setName("Keep values edited in Obsidian")
+			.setDesc("If you changed a CSV property in Obsidian, re-imports keep your value.")
+			.addToggle((t) =>
+				t.setValue(this.cfg.protectEdits).onChange((v) => {
+					this.cfg.protectEdits = v;
+				}),
+			);
+		new Setting(box)
+			.setName("Keep values when the CSV cell is empty")
+			.setDesc("An empty cell does not clear a value that exists in the note.")
+			.addToggle((t) =>
+				t.setValue(this.cfg.keepValuesOnEmpty).onChange((v) => {
+					this.cfg.keepValuesOnEmpty = v;
+				}),
+			);
+	}
+
+	private updateEncodingDesc(): void {
+		if (!this.encodingSetting) return;
+		const base = "Text encoding of the file. Change it if special characters look wrong.";
+		const hint = this.cfg.encoding === "auto" && this.detectedEncoding ? ` Detected: ${ENCODING_LABELS[this.detectedEncoding as CsvEncoding] ?? this.detectedEncoding}.` : "";
+		this.encodingSetting.setDesc(base + hint);
+	}
+
+	/** Re-read the file with the selected encoding and refresh everything. */
+	private async redecode(): Promise<void> {
+		try {
+			const bytes = await this.app.vault.readBinary(this.file);
+			const res = decodeCsv(bytes, this.cfg.encoding);
+			this.text = res.text;
+			this.detectedEncoding = res.encoding;
+		} catch (e) {
+			new Notice(`Could not read the file: ${e instanceof Error ? e.message : String(e)}`);
+			return;
+		}
+		this.updateEncodingDesc();
+		this.onParsingChanged();
+	}
+
 	private onParsingChanged(): void {
 		this.reparse();
 		this.renderKeyDropdown();
@@ -136,6 +204,17 @@ export class ImportConfigModal extends Modal {
 
 		// Parsing
 		new Setting(el).setName("Parsing").setHeading();
+		this.encodingSetting = new Setting(el).setName("Encoding");
+		this.encodingSetting.addDropdown((d) =>
+			d
+				.addOptions(ENCODING_LABELS)
+				.setValue(this.cfg.encoding)
+				.onChange((v) => {
+					this.cfg.encoding = v as CsvEncoding;
+					void this.redecode();
+				}),
+		);
+		this.updateEncodingDesc();
 		new Setting(el)
 			.setName("Delimiter")
 			.setDesc("Auto detects the delimiter from the file content.")
@@ -221,7 +300,9 @@ export class ImportConfigModal extends Modal {
 		new Setting(el).setName("Output").setHeading();
 		const folderSetting = new Setting(el)
 			.setName("Target folder")
-			.setDesc("Leave empty to use the default folder shown as placeholder.");
+			.setDesc(
+				"Leave empty to use the default folder shown as placeholder. Placeholders like {{Column}} create subfolders per row, for example Projects/{{Client}}.",
+			);
 		folderSetting.addText((t) => {
 			this.folderInput = t.inputEl;
 			t.setValue(this.cfg.targetFolder).onChange((v) => {
@@ -283,23 +364,37 @@ export class ImportConfigModal extends Modal {
 					this.updatePreview();
 				}),
 			);
-		const conflictSetting = new Setting(el).setName("If a note already exists");
+		new Setting(el)
+			.setName("Create a base")
+			.setDesc(
+				"Create a .base file next to the target folder that shows the imported notes as a table. Existing base files are never changed.",
+			)
+			.addToggle((t) =>
+				t.setValue(this.cfg.createBase).onChange((v) => {
+					this.cfg.createBase = v;
+				}),
+			);
+
+		const conflictSetting = new Setting(el).setName("Existing notes");
 		const updateConflictDesc = () => conflictSetting.setDesc(CONFLICT_DESCRIPTIONS[this.cfg.conflict]);
 		updateConflictDesc();
 		conflictSetting.addDropdown((d) =>
 			d
 				.addOptions({
+					update: "Update",
 					skip: "Skip",
+					rename: "Create a copy",
 					overwrite: "Overwrite",
-					update: "Update properties",
-					rename: "Create new with suffix",
 				})
 				.setValue(this.cfg.conflict)
 				.onChange((v) => {
 					this.cfg.conflict = v as ConflictStrategy;
 					updateConflictDesc();
+					this.renderUpdateOptions();
 				}),
 		);
+		this.updateOptionsEl = el.createDiv({ cls: "csv-importer-sub-settings" });
+		this.renderUpdateOptions();
 
 		// Columns
 		const colHeading = new Setting(el).setName("Columns").setHeading();

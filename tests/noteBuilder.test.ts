@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	planNotes,
 	renderTemplate,
+	resolveRowFolder,
 	resolveTargetFolder,
 	sanitizeFileName,
 	serializeNote,
@@ -25,6 +26,10 @@ function cfg(over: Partial<FileImportConfig> = {}): FileImportConfig {
 		emptyValues: "empty",
 		numberPrecision: null,
 		keyColumn: "",
+		encoding: "auto",
+		protectEdits: true,
+		keepValuesOnEmpty: true,
+		createBase: false,
 		columns: [],
 		lastImport: null,
 		...over,
@@ -261,5 +266,51 @@ describe("end to end", () => {
 		const columns = buildColumnConfigs(parsed, { decimalSeparator: ",", midnightAsDate: false, listSeparator: "," });
 		const [note] = planNotes(parsed, cfg({ columns, decimalSeparator: "," }), { path: "h.csv", basename: "h" });
 		expect(serializeNote(note.frontmatter, "", note.types)).toContain("Datum: 2026-11-18T00:00:00\n");
+	});
+});
+
+describe("folder placeholders", () => {
+	const csv = { path: "Data/p.csv", basename: "p" };
+	it("renders per-row subfolders, sanitized, empty segments dropped", () => {
+		const parsed = parseCsv("Client,Year,Name\nAcme/Co,2024,A\n,2025,B\n", { delimiter: ",", hasHeader: true });
+		const notes = planNotes(parsed, cfg({ targetFolder: "Projects/{{Client}}/{{Year}}", fileNameTemplate: "{{Name}}" }), csv);
+		expect(notes.map((n) => n.path)).toEqual(["Projects/AcmeCo/2024/A.md", "Projects/2025/B.md"]);
+	});
+	it("resolveRowFolder works with row/file and static folders", () => {
+		const ctx = { headers: ["C"], row: ["x"], rowNumber: 4, fileBasename: "f" };
+		expect(resolveRowFolder(cfg({ targetFolder: "A/{{file}}-{{row}}" }), "d/f.csv", ctx)).toBe("A/f-4");
+		expect(resolveRowFolder(cfg({ targetFolder: "A/B" }), "d/f.csv", ctx)).toBe("A/B");
+		expect(resolveRowFolder(cfg({ targetFolder: "" }), "d/f.csv", ctx)).toBe("d/f");
+	});
+	it("duplicate detection is per full path", () => {
+		const parsed = parseCsv("C,N\nx,A\ny,A\nx,A\n", { delimiter: ",", hasHeader: true });
+		const notes = planNotes(parsed, cfg({ targetFolder: "F/{{C}}", fileNameTemplate: "{{N}}" }), csv);
+		expect(notes.map((n) => n.path)).toEqual(["F/x/A.md", "F/y/A.md", "F/x/A 2.md"]);
+	});
+});
+
+describe("tags / aliases / cssclasses normalization", () => {
+	const csv = { path: "d/p.csv", basename: "p" };
+	it("normalizes text columns into lists", () => {
+		const parsed = parseCsv("tags,aliases,cssclasses\n\"#a, #b c ,a\",\"X, Y,,X\",wide\n", { delimiter: ",", hasHeader: true });
+		const columns = buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: false, listSeparator: ";" });
+		const [n] = planNotes(parsed, cfg({ columns }), csv);
+		expect(n.frontmatter["tags"]).toEqual(["a", "b", "c"]);
+		expect(n.frontmatter["aliases"]).toEqual(["X", "Y"]);
+		expect(n.frontmatter["cssclasses"]).toEqual(["wide"]);
+		expect(n.types["tags"]).toBe("list");
+		expect(n.types["aliases"]).toBe("list");
+	});
+	it("list-typed tags: spaces become dashes; merged with config tags", () => {
+		const parsed = parseCsv("tags\n#my tag;#x\n", { delimiter: ",", hasHeader: true });
+		const columns = buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: false, listSeparator: ";" });
+		columns[0].type = "list";
+		const [n] = planNotes(parsed, cfg({ columns, listSeparator: ";", tags: "x, new" }), csv);
+		expect(n.frontmatter["tags"]).toEqual(["my-tag", "x", "new"]);
+	});
+	it("empty cell -> empty property or omitted", () => {
+		const parsed = parseCsv("tags,n\n,1\n", { delimiter: ",", hasHeader: true });
+		expect(planNotes(parsed, cfg(), csv)[0].frontmatter["tags"]).toBeNull();
+		expect("tags" in planNotes(parsed, cfg({ emptyValues: "omit" }), csv)[0].frontmatter).toBe(false);
 	});
 });
