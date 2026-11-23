@@ -149,7 +149,8 @@ export function renderColumnRow(list: HTMLElement, col: ColumnConfig, draft: Con
 
 	const note = opts.createDiv({ cls: "csv-importer-col-note" });
 
-	let open = !!col.valueTemplate || (col.type === "number" && !!col.stripUnits);
+	// Options always start collapsed; the dot on the options button marks columns that have options set.
+	let open = false;
 	const setOpen = (v: boolean): void => {
 		open = v;
 		opts.toggleClass("csv-importer-hidden", !open);
