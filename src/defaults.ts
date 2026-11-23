@@ -17,7 +17,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	defaultKeepValuesOnEmpty: true,
 	defaultCreateBase: true,
 	midnightAsDate: true,
-	registerPropertyTypes: true,
 	pageSize: 200,
 };
 

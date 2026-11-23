@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Removed the use of Obsidian's undocumented property-type registry. Property types now come from the typed YAML values alone, and the "Register property types" setting is gone.
+
 ### Safety
 - Re-imports only change notes this CSV created. Other notes are skipped as "not created by this import". New option **Update existing notes not created by this import** turns this off.
 - A CSV column named `source` is no longer overwritten by the source link; the link uses `source_csv` then.
@@ -20,7 +22,7 @@
 - Shows where notes will go; the button reads "Import N rows as notes". Replacing whole notes asks for confirmation.
 - Existing notes options renamed: **Update properties**, **Skip**, **Create a copy**, **Replace whole note**.
 - Consistent labels (New, Updated, Unchanged, Skipped, Failed), **Stop import**, readable type badges, full text of long cells on hover.
-- After an import: **Open base** and **Reveal folder**.
+- After an import: **Open base** and **Open first note**.
 - **Create a base** is on by default when Obsidian supports Bases.
 - New command: **Re-import all configured CSV files**.
 
@@ -40,7 +42,6 @@
 - Conflict strategies: skip, overwrite, update properties, create with suffix.
 - Optional source link property and tags.
 - Typed YAML output: unquoted numbers, ISO dates and datetimes, booleans; minimal text quoting; Excel serial dates; number precision; empty cells left empty or omitted.
-- Property types merged into Obsidian's registry without overwriting existing types (conflicts are reported).
 - Key column for idempotent re-imports.
 - Change column types and link values directly from the table header.
 - Per-column value templates, e.g. `[[{{value}}]]` for wikilinks.

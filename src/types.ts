@@ -129,8 +129,6 @@ export interface PluginSettings {
 	defaultCreateBase: boolean;
 	/** Infer `date` instead of `datetime` when every time component is 00:00:00. */
 	midnightAsDate: boolean;
-	/** Also register inferred types in Obsidian's property type registry (types.json). */
-	registerPropertyTypes: boolean;
 	/** Max rows rendered in the table before "show more". */
 	pageSize: number;
 }
@@ -169,13 +167,6 @@ export interface PlannedNote {
 	types: Record<string, PropertyType>;
 	/** Key for matching existing notes: `{ property, value }` when config.keyColumn is set and the cell is non-empty. */
 	key: { property: string; value: string } | null;
-}
-
-/** Result of registering property types in Obsidian (.obsidian/types.json). */
-export interface TypeRegistrationResult {
-	registered: string[];
-	/** Properties that already have a different type in Obsidian; left unchanged. */
-	conflicts: { property: string; existing: string; wanted: string }[];
 }
 
 /** Outcome of one planned note. */

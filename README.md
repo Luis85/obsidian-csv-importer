@@ -63,7 +63,7 @@ A column's type is inferred from all its non-empty values. A type is chosen only
 
 Values that look like numbers but are identifiers stay text: leading zeros (`007`), phone numbers (`+49…`), very long digit strings, and exponent notation (`1e5`). A column that contains only `no` is text, not a checkbox.
 
-The inferred types are also registered in Obsidian's property types. A property that already has a different type is left unchanged and you get a warning.
+Because the values themselves are typed, Obsidian recognizes the property types from the notes. The plugin does not edit Obsidian's property type settings. If you set a different type for a property in Obsidian yourself, the editor follows your setting, but the stored values stay typed.
 
 ## Value templates
 
@@ -122,7 +122,7 @@ If the CSV has a column named `source`, the source link is written to `source_cs
 Importing first shows a preview without writing anything: how many notes will be new, updated, unchanged, skipped or failed, and per note which properties change or are kept. Parser warnings are shown here too. After **Import** you see progress with **Stop import**, then a report with these buttons:
 
 - **Save report as note**: writes the report as a note.
-- **Reveal folder**: shows the target folder in the file explorer.
+- **Open first note**: opens the first created or updated note.
 - **Open base**: opens the generated base, if there is one.
 - **Undo last import** (also in the toolbar, command palette and file menu): moves notes created by the import to the trash and restores the previous content of notes it modified. Notes you changed after the import are skipped and listed.
 
@@ -152,7 +152,6 @@ Global settings provide defaults for CSV files you configure for the first time.
 - Source link to the CSV
 - Empty cells (leave property empty or omit it)
 - Treat midnight datetimes as dates
-- Register property types (merge inferred types into Obsidian's property types)
 - Create a base
 
 **Existing notes**
@@ -178,7 +177,7 @@ Global settings provide defaults for CSV files you configure for the first time.
 - Import state (a hash of the last imported value per note and property, used to protect your edits) and undo data (the previous content of notes the last import changed) are stored in `.obsidian/plugins/csv-importer/imports/`. These files can contain row data. If you sync your vault's configuration folder, they are synced too.
 - The CSV file is never modified.
 - Files the plugin creates: the notes, an optional `.base` file, and an optional import report note.
-- To store property types, it uses Obsidian's internal property-type registry (`metadataTypeManager`), which is not a documented API. It is guarded, and you can turn it off with **Register property types**.
+- It uses only Obsidian's documented plugin API. It does not write `.obsidian/types.json`: because values are written as typed YAML, Obsidian picks up the property types from the notes.
 
 ## Limitations
 

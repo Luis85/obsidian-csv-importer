@@ -44,7 +44,7 @@
 - [ ] Network: the plugin makes no network requests and has no telemetry.
 - [ ] Data stored: settings in `data.json`; import state (hashes of last imported values) and undo data (previous note content, may contain row data) in `.obsidian/plugins/csv-importer/imports/`. Documented in the README under "Privacy and data".
 - [ ] Files outside notes: optional `.base` file, optional import report note. The CSV is never modified.
-- [ ] Internal API note for reviewers: `app.metadataTypeManager` (not in the public typings) is used to register property types. It is feature-detected, optional, and can be turned off with the "Register property types" setting. The plugin works without it.
+- [ ] Only documented APIs are used (no `metadataTypeManager`, no file-explorer internals). Search `src/` for `as unknown as` before submitting.
 - [ ] `vault.adapter` is used only for plugin-folder state (`imports/`); notes are written with the Vault API (`vault.process`, `processFrontMatter` where applicable).
 - [ ] README has no screenshot placeholder; screenshots are optional (`docs/images/`).
 

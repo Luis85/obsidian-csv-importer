@@ -179,15 +179,6 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 				}),
 			);
 
-		new Setting(containerEl)
-			.setName("Register property types")
-			.setDesc("Also tell Obsidian the type of each imported property so it shows the right editor.")
-			.addToggle((t) =>
-				t.setValue(s.registerPropertyTypes).onChange((v) => {
-					s.registerPropertyTypes = v;
-					save();
-				}),
-			);
 
 		new Setting(containerEl).setName("Existing notes").setHeading();
 

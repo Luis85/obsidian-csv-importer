@@ -9,7 +9,7 @@ import { planNotes, resolveTargetFolder } from "./import/noteBuilder";
 import { ImportStorage } from "./storage";
 import { confirmDialog } from "./view/ConfirmModal";
 import { ImportRunModal } from "./view/ImportRunModal";
-import { applyUndo, applyUndoToSnapshot, registerPropertyTypes, writeNotes } from "./import/importer";
+import { applyUndo, applyUndoToSnapshot, writeNotes } from "./import/importer";
 import { valueHash } from "./import/merge";
 import { createDefaultFileConfig, CsvImporterSettingTab, DEFAULT_SETTINGS } from "./settings";
 import type { SettingsHost } from "./settings";
@@ -198,7 +198,6 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 				preview: async () =>
 					(await writeNotes(this.app, notes, cfg, { dryRun: true, snapshot: stored, warnings: parsed.warnings })).result,
 				execute: async (opts) => {
-					this.notifyTypeConflicts(cfg);
 					const snap = await this.storage.loadSnapshot(file.path);
 					const out = await writeNotes(this.app, notes, cfg, {
 						snapshot: snap,
@@ -235,7 +234,7 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 				canUndo: () => this.canUndo(file),
 				undo: () => this.undoLastImport(file),
 				targetFolder: staticFolder,
-				openFolder: () => this.revealFolder(staticFolder),
+				openNote: (path: string) => this.openNote(path),
 				basePath: basePathFor,
 				openBase: () => {
 					const p = basePathFor();
@@ -292,18 +291,6 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 		new Notice(message, 10000);
 	}
 
-	private notifyTypeConflicts(cfg: FileImportConfig): void {
-		if (!this.settings.registerPropertyTypes) return;
-		const reg = registerPropertyTypes(this.app, cfg.columns);
-		if (reg.conflicts.length === 0) return;
-		const label = (t: string): string => (t === "multitext" ? "list" : t);
-		const lines = reg.conflicts.map(
-			(c) =>
-				`Property "${c.property}" is already typed as ${label(c.existing)} in Obsidian; kept that type. Values were written as ${label(c.wanted)}.`,
-		);
-		new Notice(lines.slice(0, 5).join("\n") + (lines.length > 5 ? `\n…and ${lines.length - 5} more.` : ""), 12000);
-	}
-
 	/** Creates the base file next to the notes folder (Obsidian 1.9+ only). Returns its path and content, or null. */
 	private async createBaseFile(
 		folder: string,
@@ -326,23 +313,11 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 		}
 	}
 
-	/** Shows a folder in the file explorer; falls back to opening its first note. */
-	private revealFolder(path: string): void {
-		const folder = path ? this.app.vault.getAbstractFileByPath(path) : this.app.vault.getRoot();
-		if (!(folder instanceof TFolder)) {
-			new Notice("The folder does not exist yet.");
-			return;
-		}
-		const leaf = this.app.workspace.getLeavesOfType("file-explorer")[0];
-		const view = leaf?.view as unknown as { revealInFolder?: (f: TAbstractFile) => void } | undefined;
-		if (leaf && typeof view?.revealInFolder === "function") {
-			void this.app.workspace.revealLeaf(leaf);
-			view.revealInFolder(folder);
-			return;
-		}
-		const first = folder.children.find((c): c is TFile => c instanceof TFile);
-		if (first) void this.app.workspace.getLeaf(false).openFile(first);
-		else new Notice("The folder is empty.");
+	/** Opens a note in a new tab (documented Workspace API only). */
+	private openNote(path: string): void {
+		const file = this.app.vault.getFileByPath(path);
+		if (file) void this.app.workspace.getLeaf("tab").openFile(file);
+		else new Notice("The note no longer exists.");
 	}
 
 	/** Runs the import dialog for every configured CSV file that still exists, one after the other. */

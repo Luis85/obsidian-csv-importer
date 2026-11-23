@@ -25,8 +25,8 @@ export interface ImportRunControls {
 	undo(): Promise<void>;
 	/** Target folder shown in the preview header (static prefix when it has placeholders). */
 	targetFolder: string;
-	/** Reveal the target folder in the file explorer. */
-	openFolder(): void;
+	/** Open a note (vault path) in a new tab. */
+	openNote(path: string): void;
 	/** Path of the .base file for these notes if it exists (after a run), else null. */
 	basePath(): string | null;
 	/** Open the .base file in a new tab. */
@@ -188,7 +188,8 @@ export class ImportRunModal extends Modal {
 				},
 			});
 		}
-		buttons.push({ text: "Reveal folder", onClick: () => this.ctl.openFolder() });
+		const first = result.rows.find((r) => r.outcome === "created" || r.outcome === "updated");
+		if (first) buttons.push({ text: "Open first note", onClick: () => this.ctl.openNote(first.path) });
 		if (this.ctl.basePath() !== null) buttons.push({ text: "Open base", onClick: () => this.ctl.openBase() });
 		buttons.push({ text: "Close", cta: true, onClick: () => this.close() });
 		this.buttons(buttons);

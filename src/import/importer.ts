@@ -1,7 +1,6 @@
 import { normalizePath, TFile, TFolder } from "obsidian";
 import type { App, TAbstractFile } from "obsidian";
 import type {
-	ColumnConfig,
 	FileImportConfig,
 	FrontmatterValue,
 	ImportResult,
@@ -9,8 +8,6 @@ import type {
 	PlannedNote,
 	RowOutcome,
 	UndoManifest,
-	PropertyType,
-	TypeRegistrationResult,
 } from "../types";
 import { mergeFrontmatter, valueHash } from "./merge";
 import { formatValue, serializeNote, sourceLinkProperty } from "./noteBuilder";
@@ -531,67 +528,4 @@ export async function writeNotes(
 		result.warnings.push(UNDO_TRUNCATED_WARNING);
 	}
 	return { result, snapshot: dryRun ? { ...(opts.snapshot ?? {}) } : snapshot, undo };
-}
-
-interface MetadataTypeManagerLike {
-	setType?: (name: string, type: string) => unknown;
-	getAssignedType?: (name: string) => string | null | undefined;
-	types?: Record<string, { type?: string } | undefined>;
-}
-
-const OBSIDIAN_TYPES: Record<PropertyType, string> = {
-	text: "text",
-	number: "number",
-	checkbox: "checkbox",
-	date: "date",
-	datetime: "datetime",
-	list: "multitext",
-};
-
-const SKIPPED_PROPERTIES = new Set(["tags", "aliases", "cssclasses"]);
-
-function normalizeType(t: string): string {
-	return t === "tags" || t === "aliases" ? "multitext" : t;
-}
-
-function existingType(mgr: MetadataTypeManagerLike, name: string): string | null {
-	let t: string | null | undefined;
-	if (typeof mgr.getAssignedType === "function") t = mgr.getAssignedType(name);
-	if (!t && mgr.types) t = mgr.types[name]?.type ?? mgr.types[name.toLowerCase()]?.type;
-	return t ? t : null;
-}
-
-/**
- * Best-effort: merge column types into Obsidian's property type registry (undocumented metadataTypeManager).
- * Never overwrites a property that already has a different type; those are returned as conflicts. Never throws.
- */
-export function registerPropertyTypes(app: App, columns: ColumnConfig[]): TypeRegistrationResult {
-	const out: TypeRegistrationResult = { registered: [], conflicts: [] };
-	try {
-		const mgr = (app as unknown as { metadataTypeManager?: MetadataTypeManagerLike }).metadataTypeManager;
-		if (!mgr || typeof mgr.setType !== "function") return out;
-		for (const col of columns) {
-			if (!col.include) continue;
-			const name = col.property;
-			if (!name || SKIPPED_PROPERTIES.has(name.toLowerCase())) continue;
-			try {
-				const wanted =
-					col.valueTemplate && col.type !== "list" ? OBSIDIAN_TYPES.text : OBSIDIAN_TYPES[col.type];
-				const existing = existingType(mgr, name);
-				if (existing) {
-					if (normalizeType(existing) !== wanted) {
-						out.conflicts.push({ property: name, existing, wanted });
-					}
-					continue;
-				}
-				void mgr.setType(name, wanted);
-				out.registered.push(name);
-			} catch {
-				// Best effort: one property failing must not stop the others.
-			}
-		}
-	} catch {
-		// Undocumented API unavailable: nothing to register.
-	}
-	return out;
 }
