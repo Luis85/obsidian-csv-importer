@@ -73,7 +73,7 @@ export class TableRenderer {
 		}
 
 		const scroller = body.createDiv({ cls: "csv-importer-scroll" });
-		const table = scroller.createEl("table", { cls: "csv-importer-table" });
+		const table = scroller.createEl("table", { cls: "csv-importer-table", attr: { "data-testid": "csv-table" } });
 		this.renderHeader(table.createEl("thead"), parsed, columns);
 
 		const pageSize = Math.max(1, this.hooks.pageSize());
@@ -152,6 +152,7 @@ export class TableRenderer {
 				role: "button",
 				tabindex: "0",
 				"data-col": String(i),
+				"data-testid": "csv-type-badge",
 				"aria-haspopup": "menu",
 				"aria-label": `Property type of ${header}: ${TYPE_LABELS[col.type]}. Click to change the property type`,
 			},

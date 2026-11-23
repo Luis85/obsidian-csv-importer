@@ -85,6 +85,7 @@ export class ImportIndexView extends ItemView {
 		const root = this.contentEl;
 		root.empty();
 		root.addClass("csv-importer-index");
+		root.setAttr("data-testid", "csv-index");
 
 		const tools = root.createDiv({ cls: "csv-importer-index-tools" });
 		this.toolsEl = tools;
@@ -141,7 +142,7 @@ export class ImportIndexView extends ItemView {
 	}
 
 	private renderRow(list: HTMLElement, item: ImportSummary, token: number): void {
-		const row = list.createDiv({ cls: "csv-importer-index-row", attr: { role: "listitem" } });
+		const row = list.createDiv({ cls: "csv-importer-index-row", attr: { role: "listitem", "data-testid": "csv-index-row" } });
 		if (!item.exists) row.addClass("is-missing");
 		const dir = item.csvPath.includes("/") ? item.csvPath.slice(0, item.csvPath.lastIndexOf("/")) : "";
 
@@ -191,7 +192,7 @@ export class ImportIndexView extends ItemView {
 			const primary = actions.createEl("button", {
 				cls: "csv-importer-index-primary",
 				text: label,
-				attr: { type: "button", "aria-label": `${label} ${item.fileName}` },
+				attr: { type: "button", "aria-label": `${label} ${item.fileName}`, "data-testid": "csv-index-primary" },
 			});
 			primary.addEventListener("click", () => void this.guard(() => this.host.reimport(item.csvPath)));
 			const cfg = all.find((a) => a.id === "configure");

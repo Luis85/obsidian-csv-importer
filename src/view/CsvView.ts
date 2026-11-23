@@ -131,6 +131,7 @@ export class CsvView extends TextFileView {
 		if (this.toolbarEl && this.toolbarEl.isConnected) return;
 		this.contentEl.empty();
 		this.contentEl.addClass("csv-importer-view");
+		this.contentEl.setAttr("data-testid", "csv-view");
 		this.toolbarEl = this.contentEl.createDiv({ cls: "csv-importer-toolbar" });
 		this.statusEl = this.contentEl.createDiv({ cls: "csv-importer-status" });
 		this.bannerEl = this.contentEl.createDiv({ cls: "csv-importer-banner-slot" });
@@ -306,7 +307,7 @@ export class CsvView extends TextFileView {
 
 		const configBtn = el.createEl("button", {
 			cls: "csv-importer-btn csv-importer-configure",
-			attr: { type: "button", "aria-label": "Configure import" },
+			attr: { type: "button", "aria-label": "Configure import", "data-testid": "csv-configure" },
 		});
 		setIcon(configBtn.createSpan({ cls: "csv-importer-btn-icon" }), "sliders-horizontal");
 		configBtn.createSpan({ cls: "csv-importer-btn-label", text: CONFIGURE_IMPORT });
@@ -314,7 +315,7 @@ export class CsvView extends TextFileView {
 		configBtn.addEventListener("click", () => this.openConfig());
 
 		const importCount = parsed ? countMatching(parsed, cfg) : 0;
-		const importBtn = el.createEl("button", { cls: "csv-importer-btn mod-cta csv-importer-import", attr: { type: "button" } });
+		const importBtn = el.createEl("button", { cls: "csv-importer-btn mod-cta csv-importer-import", attr: { type: "button", "data-testid": "csv-import" } });
 		setIcon(importBtn.createSpan({ cls: "csv-importer-btn-icon" }), "file-plus");
 		importBtn.createSpan({ text: importRowsLabel(importCount) });
 		importBtn.disabled = this.importing || importCount === 0;

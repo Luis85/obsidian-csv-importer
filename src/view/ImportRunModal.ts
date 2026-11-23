@@ -67,6 +67,7 @@ export class ImportRunModal extends Modal {
 		super(app);
 		this.closed = new Promise((resolve) => (this.resolveClosed = resolve));
 		this.modalEl.addClass("csv-importer-run");
+		this.modalEl.setAttr("data-testid", "import-run-modal");
 	}
 
 	override onOpen(): void {
@@ -111,6 +112,7 @@ export class ImportRunModal extends Modal {
 				text: previewImportLabel(actionable),
 				cta: true,
 				disabled: result.rows.length === 0,
+				testid: "run-import",
 				onClick: () => void this.runImport(),
 			},
 			{ text: CANCEL, onClick: () => this.close() },
@@ -182,7 +184,7 @@ export class ImportRunModal extends Modal {
 		};
 
 		const row = this.footer();
-		const close = row.createEl("button", { text: CLOSE, cls: "mod-cta csv-importer-run-close", attr: { type: "button" } });
+		const close = row.createEl("button", { text: CLOSE, cls: "mod-cta csv-importer-run-close", attr: { type: "button", "data-testid": "run-close" } });
 		close.addEventListener("click", () => this.close());
 		if (hasBase) {
 			const base = row.createEl("button", { text: OPEN_BASE, cls: "csv-importer-run-base", attr: { type: "button" } });
@@ -235,10 +237,11 @@ export class ImportRunModal extends Modal {
 		return this.contentEl.createDiv({ cls: "modal-button-container csv-importer-run-buttons" });
 	}
 
-	private buttons(defs: { text: string; cta?: boolean; disabled?: boolean; onClick: () => void }[]): HTMLButtonElement[] {
+	private buttons(defs: { text: string; cta?: boolean; disabled?: boolean; testid?: string; onClick: () => void }[]): HTMLButtonElement[] {
 		const row = this.footer();
 		return defs.map((d) => {
 			const b = row.createEl("button", { text: d.text, cls: d.cta ? "mod-cta" : "", attr: { type: "button" } });
+			if (d.testid) b.setAttr("data-testid", d.testid);
 			b.disabled = d.disabled === true;
 			b.addEventListener("click", d.onClick);
 			return b;

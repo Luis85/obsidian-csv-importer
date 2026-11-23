@@ -62,6 +62,7 @@ export class ImportConfigModal extends Modal {
 
 	override onOpen(): void {
 		this.modalEl.addClass("csv-importer-modal");
+		this.modalEl.setAttr("data-testid", "import-config-modal");
 		this.setTitle(`Import settings: ${this.file.name}`);
 		this.draft.reparse();
 		this.build();
@@ -122,7 +123,7 @@ export class ImportConfigModal extends Modal {
 		}
 		parts.forEach((part, i) => {
 			if (i > 0) el.createSpan({ cls: "csv-importer-summary-sep", text: "\u00b7", attr: { "aria-hidden": "true" } });
-			const btn = el.createEl("button", { cls: "csv-importer-summary-link", text: part.text, attr: { type: "button" } });
+			const btn = el.createEl("button", { cls: "csv-importer-summary-link", text: part.text, attr: { type: "button", "data-testid": "config-summary-link" } });
 			btn.toggleClass("is-muted", part.muted === true);
 			btn.addEventListener("click", () => {
 				this.setPreviewOpen(false);
@@ -141,7 +142,7 @@ export class ImportConfigModal extends Modal {
 		root.empty();
 		root.addClass("csv-importer-config-root");
 
-		this.summaryEl = root.createDiv({ cls: "csv-importer-summary", attr: { role: "group", "aria-label": SUMMARY_LABEL } });
+		this.summaryEl = root.createDiv({ cls: "csv-importer-summary", attr: { role: "group", "aria-label": SUMMARY_LABEL, "data-testid": "config-summary" } });
 		this.tabs = new Tabs(root, createDiv(), TAB_DEFS, "csv-importer-config", () => this.setPreviewOpen(false));
 		// The tab bar sits under the summary; the panels live in the scroll area next to the preview pane.
 		const main = root.createDiv({ cls: "csv-importer-config-main" });

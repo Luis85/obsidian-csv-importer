@@ -11,7 +11,7 @@ It works with Excel and German exports: semicolon delimiter, decimal comma, Wind
 | ![Import settings: columns, types and live note preview](docs/images/import-settings.png) | ![Import preview grouped by outcome](docs/images/import-preview.png) |
 | ![Re-import tab: keep edited values, composite key, extra ID property](docs/images/import-settings-reimport.png) | ![CSV imports index](docs/images/imports-index.png) |
 
-<sub>Screenshots are rendered with the plugin's preview harness (`ui-preview/`), which approximates Obsidian's default theme. Real Obsidian may look slightly different, depending on your theme.</sub>
+<sub>Screenshots are captured in real Obsidian with the default theme by the end-to-end test suite (`npm run screenshots:readme`). Your theme may look different.</sub>
 
 ## Quick start
 
