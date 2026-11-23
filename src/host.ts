@@ -1,5 +1,5 @@
 import type { TFile } from "obsidian";
-import type { FileImportConfig, ImportResult, PluginSettings } from "./types";
+import type { CsvEncoding, FileImportConfig, ImportResult, PluginSettings } from "./types";
 
 /**
  * What the view/modals need from the plugin. Implemented by the plugin class in main.ts.
@@ -13,6 +13,8 @@ export interface CsvImporterHost {
 	saveFileConfig(file: TFile, config: FileImportConfig): Promise<void>;
 	/** Reads and decodes the CSV file honoring config.encoding (handles UTF-16 / Windows-1252). */
 	readCsv(file: TFile): Promise<string>;
+	/** Reads and decodes the CSV with an explicit encoding (e.g. an unsaved choice in the settings dialog). */
+	readCsvDecoded(file: TFile, encoding: CsvEncoding): Promise<{ text: string; encoding: Exclude<CsvEncoding, "auto"> }>;
 	/**
 	 * Runs the import flow for the CSV (opens the import dialog: dry-run preview -> confirm -> progress with
 	 * stop -> report). `text` is the current decoded content. Resolves with the result when the dialog closes

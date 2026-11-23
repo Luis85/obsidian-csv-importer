@@ -13,7 +13,7 @@ import { applyUndo, applyUndoToSnapshot, writeNotes } from "./import/importer";
 import { valueHash } from "./import/merge";
 import { createDefaultFileConfig, CsvImporterSettingTab, DEFAULT_SETTINGS } from "./settings";
 import type { SettingsHost } from "./settings";
-import type { FileImportConfig, ImportResult, PluginData, PluginSettings } from "./types";
+import type { CsvEncoding, FileImportConfig, ImportResult, PluginData, PluginSettings } from "./types";
 import { CsvView, VIEW_TYPE_CSV } from "./view/CsvView";
 import { ImportConfigModal } from "./view/ImportConfigModal";
 
@@ -167,8 +167,14 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 	}
 
 	async readCsv(file: TFile): Promise<string> {
-		const bytes = await this.app.vault.readBinary(file);
-		return decodeCsv(bytes, this.getFileConfig(file).encoding).text;
+		return (await this.readCsvDecoded(file, this.getFileConfig(file).encoding)).text;
+	}
+
+	async readCsvDecoded(
+		file: TFile,
+		encoding: CsvEncoding,
+	): Promise<{ text: string; encoding: Exclude<CsvEncoding, "auto"> }> {
+		return decodeCsv(await this.app.vault.readBinary(file), encoding);
 	}
 
 	canUndo(file: TFile): boolean {

@@ -174,6 +174,12 @@ export interface PlannedNote {
 	key: { property: string; value: string } | null;
 }
 
+/** Columns added/removed since the import settings were saved. */
+export interface HeaderDrift {
+	added: string[];
+	removed: string[];
+}
+
 /** Outcome of one planned note. */
 export type NoteOutcome = "created" | "updated" | "unchanged" | "skipped" | "failed";
 
@@ -209,6 +215,8 @@ export interface UndoManifest {
 	 * whose current content no longer matches (edited after the import) and reports them instead.
 	 */
 	writtenHashes?: Record<string, string>;
+	/** True when the import was too large to record every previous note content (undo is partial). */
+	truncated?: boolean;
 }
 
 /** Summary of an import run. */
