@@ -9,6 +9,9 @@ export type PropertyType = "text" | "number" | "checkbox" | "date" | "datetime" 
 /** Delimiter option. "auto" means detect from file content. */
 export type DelimiterOption = "auto" | "," | ";" | "\t" | "|";
 
+/** How empty cells are written into frontmatter. */
+export type EmptyValueMode = "empty" | "omit";
+
 /** What to do when the target note already exists. */
 export type ConflictStrategy =
 	/** Leave the existing note untouched. */
@@ -32,6 +35,13 @@ export interface ColumnConfig {
 	type: PropertyType;
 	/** Whether the column is written into frontmatter. */
 	include: boolean;
+	/**
+	 * Optional value transform applied after type conversion, e.g. `[[{{value}}]]` to turn the cell into a wikilink.
+	 * `{{value}}` (alias `$value`) is the converted cell value; `{{Other column}}`, `{{row}}`, `{{file}}` also work.
+	 * For `list` columns it is applied to every item. A non-empty template makes the value text (or list of text).
+	 * Empty cells stay empty (template not applied). Empty string/undefined = no transform.
+	 */
+	valueTemplate?: string;
 }
 
 /** Import configuration persisted per CSV file (keyed by vault path). */
@@ -60,6 +70,16 @@ export interface FileImportConfig {
 	addSourceLink: boolean;
 	/** Separator used to split values of `list` typed columns (e.g. ","). */
 	listSeparator: string;
+	/** How empty cells are written: `empty` -> `key:` (empty property), `omit` -> key left out. Never `""`. */
+	emptyValues: EmptyValueMode;
+	/** Round numbers to this many decimal places; null keeps the source precision. */
+	numberPrecision: number | null;
+	/**
+	 * Source header of the column that identifies a row (e.g. an ID). When set, re-imports match existing
+	 * notes in the target folder by this property's value instead of by file path, so renamed notes are
+	 * still updated and no duplicates are created. Empty string = match by file path.
+	 */
+	keyColumn: string;
 	/** Column configs. Empty array means "not configured yet" -> infer on open. */
 	columns: ColumnConfig[];
 	/** Epoch ms of the last import, or null. */
@@ -79,6 +99,7 @@ export interface PluginSettings {
 	defaultTags: string;
 	defaultAddSourceLink: boolean;
 	defaultListSeparator: string;
+	defaultEmptyValues: EmptyValueMode;
 	/** Infer `date` instead of `datetime` when every time component is 00:00:00. */
 	midnightAsDate: boolean;
 	/** Also register inferred types in Obsidian's property type registry (types.json). */
@@ -115,6 +136,17 @@ export interface PlannedNote {
 	body: string;
 	/** 1-based data row number. */
 	row: number;
+	/** Property types of the frontmatter keys (columns + `tags` -> list, `source` -> text). Used by serializeNote. */
+	types: Record<string, PropertyType>;
+	/** Key for matching existing notes: `{ property, value }` when config.keyColumn is set and the cell is non-empty. */
+	key: { property: string; value: string } | null;
+}
+
+/** Result of registering property types in Obsidian (.obsidian/types.json). */
+export interface TypeRegistrationResult {
+	registered: string[];
+	/** Properties that already have a different type in Obsidian; left unchanged. */
+	conflicts: { property: string; existing: string; wanted: string }[];
 }
 
 /** Summary of an import run. */

@@ -46,7 +46,7 @@ Sample files are in [`examples/`](examples): `timesheet.csv` (comma) and `timesh
 
 1. Put a CSV file in your vault, for example `Data/timesheet.csv`.
 2. Click it in the file explorer. It opens in the table view.
-3. Run **Configure import for current CSV file** (or use the file menu) to review delimiter, header row, column names and types, templates, target folder and conflict handling.
+3. Set types before importing: click a column's type badge in the table header to change its type, link its values or exclude it. Or run **Configure import for current CSV file** (or use the file menu) to review delimiter, header row, column names and types, value templates, templates, target folder, key column and conflict handling.
 4. Run **Import rows from current CSV file**.
 
 With this row:
@@ -69,6 +69,30 @@ Tage: 5
 ```
 
 `Stunden` and `Tage` are written as numbers, not strings, and `Datum` as a date (midnight timestamps become dates by default).
+
+## Typed YAML
+
+Obsidian Bases and Dataview can only sum, average, sort or filter a property if the YAML value itself has the right type; the property type in `.obsidian/types.json` only controls the editor widget. CSV Importer therefore writes typed values:
+
+- Numbers unquoted, with decimal comma and thousands separators normalized (`0,5`, `"0.5"` → `pt: 0.5`) and no floating-point noise. Optional rounding via **Number precision**.
+- Dates as `YYYY-MM-DD`, datetimes as `YYYY-MM-DDTHH:mm:ss`, unquoted. Source formats: `YYYY-MM-DD[ HH:mm[:ss]]`, `DD.MM.YYYY`, `YYYY/MM/DD`, and Excel serial numbers (for columns typed date).
+- Booleans as `true` / `false`.
+- Text quoted only when YAML requires it, including text that would otherwise be read as a number, date or boolean (`id: "007"`).
+- Empty cells as an empty property (`pt:`) or omitted, never `""`.
+- One type per column, so every note gets the same type for the same property.
+
+Inferred types are also registered in Obsidian's property types. A property that already has a different type is left unchanged and you get a warning.
+
+## Value templates
+
+Each column can have a value template applied after type conversion. `{{value}}` (or `$value`) is the cell value; `{{Other column}}`, `{{row}}` and `{{file}}` work too.
+
+| Template | Cell | Property |
+| --- | --- | --- |
+| `[[{{value}}]]` | `Softwareentwickler` | `Rolle: "[[Softwareentwickler]]"` |
+| `{{value}} h` | `0,5` | `pt: 0.5 h` |
+
+For list columns the template is applied to every item, so `[[{{value}}]]` creates a list of links. The **Link** button in the import settings and the badge menu in the table set `[[{{value}}]]` in one click.
 
 ## Type inference
 
@@ -97,7 +121,7 @@ Templates are used for the note file name and the note body.
 | `{{row}}` | the 1-based data row number |
 | `{{file}}` | the CSV file name without extension |
 
-Example file name template: `{{Datum}} {{Rolle}}`. Characters that are not allowed in file names are removed.
+Example file name template: `{{Datum}} {{Rolle}}`. Typed values are formatted in file names (`2026-10-20 00:00:00` becomes `2026-10-20`, datetimes become `2026-10-20 14-30`). Characters that are not allowed in file names are removed.
 
 ## Conflict strategies
 
@@ -112,7 +136,12 @@ Example file name template: `{{Datum}} {{Rolle}}`. Characters that are not allow
 
 1. Edit and save the CSV (keep the same file name and path).
 2. Run **Import rows from current CSV file** again.
-3. With the **Update properties** or **Overwrite** strategy, notes with the same generated file name are updated instead of duplicated. Use a file name template that is stable and unique per row (for example `{{Datum}} {{Rolle}}`).
+3. With the **Update properties** or **Overwrite** strategy, existing notes are updated instead of duplicated.
+
+Notes are matched in one of two ways:
+
+- **Key column** (recommended): pick a column with unique values, such as an ID. Notes in the target folder whose property matches the value are updated, even if you renamed or moved them within that folder.
+- **File name**: without a key column, notes with the same generated file name are updated. Use a file name template that is stable and unique per row (for example `{{Datum}} {{Rolle}}`).
 
 ## Settings reference
 
@@ -126,11 +155,12 @@ Global settings provide defaults for CSV files you configure for the first time:
 - Default conflict strategy
 - Default tags and source link
 - List separator
+- Empty cells (leave property empty or omit it)
 - Treat midnight datetimes as dates
 - Register inferred types in Obsidian's property type registry
 - Rows per page in the table view
 
-Per-file settings can override all of these and are stored in the plugin's `data.json`.
+Per-file settings can override all of these and add number precision, key column, column types and value templates. They are stored in the plugin's `data.json`.
 
 ## FAQ
 
@@ -141,7 +171,10 @@ Obsidian lets only one plugin register an extension. If another CSV viewer (for 
 Check the decimal separator in the import settings. `0,625` needs `,`. A single non-numeric value in a column makes it text; override the type manually.
 
 **Dates are not recognized.**
-Only ISO formats (`YYYY-MM-DD`, optionally with `HH:MM[:SS]`) are inferred. Convert other formats in the source file.
+`YYYY-MM-DD`, `YYYY/MM/DD` and `DD.MM.YYYY`, optionally followed by a time, are inferred. Excel serial numbers are inferred as numbers; set the column type to date to convert them.
+
+**A property shows the wrong type in Obsidian.**
+If the property already had a different type in your vault, CSV Importer does not change it and shows a warning. Change the type in Obsidian's properties view.
 
 **Does it change my CSV?**
 No. The plugin only reads CSV files.

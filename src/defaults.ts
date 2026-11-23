@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	defaultTags: "",
 	defaultAddSourceLink: true,
 	defaultListSeparator: ",",
+	defaultEmptyValues: "empty",
 	midnightAsDate: true,
 	registerPropertyTypes: true,
 	pageSize: 200,
@@ -29,6 +30,9 @@ export function createDefaultFileConfig(settings: PluginSettings): FileImportCon
 		tags: settings.defaultTags,
 		addSourceLink: settings.defaultAddSourceLink,
 		listSeparator: settings.defaultListSeparator,
+		emptyValues: settings.defaultEmptyValues,
+		numberPrecision: null,
+		keyColumn: "",
 		columns: [],
 		lastImport: null,
 	};

@@ -10,6 +10,33 @@ export interface InferenceOptions {
 export interface ConversionOptions {
 	decimalSeparator: "." | ",";
 	listSeparator: string;
+	/** Round numbers to this many decimals (trailing zeros stripped). null/undefined keeps the source precision. */
+	precision?: number | null;
+}
+
+/**
+ * Format a number as the shortest decimal string that round-trips (never exponent notation),
+ * optionally rounded to `precision` decimals with trailing zeros stripped.
+ */
+export function formatNumber(n: number, precision?: number | null): string {
+	if (!Number.isFinite(n)) return "";
+	if (precision !== null && precision !== undefined && precision >= 0) {
+		const p = Math.min(Math.floor(precision), 100);
+		const fixed = Math.abs(n) < 1e21 ? n.toFixed(p) : String(n);
+		if (!fixed.includes("e")) {
+			const out = fixed.includes(".") ? fixed.replace(/\.?0+$/, "") : fixed;
+			return out === "-0" || out === "" ? "0" : out;
+		}
+	}
+	let str = String(n);
+	const m = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(str);
+	if (m) {
+		const exp = Number(m[4]);
+		const mantDigits = (m[3] ?? "").length;
+		if (exp < 0) str = n.toFixed(Math.min(100, mantDigits - exp));
+		else str = (m[1] + m[2] + (m[3] ?? "")).padEnd(m[1].length + 1 + exp, "0");
+	}
+	return str === "-0" ? "0" : str;
 }
 
 // ---------------------------------------------------------------- numbers
@@ -91,6 +118,33 @@ export function parseDateValue(raw: string): ParsedDate | null {
 	return { kind: "datetime", date: d, time: `${pad(h)}:${pad(mi)}:${pad(sec)}` };
 }
 
+/**
+ * Interpret a plain number as an Excel serial date (1900 date system incl. the Lotus leap-year bug:
+ * serial 60 is the fake 1900-02-29, serials > 60 count from 1899-12-30). Fraction = time of day.
+ * Range 1..2958465. Never used for inference.
+ */
+export function parseExcelSerial(raw: string, decimalSeparator: "." | ","): ParsedDate | null {
+	const t = raw.trim();
+	if (!/^\d+(?:[.,]\d+)?$/.test(t)) return null;
+	const n = parseNumber(t, decimalSeparator, false);
+	if (n === null || n < 1 || n > 2958465) return null;
+	let day = Math.floor(n);
+	let secs = Math.round((n - day) * 86400);
+	if (secs >= 86400) {
+		day += 1;
+		secs -= 86400;
+	}
+	let date: string;
+	if (day === 60) date = "1900-02-29";
+	else {
+		const base = day < 60 ? Date.UTC(1899, 11, 31) : Date.UTC(1899, 11, 30);
+		const d = new Date(base + day * 86400000);
+		date = `${pad(d.getUTCFullYear(), 4)}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+	}
+	if (secs === 0) return { kind: "date", date };
+	return { kind: "datetime", date, time: `${pad(Math.floor(secs / 3600))}:${pad(Math.floor((secs % 3600) / 60))}:${pad(secs % 60)}` };
+}
+
 // ---------------------------------------------------------------- checkbox
 
 const TRUE_WORDS = new Set(["true", "yes"]);
@@ -137,18 +191,20 @@ export function convertValue(raw: string, type: PropertyType, opts: ConversionOp
 	switch (type) {
 		case "number": {
 			const n = parseNumber(t, opts.decimalSeparator, false);
-			return n === null ? t : n;
+			if (n === null) return t;
+			const p = opts.precision;
+			return p !== null && p !== undefined ? Number(formatNumber(n, p)) : n;
 		}
 		case "checkbox": {
 			const b = parseBool(t);
 			return b === null ? t : b;
 		}
 		case "date": {
-			const d = parseDateValue(t);
+			const d = parseDateValue(t) ?? parseExcelSerial(t, opts.decimalSeparator);
 			return d ? d.date : t;
 		}
 		case "datetime": {
-			const d = parseDateValue(t);
+			const d = parseDateValue(t) ?? parseExcelSerial(t, opts.decimalSeparator);
 			return d ? `${d.date}T${d.time ?? "00:00:00"}` : t;
 		}
 		case "list": {

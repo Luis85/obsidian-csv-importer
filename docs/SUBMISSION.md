@@ -3,6 +3,7 @@
 ## Checklist
 
 1. Make sure `main` is green (CI passes: lint, test, build).
+1b. After testing the 0.x beta with BRAT, bump to 1.0.0 with `npm version 1.0.0` (updates manifest.json and versions.json).
 2. Confirm `manifest.json` has `id` `csv-importer`, version `1.0.0`, and the same description as below. `versions.json` contains `"1.0.0": "1.6.6"`.
 3. Create the release. Either push the tag (the release workflow publishes it):
    ```sh

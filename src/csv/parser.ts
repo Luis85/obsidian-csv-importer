@@ -68,7 +68,9 @@ function parseRecords(text: string, delimiter: string, maxRecords = Infinity): s
 }
 
 function stripBom(text: string): string {
-	return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+	let i = 0;
+	while (text.charCodeAt(i) === 0xfeff) i++;
+	return i > 0 ? text.slice(i) : text;
 }
 
 /** Guess the delimiter by consistency of field counts across the first lines (quote-aware). Defaults to ",". */
@@ -104,7 +106,7 @@ export function detectDelimiter(text: string): Delim {
 function uniqueHeaders(raw: string[]): string[] {
 	const used = new Set<string>();
 	return raw.map((h, i) => {
-		const base = h.trim() || `Column ${i + 1}`;
+		const base = h.replace(/\ufeff/g, "").trim() || `Column ${i + 1}`;
 		let candidate = base;
 		let n = 2;
 		while (used.has(candidate)) candidate = `${base} ${n++}`;

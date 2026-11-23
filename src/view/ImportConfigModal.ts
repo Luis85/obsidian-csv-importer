@@ -1,10 +1,10 @@
 import { AbstractInputSuggest, App, Modal, Notice, Setting, TFile, TFolder, debounce } from "obsidian";
 import type { CsvImporterHost } from "../host";
-import type { ColumnConfig, ConflictStrategy, DelimiterOption, FileImportConfig, ParsedCsv, PropertyType } from "../types";
+import type { ColumnConfig, ConflictStrategy, DelimiterOption, EmptyValueMode, FileImportConfig, FrontmatterValue, ParsedCsv, PropertyType } from "../types";
 import { parseCsv } from "../csv/parser";
 import { convertValue, inferColumnType, prepareConfig } from "../csv/typeInference";
-import { planNotes, resolveTargetFolder, serializeNote } from "../import/noteBuilder";
-import { TYPE_LABELS, conversionOptions, inferenceOptions } from "./shared";
+import { applyValueTemplate, formatValue, planNotes, resolveTargetFolder, serializeNote } from "../import/noteBuilder";
+import { LINK_TEMPLATE, TYPE_LABELS, conversionOptions, inferenceOptions } from "./shared";
 
 class FolderSuggest extends AbstractInputSuggest<TFolder> {
 	constructor(app: App, private inputEl: HTMLInputElement, private onPick: (path: string) => void) {
@@ -38,6 +38,9 @@ const CONFLICT_DESCRIPTIONS: Record<ConflictStrategy, string> = {
 	rename: "Create a new note with a numeric suffix.",
 };
 
+const KEY_DESC =
+	"Re-imports update the note whose property matches this column, even if the note was renamed. Use a column with unique values, like an ID.";
+
 function cloneConfig(cfg: FileImportConfig): FileImportConfig {
 	return { ...cfg, columns: cfg.columns.map((c) => ({ ...c })) };
 }
@@ -55,6 +58,7 @@ export class ImportConfigModal extends Modal {
 	private bodyInput: HTMLTextAreaElement | null = null;
 	private lastTemplateField: "name" | "body" = "name";
 	private folderInput: HTMLInputElement | null = null;
+	private keySettingEl: Setting | null = null;
 
 	private readonly refreshPreview = debounce(() => this.updatePreview(), 150, true);
 
@@ -97,8 +101,27 @@ export class ImportConfigModal extends Modal {
 		}
 	}
 
+	private renderKeyDropdown(): void {
+		const setting = this.keySettingEl;
+		if (!setting) return;
+		setting.controlEl.empty();
+		const options: Record<string, string> = { "": "None" };
+		for (const c of this.cfg.columns) options[c.source] = c.source;
+		if (this.cfg.keyColumn && !(this.cfg.keyColumn in options)) this.cfg.keyColumn = "";
+		setting.addDropdown((d) =>
+			d
+				.addOptions(options)
+				.setValue(this.cfg.keyColumn)
+				.onChange((v) => {
+					this.cfg.keyColumn = v;
+					this.updatePreview();
+				}),
+		);
+	}
+
 	private onParsingChanged(): void {
 		this.reparse();
+		this.renderKeyDropdown();
 		this.renderColumns();
 		this.renderChips();
 		this.updatePreview();
@@ -156,6 +179,43 @@ export class ImportConfigModal extends Modal {
 					this.updatePreview();
 				}),
 			);
+
+		new Setting(el)
+			.setName("Empty cells")
+			.setDesc("Leave the property empty, or omit it from the note when the cell is empty.")
+			.addDropdown((d) =>
+				d
+					.addOptions({ empty: "Leave property empty", omit: "Omit property" })
+					.setValue(this.cfg.emptyValues)
+					.onChange((v) => {
+						this.cfg.emptyValues = v as EmptyValueMode;
+						this.updatePreview();
+					}),
+			);
+		new Setting(el)
+			.setName("Number precision")
+			.setDesc("Decimal places for numbers, 0 to 10. Leave empty to keep the source precision.")
+			.addText((t) => {
+				t.setPlaceholder("Keep source");
+				if (this.cfg.numberPrecision !== null) t.setValue(String(this.cfg.numberPrecision));
+				t.onChange((v) => {
+					const trimmed = v.trim();
+					if (trimmed === "") {
+						this.cfg.numberPrecision = null;
+						t.inputEl.removeClass("csv-importer-invalid");
+					} else if (/^\d+$/.test(trimmed) && Number(trimmed) <= 10) {
+						this.cfg.numberPrecision = Number(trimmed);
+						t.inputEl.removeClass("csv-importer-invalid");
+					} else {
+						t.inputEl.addClass("csv-importer-invalid");
+						return;
+					}
+					this.renderColumns();
+					this.updatePreview();
+				});
+			});
+		this.keySettingEl = new Setting(el).setName("Key column").setDesc(KEY_DESC);
+		this.renderKeyDropdown();
 
 		// Output
 		new Setting(el).setName("Output").setHeading();
@@ -320,16 +380,28 @@ export class ImportConfigModal extends Modal {
 		return "";
 	}
 
-	private formatConverted(raw: string, type: PropertyType): string {
-		if (raw === "") return "";
-		let v: ReturnType<typeof convertValue>;
+	/** Converted (and templated) value of the first non-empty cell of a column, as shown in the column list. */
+	private previewColumnValue(col: ColumnConfig): string {
+		if (!this.parsed) return "";
+		const rowIndex = this.parsed.rows.findIndex((r) => (r[col.index] ?? "").trim() !== "");
+		if (rowIndex < 0) return "";
+		const row = this.parsed.rows[rowIndex];
+		let v: FrontmatterValue;
 		try {
-			v = convertValue(raw, type, conversionOptions(this.cfg));
+			v = convertValue(row[col.index] ?? "", col.type, conversionOptions(this.cfg));
+			if (col.valueTemplate) {
+				v = applyValueTemplate(col.valueTemplate, v, {
+					headers: this.parsed.headers,
+					row,
+					rowNumber: rowIndex + 1,
+					fileBasename: this.file.basename,
+				});
+			}
 		} catch {
 			v = null;
 		}
-		if (v === null || v === undefined) return "(empty)";
-		return Array.isArray(v) ? JSON.stringify(v) : String(v);
+		if (v === null) return "(empty)";
+		return Array.isArray(v) ? JSON.stringify(v) : formatValue(v);
 	}
 
 	private renderColumns(): void {
@@ -347,7 +419,7 @@ export class ImportConfigModal extends Modal {
 		const scroller = el.createDiv({ cls: "csv-importer-scroll" });
 		const table = scroller.createEl("table", { cls: "csv-importer-table csv-importer-columns-table" });
 		const head = table.createEl("thead").createEl("tr");
-		for (const h of ["Use", "Column", "Property name", "Type", "Sample", "Converted"]) head.createEl("th", { text: h });
+		for (const h of ["Use", "Column", "Property name", "Type", "Value template", "Sample", "Converted"]) head.createEl("th", { text: h });
 		const tbody = table.createEl("tbody");
 
 		for (const col of this.cfg.columns) {
@@ -378,15 +450,40 @@ export class ImportConfigModal extends Modal {
 			for (const [value, label] of Object.entries(TYPE_LABELS)) sel.createEl("option", { value, text: label });
 			sel.value = col.type;
 
+			const tplTd = tr.createEl("td", { cls: "csv-importer-col-template" });
+			const tpl = tplTd.createEl("input", {
+				type: "text",
+				cls: "csv-importer-prop-input",
+				attr: { placeholder: "{{value}}", "aria-label": `Value template for ${col.source}` },
+			});
+			tpl.value = col.valueTemplate ?? "";
+			const linkBtn = tplTd.createEl("button", {
+				cls: "csv-importer-chip",
+				text: "Link",
+				attr: { type: "button", title: "Turn values into links: [[{{value}}]]" },
+			});
+
 			const sample = this.firstSample(col);
 			tr.createEl("td", { text: sample, cls: "csv-importer-col-sample", attr: { title: sample } });
 			const convTd = tr.createEl("td", { cls: "csv-importer-col-converted" });
 			const showConv = () => {
-				const out = this.formatConverted(sample, col.type);
+				const out = this.previewColumnValue(col);
 				convTd.setText(sample === "" ? "" : `→ ${out}`);
 				convTd.setAttr("title", out);
 			};
 			showConv();
+
+			tpl.addEventListener("input", () => {
+				col.valueTemplate = tpl.value === "" ? undefined : tpl.value;
+				showConv();
+				this.refreshPreview();
+			});
+			linkBtn.addEventListener("click", () => {
+				tpl.value = LINK_TEMPLATE;
+				col.valueTemplate = LINK_TEMPLATE;
+				showConv();
+				this.updatePreview();
+			});
 
 			sel.addEventListener("change", () => {
 				col.type = sel.value as PropertyType;
@@ -416,7 +513,7 @@ export class ImportConfigModal extends Modal {
 			const first: ParsedCsv = { ...this.parsed, rows: this.parsed.rows.slice(0, 1) };
 			const notes = planNotes(first, this.cfg, { path: this.file.path, basename: this.file.basename });
 			const note = notes[0];
-			this.previewEl.setText(note ? `${note.path}\n\n${serializeNote(note.frontmatter, note.body)}` : "No notes would be created.");
+			this.previewEl.setText(note ? `${note.path}\n\n${serializeNote(note.frontmatter, note.body, note.types)}` : "No notes would be created.");
 		} catch (e) {
 			this.previewEl.setText(`Preview unavailable: ${e instanceof Error ? e.message : String(e)}`);
 		}

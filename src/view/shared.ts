@@ -28,7 +28,7 @@ export function inferenceOptions(cfg: FileImportConfig, settings: PluginSettings
 }
 
 export function conversionOptions(cfg: FileImportConfig): ConversionOptions {
-	return { decimalSeparator: cfg.decimalSeparator, listSeparator: cfg.listSeparator };
+	return { decimalSeparator: cfg.decimalSeparator, listSeparator: cfg.listSeparator, precision: cfg.numberPrecision };
 }
 
 export function delimiterLabel(d: string): string {
@@ -40,3 +40,6 @@ export function delimiterLabel(d: string): string {
 		default: return d;
 	}
 }
+
+/** Preview of a column value template (simple `{{value}}` / `$value` substitution). */
+export const LINK_TEMPLATE = "[[{{value}}]]";

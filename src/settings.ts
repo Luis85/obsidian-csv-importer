@@ -1,6 +1,6 @@
 import { App, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { Plugin } from "obsidian";
-import type { ConflictStrategy, DelimiterOption, FileImportConfig, PluginSettings } from "./types";
+import type { ConflictStrategy, DelimiterOption, EmptyValueMode, FileImportConfig, PluginSettings } from "./types";
 
 export { DEFAULT_SETTINGS, createDefaultFileConfig } from "./defaults";
 
@@ -173,6 +173,19 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 					s.defaultListSeparator = v;
 					save();
 				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Empty cells")
+			.setDesc("How empty cells are written into the properties of a note.")
+			.addDropdown((d) =>
+				d
+					.addOptions({ empty: "Leave property empty", omit: "Omit property" })
+					.setValue(s.defaultEmptyValues)
+					.onChange((v) => {
+						s.defaultEmptyValues = v as EmptyValueMode;
+						save();
+					}),
 			);
 
 		new Setting(containerEl).setName("Behavior").setHeading();

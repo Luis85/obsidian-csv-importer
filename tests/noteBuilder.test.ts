@@ -22,6 +22,9 @@ function cfg(over: Partial<FileImportConfig> = {}): FileImportConfig {
 		tags: "",
 		addSourceLink: false,
 		listSeparator: ",",
+		emptyValues: "empty",
+		numberPrecision: null,
+		keyColumn: "",
 		columns: [],
 		lastImport: null,
 		...over,
@@ -83,6 +86,8 @@ describe("planNotes", () => {
 			frontmatter: { Name: "A", Qty: 1.5, Done: true },
 			body: "Qty: 1.5",
 			row: 1,
+			types: { Name: "text", Qty: "number", Done: "checkbox" },
+			key: null,
 		});
 		expect(notes[1].frontmatter).toEqual({ Name: "B", Qty: null, Done: false });
 	});
@@ -167,7 +172,7 @@ describe("serializeNote", () => {
 		expect(out).toContain('lead: " x"');
 		expect(out).toContain('nl: "a\\nb"');
 		expect(out).toContain('empty: ""');
-		expect(out).toContain('q: "say \\"hi\\""');
+		expect(out).toContain('q: say "hi"');
 		expect(out).toContain('tilde: "~"');
 	});
 	it("writes plain safe words and unicode unquoted", () => {
@@ -176,8 +181,12 @@ describe("serializeNote", () => {
 		expect(out).toContain("b: Architektur und Harness Vorbereitung Backend\n");
 		expect(out).toContain("c: Größe\n");
 	});
-	it("writes date/datetime strings unquoted", () => {
-		const out = serializeNote({ d: "2026-11-18", t: "2026-11-18T08:30:00" }, "");
+	it("writes date/datetime strings unquoted only for date-typed keys", () => {
+		const out = serializeNote(
+			{ d: "2026-11-18", t: "2026-11-18T08:30:00" },
+			"",
+			{ d: "date", t: "datetime" },
+		);
 		expect(out).toContain("d: 2026-11-18\n");
 		expect(out).toContain("t: 2026-11-18T08:30:00\n");
 	});
@@ -217,7 +226,7 @@ describe("end to end", () => {
 			path: "hours.csv",
 			basename: "hours",
 		});
-		return serializeNote(note.frontmatter, note.body);
+		return serializeNote(note.frontmatter, note.body, note.types);
 	};
 
 	it("comma file with dot decimals", () => {
@@ -251,6 +260,6 @@ describe("end to end", () => {
 		const parsed = parseCsv("Datum;Tage\n2026-11-18 00:00:00;5", { delimiter: "auto", hasHeader: true });
 		const columns = buildColumnConfigs(parsed, { decimalSeparator: ",", midnightAsDate: false, listSeparator: "," });
 		const [note] = planNotes(parsed, cfg({ columns, decimalSeparator: "," }), { path: "h.csv", basename: "h" });
-		expect(serializeNote(note.frontmatter, "")).toContain("Datum: 2026-11-18T00:00:00\n");
+		expect(serializeNote(note.frontmatter, "", note.types)).toContain("Datum: 2026-11-18T00:00:00\n");
 	});
 });

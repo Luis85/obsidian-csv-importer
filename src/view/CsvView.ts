@@ -1,10 +1,10 @@
-import { TextFileView, WorkspaceLeaf, Notice, setIcon, debounce } from "obsidian";
+import { Menu, TextFileView, WorkspaceLeaf, Notice, setIcon, debounce } from "obsidian";
 import type { CsvImporterHost } from "../host";
-import type { ColumnConfig, FileImportConfig, ParsedCsv } from "../types";
+import type { ColumnConfig, FileImportConfig, ParsedCsv, PropertyType } from "../types";
 import { parseCsv } from "../csv/parser";
 import { convertValue, prepareConfig } from "../csv/typeInference";
 import { ImportConfigModal } from "./ImportConfigModal";
-import { TYPE_BADGES, TYPE_LABELS, conversionOptions, delimiterLabel, inferenceOptions } from "./shared";
+import { LINK_TEMPLATE, TYPE_BADGES, TYPE_LABELS, conversionOptions, delimiterLabel, inferenceOptions } from "./shared";
 
 export const VIEW_TYPE_CSV = "csv-importer-view";
 
@@ -260,10 +260,28 @@ export class CsvView extends TextFileView {
 			const inner = th.createDiv({ cls: "csv-importer-th-inner" });
 			inner.createSpan({ cls: "csv-importer-th-name", text: h });
 			if (col) {
-				inner.createSpan({
-					cls: `csv-importer-badge csv-importer-badge-${col.type}`,
-					text: TYPE_BADGES[col.type],
-					attr: { title: TYPE_LABELS[col.type] + (col.include ? "" : " (excluded)") },
+				const badge = inner.createSpan({
+					cls: `csv-importer-badge csv-importer-badge-${col.type} is-clickable`,
+					attr: {
+						title: `${TYPE_LABELS[col.type]}${col.include ? "" : " (excluded)"}. Click to change the property type`,
+						role: "button",
+						tabindex: "0",
+						"aria-label": `Property type of ${h}: ${TYPE_LABELS[col.type]}. Click to change the property type`,
+					},
+				});
+				badge.createSpan({ text: TYPE_BADGES[col.type] });
+				if (col.valueTemplate) setIcon(badge.createSpan({ cls: "csv-importer-badge-link" }), "link");
+				badge.addEventListener("click", (ev: MouseEvent) => {
+					ev.stopPropagation();
+					this.openTypeMenu(ev, i);
+				});
+				badge.addEventListener("keydown", (ev: KeyboardEvent) => {
+					if (ev.key === "Enter" || ev.key === " ") {
+						ev.preventDefault();
+						ev.stopPropagation();
+						const r = badge.getBoundingClientRect();
+						this.openTypeMenu(new MouseEvent("click", { clientX: r.left, clientY: r.bottom }), i);
+					}
 				});
 			}
 			const sortIcon = inner.createSpan({ cls: "csv-importer-sort-icon" });
@@ -302,6 +320,55 @@ export class CsvView extends TextFileView {
 				this.renderBody();
 			});
 		}
+	}
+
+	private openTypeMenu(ev: MouseEvent, index: number): void {
+		const col = this.model?.columns[index];
+		if (!col) return;
+		const menu = new Menu();
+		for (const [type, label] of Object.entries(TYPE_LABELS) as [PropertyType, string][]) {
+			menu.addItem((item) =>
+				item
+					.setTitle(label)
+					.setChecked(col.type === type)
+					.onClick(() => void this.updateColumn(index, (c) => (c.type = type))),
+			);
+		}
+		menu.addSeparator();
+		menu.addItem((item) =>
+			item
+				.setTitle(col.valueTemplate ? "Unlink values" : "Link values ([[…]])")
+				.setIcon("link")
+				.onClick(() =>
+					void this.updateColumn(index, (c) => {
+						c.valueTemplate = c.valueTemplate ? undefined : LINK_TEMPLATE;
+					}),
+				),
+		);
+		menu.addItem((item) =>
+			item
+				.setTitle(col.include ? "Exclude from import" : "Include in import")
+				.setIcon(col.include ? "eye-off" : "eye")
+				.onClick(() => void this.updateColumn(index, (c) => (c.include = !c.include))),
+		);
+		menu.showAtMouseEvent(ev);
+	}
+
+	private async updateColumn(index: number, mutate: (c: ColumnConfig) => void): Promise<void> {
+		const file = this.file;
+		if (!file) return;
+		try {
+			const cfg = this.host.getFileConfig(file);
+			const parsed = parseCsv(this.raw, { delimiter: cfg.delimiter, hasHeader: cfg.hasHeader });
+			prepareConfig(cfg, parsed, this.host.settings.midnightAsDate);
+			const col = cfg.columns.find((c) => c.index === index);
+			if (!col) return;
+			mutate(col);
+			await this.host.saveFileConfig(file, cfg);
+		} catch (e) {
+			new Notice(`Could not save the column setting: ${e instanceof Error ? e.message : String(e)}`);
+		}
+		this.render();
 	}
 
 	private toggleSort(i: number): void {

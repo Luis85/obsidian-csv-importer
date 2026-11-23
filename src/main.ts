@@ -127,7 +127,19 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 			const parsed = parseCsv(text, cfg);
 			prepareConfig(cfg, parsed, this.settings.midnightAsDate);
 			const notes = planNotes(parsed, cfg, { path: file.path, basename: file.basename });
-			if (this.settings.registerPropertyTypes) registerPropertyTypes(this.app, cfg.columns);
+			if (this.settings.registerPropertyTypes) {
+				const reg = registerPropertyTypes(this.app, cfg.columns);
+				if (reg.conflicts.length > 0) {
+					const label = (t: string): string => (t === "multitext" ? "list" : t);
+					const wantedLabel = (t: string): string => (t === "multitext" ? "list" : t);
+					const lines = reg.conflicts.map(
+						(c) =>
+							`Property "${c.property}" is already typed as ${label(c.existing)} in Obsidian; kept that type. Values were written as ${wantedLabel(c.wanted)}.`,
+					);
+					console.warn("CSV Importer: property type conflicts", reg.conflicts);
+					new Notice(lines.slice(0, 5).join("\n") + (lines.length > 5 ? `\n…and ${lines.length - 5} more.` : ""), 12000);
+				}
+			}
 
 			let lastShown = 0;
 			const result = await writeNotes(this.app, notes, cfg, (done, total) => {
