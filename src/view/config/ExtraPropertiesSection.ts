@@ -6,7 +6,7 @@ import { EXTRA_PROPERTIES_HELP, TYPE_LABELS } from "../labels";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
 
-const EXTRA_TOKENS = ["{{today}}", "{{now}}"];
+const EXTRA_TOKENS = ["{{today}}", "{{now}}", "{{uuid}}"];
 
 /** The "Extra properties" section: properties that are not in the CSV but added to every note. */
 export class ExtraPropertiesSection {
@@ -28,6 +28,18 @@ export class ExtraPropertiesSection {
 				this.renderList();
 				this.draft.emit("preview");
 			}),
+		).addButton((b) =>
+			b
+				.setButtonText("Add ID property")
+				.setTooltip("Gives every new note a unique ID (UUID). The ID is kept on re-import.")
+				.onClick(() => {
+					const taken = new Set(this.draft.cfg.extraProperties.map((e) => e.property.trim().toLowerCase()));
+					let name = "id";
+					for (let n = 2; taken.has(name); n++) name = `id ${n}`;
+					this.draft.cfg.extraProperties.push({ property: name, type: "text", defaultValue: "{{uuid}}" });
+					this.renderList();
+					this.draft.emit("preview");
+				}),
 		);
 		this.chipsEl = parent.createDiv({ cls: "csv-importer-chips" });
 		this.renderList();

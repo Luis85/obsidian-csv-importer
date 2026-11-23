@@ -184,3 +184,18 @@ export type App = MockApp;
 export function requireApiVersion(_version: string): boolean {
 	return true;
 }
+
+/** Notice stand-in: records messages in `Notice.messages`. */
+export class Notice {
+	static messages: string[] = [];
+	constructor(message: string, _timeout?: number) {
+		Notice.messages.push(message);
+	}
+	setMessage(_message: string): this {
+		return this;
+	}
+	hide(): void {}
+}
+
+/** Only referenced as a value by `instanceof`/`extends` in modules the tests stub out. */
+export class MarkdownView {}

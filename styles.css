@@ -778,3 +778,210 @@
 .csv-importer-units.csv-importer-hidden {
 	display: none;
 }
+
+/* === Import index === */
+.csv-importer-index {
+	container-type: inline-size;
+	padding: var(--size-4-4);
+	overflow-y: auto;
+}
+
+.csv-importer-index-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-4);
+}
+
+.csv-importer-index-title {
+	margin: 0;
+}
+
+.csv-importer-index-desc {
+	margin: var(--size-2-1) 0 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.csv-importer-index-tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.csv-importer-index-search {
+	flex: 1 1 180px;
+	min-width: 140px;
+}
+
+.csv-importer-index-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.csv-importer-index-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-3) var(--size-4-4);
+	padding: var(--size-4-3) var(--size-4-4);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary-alt);
+}
+
+.csv-importer-index-row.is-missing {
+	border-color: var(--text-warning);
+}
+
+.csv-importer-index-main {
+	flex: 2 1 220px;
+	min-width: 0;
+}
+
+.csv-importer-index-name {
+	display: block;
+	max-width: 100%;
+	padding: 0;
+	height: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	background: transparent;
+	box-shadow: none;
+	border: none;
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
+	text-align: left;
+	cursor: pointer;
+}
+
+.csv-importer-index-name:hover:not(:disabled) {
+	color: var(--text-accent-hover);
+	text-decoration: underline;
+}
+
+.csv-importer-index-name:disabled {
+	color: var(--text-muted);
+	cursor: default;
+}
+
+.csv-importer-index-path {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.csv-importer-index-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	margin-top: var(--size-2-2);
+}
+
+.csv-importer-index-badges:empty {
+	display: none;
+}
+
+.csv-importer-badge {
+	padding: 0 var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.csv-importer-badge.mod-warning {
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+}
+
+.csv-importer-index-meta {
+	flex: 2 1 200px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1);
+	min-width: 0;
+	font-size: var(--font-ui-small);
+}
+
+.csv-importer-index-meta-line {
+	display: flex;
+	gap: var(--size-4-2);
+}
+
+.csv-importer-index-meta-label {
+	flex: 0 0 6.5em;
+	color: var(--text-muted);
+}
+
+.csv-importer-index-meta-value {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.csv-importer-index-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-2-3);
+	margin-left: auto;
+}
+
+.csv-importer-index-action {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-2);
+}
+
+.csv-importer-index-action-icon {
+	display: inline-flex;
+}
+
+.csv-importer-index-action .svg-icon {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
+.csv-importer-index-empty {
+	padding: var(--size-4-8) var(--size-4-4);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.csv-importer-confirm-option {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	margin-bottom: var(--size-4-3);
+}
+
+/* Narrower than 900px: icon-only action buttons. */
+@container (max-width: 900px) {
+	.csv-importer-index-action-text {
+		display: none;
+	}
+}
+
+/* Narrower than 600px: only Re-import and the menu stay inline (keep in sync with NARROW_PX in ImportIndexView.ts). */
+@container (max-width: 600px) {
+	.csv-importer-index-action:not(.is-always):not(.mod-more) {
+		display: none;
+	}
+
+	.csv-importer-index-actions {
+		width: 100%;
+		justify-content: flex-end;
+	}
+}
+/* === end import index === */

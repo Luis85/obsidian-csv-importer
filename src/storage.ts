@@ -361,6 +361,13 @@ export class ImportStorage {
 		await this.persistIndex();
 	}
 
+	/** Forgets the snapshot and undo state of a CSV but keeps it as a known (empty) entry. */
+	async clearImportState(csvPath: string): Promise<void> {
+		await this.init();
+		await this.saveUndo(csvPath, null);
+		await this.saveSnapshot(csvPath, {});
+	}
+
 	/** Re-keys snapshot entries and undo references after a note was renamed or moved. */
 	async renameNote(oldNotePath: string, newNotePath: string): Promise<void> {
 		await this.init();

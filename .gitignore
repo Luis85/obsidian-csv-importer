@@ -6,3 +6,5 @@ data.json
 .vscode/
 .idea/
 coverage/
+ui-preview/dist/
+ui-preview/screenshots/

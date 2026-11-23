@@ -150,7 +150,7 @@ export function delimiterLabel(d: string): string {
 }
 
 export const EXTRA_PROPERTIES_HELP =
-	"Add properties to the imported notes that are not in the CSV. They are only written to the notes, the CSV file is not changed. The default value fills in new notes and empty properties on re-import; values you set in Obsidian are kept.";
+	"Add properties to the imported notes that are not in the CSV. They are only written to the notes, the CSV file is not changed. The default value fills in new notes and empty properties on re-import; values you set in Obsidian are kept. Use {{uuid}} for a unique ID per note.";
 
 export const ROW_FILTER_OPS: Record<RowFilterOp, string> = {
 	equals: "equals",

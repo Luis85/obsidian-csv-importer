@@ -1,5 +1,5 @@
-import { MarkdownView, Notice } from "obsidian";
-import type { App, TFile } from "obsidian";
+import { MarkdownView, Notice, TFile } from "obsidian";
+import type { App } from "obsidian";
 import type { ConfigStore } from "../configStore";
 import { decodeCsv } from "../csv/encoding";
 import { parseCsv } from "../csv/parser";
@@ -10,9 +10,10 @@ import { ROW_FILTER_WARNING, HISTORY_NOT_SAVED_WARNING, applyUndo, applyUndoToSn
 import { valueHash } from "../import/merge";
 import { countMatching, planNotes, resolveTargetFolder, staticPrefix } from "../import/noteBuilder";
 import { createDefaultFileConfig, migrateFileConfig } from "../defaults";
+import type { ImportSummary } from "../host";
 import type { ImportStorage } from "../storage";
 import type { CsvEncoding, FileImportConfig, ImportResult, ImportSnapshot, PluginSettings, UndoManifest } from "../types";
-import { confirmDialog } from "../view/ConfirmModal";
+import { confirmDialog, confirmDialogWithOption } from "../view/ConfirmModal";
 import { CsvView } from "../view/CsvView";
 import { ImportRunModal } from "../view/ImportRunModal";
 import type { ImportRunControls } from "../view/ImportRunModal";
@@ -165,7 +166,12 @@ export class ImportService {
 
 	/** Asks for confirmation, reverts the last import of the CSV and shows a notice. */
 	async undoLastImport(file: TFile): Promise<void> {
-		const manifest = await this.storage.loadUndo(file.path);
+		return this.undoImport(file.path);
+	}
+
+	/** Same as `undoLastImport`, by CSV path (works when the CSV file is gone). */
+	async undoImport(csvPath: string): Promise<void> {
+		const manifest = await this.storage.loadUndo(csvPath);
 		if (!manifest) {
 			new Notice("There is no import to undo for this file.");
 			return;
@@ -178,10 +184,10 @@ export class ImportService {
 			true,
 		);
 		if (!ok) return;
-		const snapshot = await this.storage.loadSnapshot(file.path);
+		const snapshot = await this.storage.loadSnapshot(csvPath);
 		const outcome = await applyUndo(this.app, manifest);
-		await this.storage.saveSnapshot(file.path, applyUndoToSnapshot(snapshot, manifest, new Set(outcome.changed)));
-		await this.storage.saveUndo(file.path, null);
+		await this.storage.saveSnapshot(csvPath, applyUndoToSnapshot(snapshot, manifest, new Set(outcome.changed)));
+		await this.storage.saveUndo(csvPath, null);
 		new Notice(undoNoticeText(manifest, outcome), 10000);
 	}
 
@@ -209,6 +215,149 @@ export class ImportService {
 			console.error("CSV Importer: could not read file", e);
 			new Notice(`Could not read ${file.name}.`);
 		}
+	}
+
+	// --- imports index ---
+
+	private configFor(csvPath: string): FileImportConfig {
+		const defaults = createDefaultFileConfig(this.getSettings());
+		const stored = this.store.get(csvPath);
+		return stored ? migrateFileConfig({ ...defaults, ...stored }, this.getSettings()) : defaults;
+	}
+
+	/** All CSVs with saved settings: last import first (never imported last), then by file name. */
+	async listImports(): Promise<ImportSummary[]> {
+		await this.storage.init();
+		const list = this.store.paths().map((csvPath): ImportSummary => {
+			const cfg = this.configFor(csvPath);
+			let targetFolder = "";
+			try {
+				targetFolder = staticPrefix(resolveTargetFolder(cfg, csvPath));
+			} catch {
+				targetFolder = "";
+			}
+			return {
+				csvPath,
+				fileName: csvPath.split("/").pop() ?? csvPath,
+				exists: isCsv(this.app.vault.getAbstractFileByPath(csvPath)),
+				targetFolder,
+				lastImport: cfg.lastImport,
+				hasUndo: this.storage.hasUndo(csvPath),
+				basePath: basePath(this.app, targetFolder),
+			};
+		});
+		return list.sort(
+			(a, b) =>
+				(b.lastImport ?? -1) - (a.lastImport ?? -1) ||
+				a.fileName.localeCompare(b.fileName, undefined, { sensitivity: "base", numeric: true }) ||
+				a.csvPath.localeCompare(b.csvPath),
+		);
+	}
+
+	/** Number of notes the import of this CSV owns (snapshot entries). */
+	async countImportedNotes(csvPath: string): Promise<number> {
+		return Object.keys(await this.storage.loadSnapshot(csvPath)).length;
+	}
+
+	/** Runs the import dialog for a CSV by path. */
+	async reimport(csvPath: string): Promise<void> {
+		const f = this.app.vault.getAbstractFileByPath(csvPath);
+		if (!isCsv(f)) {
+			new Notice("The CSV file no longer exists.");
+			return;
+		}
+		await this.importFromDisk(f);
+	}
+
+	/**
+	 * Moves the notes this import owns (snapshot entries that still exist as markdown files) to the trash, after
+	 * confirmation, and clears the CSV's snapshot and undo state. The file config stays (last import reset).
+	 * Resolves with the number of notes trashed (0 when cancelled).
+	 */
+	async deleteImportedNotes(csvPath: string): Promise<number> {
+		const fileName = csvPath.split("/").pop() ?? csvPath;
+		const snapshot = await this.storage.loadSnapshot(csvPath);
+		const owned = Object.keys(snapshot).filter((p) => {
+			const f = this.app.vault.getAbstractFileByPath(p);
+			return f instanceof TFile && f.extension.toLowerCase() === "md";
+		});
+		if (owned.length === 0) {
+			new Notice(`${fileName} has no imported notes to delete.`);
+			return 0;
+		}
+		const cfg = this.configFor(csvPath);
+		let folder = "";
+		try {
+			folder = staticPrefix(resolveTargetFolder(cfg, csvPath));
+		} catch {
+			folder = "";
+		}
+		const base = basePath(this.app, folder);
+		const message = `This moves ${plural(owned.length, "note", "notes")} created by importing ${fileName} to the trash. Notes you created yourself are not affected.`;
+		let alsoBase = false;
+		if (base) {
+			const r = await confirmDialogWithOption(this.app, "Delete imported notes?", message, "Delete notes", { label: "Also delete the base file" }, true);
+			if (!r.ok) return 0;
+			alsoBase = r.checked;
+		} else if (!(await confirmDialog(this.app, "Delete imported notes?", message, "Delete notes", true))) {
+			return 0;
+		}
+
+		const progress = owned.length > 50 ? new Notice(`Deleting notes: 0 of ${owned.length}`, 0) : null;
+		let trashed = 0;
+		let failed = 0;
+		try {
+			for (const [i, p] of owned.entries()) {
+				const f = this.app.vault.getAbstractFileByPath(p);
+				if (f instanceof TFile) {
+					try {
+						await this.app.fileManager.trashFile(f);
+						trashed++;
+					} catch (e) {
+						failed++;
+						console.error("CSV Importer: could not trash a note", p, e);
+					}
+				}
+				if (progress && i % 25 === 0) progress.setMessage(`Deleting notes: ${i + 1} of ${owned.length}`);
+			}
+			if (alsoBase && base) {
+				const bf = this.app.vault.getAbstractFileByPath(base);
+				if (bf instanceof TFile) {
+					try {
+						await this.app.fileManager.trashFile(bf);
+					} catch (e) {
+						console.error("CSV Importer: could not trash the base file", e);
+					}
+				}
+			}
+		} finally {
+			progress?.hide();
+		}
+		await this.storage.clearImportState(csvPath);
+		const stored = this.store.get(csvPath);
+		if (stored) {
+			stored.lastImport = null;
+			await this.store.set(csvPath, stored);
+		}
+		new Notice(failed > 0 ? `Moved ${plural(trashed, "note", "notes")} to the trash. ${failed} could not be deleted.` : `Moved ${plural(trashed, "note", "notes")} to the trash.`);
+		return trashed;
+	}
+
+	/** Deletes the settings and import history of a CSV after confirmation. Imported notes stay. */
+	async removeFromIndex(csvPath: string): Promise<boolean> {
+		const fileName = csvPath.split("/").pop() ?? csvPath;
+		const ok = await confirmDialog(
+			this.app,
+			"Remove from index?",
+			`Remove ${fileName} from the index? Its import settings and import history are deleted. Imported notes stay.`,
+			"Remove",
+			true,
+		);
+		if (!ok) return false;
+		await this.store.delete(csvPath);
+		await this.storage.delete(csvPath);
+		new Notice(`Removed ${fileName} from the index.`);
+		return true;
 	}
 
 	/** Opens a note in a new tab (documented Workspace API only). */

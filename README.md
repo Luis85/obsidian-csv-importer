@@ -76,6 +76,23 @@ Each column can have a value template applied after type conversion. `{{value}}`
 
 For list columns the template is applied to every item, so `[[{{value}}]]` creates a list of links. Empty cells stay empty. The **Link** button in the import settings and the badge menu in the table set `[[{{value}}]]` in one click.
 
+## Extra properties and IDs
+
+In the import settings, **Extra properties** adds properties to the imported notes that are not columns of the CSV, for example `status: open` for every new note. Extra properties are written only to the notes: the CSV file is never changed.
+
+Each extra property has a name, a type and a default value. The default value can use:
+
+| Placeholder | Replaced with |
+| --- | --- |
+| `{{Column}}`, `{{row}}`, `{{file}}` | the same values as in other templates |
+| `{{today}}` | today's date, `YYYY-MM-DD` |
+| `{{now}}` | the current date and time, `YYYY-MM-DDTHH:mm:ss` |
+| `{{uuid}}` | a new random ID (UUID) per note |
+
+The default only fills in. It is written when a note is created, and on re-import only if the property is missing or empty, so a value you set in Bases (for example `status: done`) is never overwritten. If an extra property has the same name as a CSV column, the column wins and you get a warning.
+
+**Add ID property** adds an `id` property with the default `{{uuid}}`. You can rename it. Every new note gets its own UUID, and the ID stays the same on re-imports. Because the ID exists only in the notes, it can't be used to match rows on re-import. Use a key column from the CSV for that.
+
 ## Templates and folders
 
 Templates are used for the note file name, the note body and the target folder.
@@ -127,6 +144,24 @@ Importing first shows a preview without writing anything: how many notes will be
 - **Undo last import** (also in the toolbar, command palette and file menu): moves notes created by the import to the trash and restores the previous content of notes it modified. Notes you changed after the import are skipped and listed.
 
 The command **Re-import all configured CSV files** runs this for every CSV that has saved settings.
+
+## CSV imports index
+
+The ribbon icon **Open CSV imports** (or the command of the same name) opens an index of every CSV file with saved import settings. It opens in its own tab; opening it again reveals the existing one. Files are sorted by last import, newest first, then by name, and a filter box narrows the list.
+
+Each row shows the CSV (click to open it in the table view), its target folder, when it was last imported, how many notes this import owns, and badges for **CSV missing** and **Undo available**. Actions per row:
+
+- **Re-import**: runs the normal import dialog.
+- **Configure**: opens the import settings.
+- **Open base**: opens the base file next to the notes folder, if it exists.
+- **Undo last import**: same as the command, shown when an undo is available.
+- **...** menu: **Delete imported notes...** and **Remove from index...**. On narrow views the other actions move into this menu too.
+
+**Re-import all** at the top runs the import dialog for every listed CSV that still exists.
+
+**Delete imported notes** moves the notes this import owns to the trash (using your Obsidian trash setting). A note counts as owned when the import history lists it and it still exists; notes you created yourself, even in the same folder, are never touched. You can also delete the base file in the same step. Afterwards the import history and undo are cleared, but the CSV's settings stay, so you can import again. This works even when the CSV file is missing.
+
+**Remove from index** deletes the CSV's settings and import history. Imported notes stay.
 
 ## Encoding
 

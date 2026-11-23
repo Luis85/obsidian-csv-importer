@@ -6,6 +6,7 @@ import type { ColumnConfig, FileImportConfig, FrontmatterValue, ParsedCsv, Plann
 import { buildColumnConfigs, conversionOptionsOf, convertValue, inferenceOptionsOf, parseNumber, resolveDateOrder, type ConversionOptions } from "../csv/typeInference";
 import { compileTemplate, formatValue, headerIndexOf, renderCompiled, type CompiledTemplate, type TemplateContext } from "./templates";
 import { compileFolderSegments, hasFolderPlaceholders, renderFolderSegments, resolveTargetFolder, sanitizeFileName } from "./folders";
+import { uuidV4 } from "../core/util";
 
 export { applyValueTemplate, formatValue, renderTemplate, type TemplateContext } from "./templates";
 export { hasFolderPlaceholders, resolveRowFolder, resolveTargetFolder, sanitizeFileName, staticPrefix } from "./folders";
@@ -291,6 +292,9 @@ function pad2(n: number): string {
 	return String(n).padStart(2, "0");
 }
 
+/** Stands in for `{{uuid}}` while templates are rendered; replaced by a fresh UUID per note. */
+const UUID_MARK = "\u0001uuid\u0001";
+
 /**
  * Plan one note per data row. Frontmatter contains included columns (typed via convertValue),
  * `tags` (when config.tags non-empty, merged with a `tags` column if present), and
@@ -299,13 +303,14 @@ function pad2(n: number): string {
  * get " 2", " 3" suffixes. If config.columns is empty, columns are inferred on the fly
  * (midnightAsDate = true). Rows rejected by config.rowFilter produce no note (row numbers of the rest are kept).
  * Composite keys (2+ key columns) are written to compositeKeyProperty(config). Extra properties are added after
- * the columns and listed in `fillOnly`. `opts.now` fixes `{{today}}` / `{{now}}` for tests.
+ * the columns and listed in `fillOnly`. `opts.now` fixes `{{today}}` / `{{now}}` for tests;
+ * `{{uuid}}` gives each note its own random UUID (`opts.uuid` replaces the generator in tests).
  */
 export function planNotes(
 	parsed: ParsedCsv,
 	config: FileImportConfig,
 	csv: { path: string; basename: string },
-	opts: { now?: Date } = {},
+	opts: { now?: Date; uuid?: () => string } = {},
 ): PlannedNote[] {
 	const dynamicFolder = hasFolderPlaceholders(config);
 	const staticFolder = resolveTargetFolder(config, csv.path);
@@ -334,6 +339,7 @@ export function planNotes(
 		convByIndex.set(col.index, o);
 	}
 	const now = opts.now ?? new Date();
+	const newUuid = opts.uuid ?? uuidV4;
 	const today = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
 	const nowStr = `${today}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
 	const conflicts = reservedExtraNames(config);
@@ -356,7 +362,10 @@ export function planNotes(
 		const name = e.property.trim();
 		if (name === "" || conflicts.has(name.toLowerCase()) || extraSeen.has(name.toLowerCase())) continue;
 		extraSeen.add(name.toLowerCase());
-		const text = (e.defaultValue ?? "").replace(/\{\{\s*today\s*\}\}/g, today).replace(/\{\{\s*now\s*\}\}/g, nowStr);
+		const text = (e.defaultValue ?? "")
+			.replace(/\{\{\s*today\s*\}\}/g, today)
+			.replace(/\{\{\s*now\s*\}\}/g, nowStr)
+			.replace(/\{\{\s*uuid\s*\}\}/g, UUID_MARK);
 		extras.push({ name, type: e.type, tpl: compileTemplate(text, headerIndex) });
 	}
 	const folderSegs = dynamicFolder ? compileFolderSegments(config.targetFolder, headerIndex) : [];
@@ -377,7 +386,9 @@ export function planNotes(
 		}
 		const fillOnly: string[] = [];
 		for (const ex of extras) {
-			const v = convertValue(renderCompiled(ex.tpl, bodyCtx), ex.type, conv);
+			const parts = renderCompiled(ex.tpl, bodyCtx).split(UUID_MARK);
+			const withIds = parts.reduce((acc, part, k) => (k === 0 ? part : acc + newUuid() + part), "");
+			const v = convertValue(withIds, ex.type, conv);
 			if (v === null && config.emptyValues === "omit") continue;
 			fm[ex.name] = v;
 			types[ex.name] = ex.type;

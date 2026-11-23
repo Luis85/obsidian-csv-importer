@@ -2,7 +2,7 @@ import { Notice, Plugin } from "obsidian";
 import type { TFile } from "obsidian";
 import { ConfigStore } from "./configStore";
 import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig } from "./defaults";
-import type { CsvImporterHost } from "./host";
+import type { ImportIndexHost, ImportSummary } from "./host";
 import { ImportService } from "./obsidian/importService";
 import { isCsv, registerVaultEvents } from "./obsidian/vaultEvents";
 import { CsvImporterSettingTab } from "./settings";
@@ -11,12 +11,13 @@ import { ImportStorage } from "./storage";
 import type { CsvEncoding, FileImportConfig, ImportResult, PluginData, PluginSettings } from "./types";
 import { CsvView, VIEW_TYPE_CSV } from "./view/CsvView";
 import { ImportConfigModal } from "./view/ImportConfigModal";
+import { ImportIndexView, VIEW_TYPE_IMPORT_INDEX } from "./view/ImportIndexView";
 
 /**
  * Plugin entry point: loads settings, registers the view, commands, menus and vault events, and hands the host
  * interface used by the UI to the `ImportService`.
  */
-export default class CsvImporterPlugin extends Plugin implements CsvImporterHost, SettingsHost {
+export default class CsvImporterPlugin extends Plugin implements ImportIndexHost, SettingsHost {
 	settings: PluginSettings = { ...DEFAULT_SETTINGS };
 	private store!: ConfigStore;
 	private storage!: ImportStorage;
@@ -45,6 +46,9 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 			);
 		}
 
+		this.registerView(VIEW_TYPE_IMPORT_INDEX, (leaf) => new ImportIndexView(leaf, this));
+		this.addRibbonIcon("table-properties", "Open CSV imports", () => void this.openImportIndex());
+
 		this.addSettingTab(new CsvImporterSettingTab(this.app, this));
 		registerVaultEvents(this, this.store, this.storage);
 		this.registerCommands();
@@ -53,6 +57,11 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 
 	private registerCommands(): void {
 		const svc = this.service;
+		this.addCommand({
+			id: "open-import-index",
+			name: "Open CSV imports",
+			callback: () => void this.openImportIndex(),
+		});
 		this.addCommand({
 			id: "import-current-csv",
 			name: "Import rows from current CSV file",
@@ -119,6 +128,17 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 		);
 	}
 
+	/** Opens the imports index in a new tab, or reveals the existing one. */
+	async openImportIndex(): Promise<void> {
+		const { workspace } = this.app;
+		let leaf = workspace.getLeavesOfType(VIEW_TYPE_IMPORT_INDEX)[0];
+		if (!leaf) {
+			leaf = workspace.getLeaf("tab");
+			await leaf.setViewState({ type: VIEW_TYPE_IMPORT_INDEX, active: true });
+		}
+		await workspace.revealLeaf(leaf);
+	}
+
 	private async openConfig(file: TFile): Promise<void> {
 		try {
 			const text = await this.service.readCsv(file);
@@ -172,5 +192,41 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 
 	undoLastImport(file: TFile): Promise<void> {
 		return this.service.undoLastImport(file);
+	}
+
+	// --- ImportIndexHost ---
+
+	listImports(): Promise<ImportSummary[]> {
+		return this.service.listImports();
+	}
+
+	countImportedNotes(csvPath: string): Promise<number> {
+		return this.service.countImportedNotes(csvPath);
+	}
+
+	reimport(csvPath: string): Promise<void> {
+		return this.service.reimport(csvPath);
+	}
+
+	reimportAll(): Promise<void> {
+		return this.service.reimportAll();
+	}
+
+	async configureImport(csvPath: string): Promise<void> {
+		const file = this.app.vault.getAbstractFileByPath(csvPath);
+		if (isCsv(file)) await this.openConfig(file);
+		else new Notice("The CSV file no longer exists.");
+	}
+
+	undoImport(csvPath: string): Promise<void> {
+		return this.service.undoImport(csvPath);
+	}
+
+	deleteImportedNotes(csvPath: string): Promise<number> {
+		return this.service.deleteImportedNotes(csvPath);
+	}
+
+	removeFromIndex(csvPath: string): Promise<boolean> {
+		return this.service.removeFromIndex(csvPath);
 	}
 }
