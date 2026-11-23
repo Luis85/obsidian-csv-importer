@@ -4,7 +4,7 @@ import type { ColumnConfig, FileImportConfig, ParsedCsv, PropertyType } from "..
 import { parseCsv } from "../csv/parser";
 import { convertValue, prepareConfig } from "../csv/typeInference";
 import { ImportConfigModal } from "./ImportConfigModal";
-import { LINK_TEMPLATE, TYPE_BADGES, TYPE_LABELS, conversionOptions, delimiterLabel, inferenceOptions } from "./shared";
+import { LINK_TEMPLATE, TYPE_BADGES, TYPE_LABELS, conversionOptions, delimiterLabel } from "./shared";
 
 export const VIEW_TYPE_CSV = "csv-importer-view";
 

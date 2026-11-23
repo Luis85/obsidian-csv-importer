@@ -1,6 +1,6 @@
 import { App, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { Plugin } from "obsidian";
-import type { ConflictStrategy, DelimiterOption, EmptyValueMode, FileImportConfig, PluginSettings } from "./types";
+import type { ConflictStrategy, DelimiterOption, EmptyValueMode, PluginSettings } from "./types";
 
 export { DEFAULT_SETTINGS, createDefaultFileConfig } from "./defaults";
 
