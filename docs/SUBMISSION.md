@@ -3,7 +3,7 @@
 ## Checklist
 
 1. Make sure `main` is green (CI passes: lint, test, build).
-2. Confirm `manifest.json` has `id` `csv-importer`, version `1.0.0`, and the same description as below. `versions.json` contains `"1.0.0": "1.5.0"`.
+2. Confirm `manifest.json` has `id` `csv-importer`, version `1.0.0`, and the same description as below. `versions.json` contains `"1.0.0": "1.6.6"`.
 3. Create the release. Either push the tag (the release workflow publishes it):
    ```sh
    git tag 1.0.0 && git push origin 1.0.0

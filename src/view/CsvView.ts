@@ -2,7 +2,7 @@ import { TextFileView, WorkspaceLeaf, Notice, setIcon, debounce } from "obsidian
 import type { CsvImporterHost } from "../host";
 import type { ColumnConfig, FileImportConfig, ParsedCsv } from "../types";
 import { parseCsv } from "../csv/parser";
-import { convertValue, reconcileColumns } from "../csv/typeInference";
+import { convertValue, prepareConfig } from "../csv/typeInference";
 import { ImportConfigModal } from "./ImportConfigModal";
 import { TYPE_BADGES, TYPE_LABELS, conversionOptions, delimiterLabel, inferenceOptions } from "./shared";
 
@@ -128,7 +128,7 @@ export class CsvView extends TextFileView {
 		let columns: ColumnConfig[] = [];
 		if (parsed) {
 			try {
-				columns = reconcileColumns(cfg.columns, parsed, inferenceOptions(cfg, this.host.settings));
+				columns = prepareConfig(cfg, parsed, this.host.settings.midnightAsDate).columns;
 			} catch (e) {
 				error = e instanceof Error ? e.message : String(e);
 				parsed = null;

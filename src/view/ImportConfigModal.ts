@@ -2,7 +2,7 @@ import { AbstractInputSuggest, App, Modal, Notice, Setting, TFile, TFolder, debo
 import type { CsvImporterHost } from "../host";
 import type { ColumnConfig, ConflictStrategy, DelimiterOption, FileImportConfig, ParsedCsv, PropertyType } from "../types";
 import { parseCsv } from "../csv/parser";
-import { convertValue, inferColumnType, reconcileColumns } from "../csv/typeInference";
+import { convertValue, inferColumnType, prepareConfig } from "../csv/typeInference";
 import { planNotes, resolveTargetFolder, serializeNote } from "../import/noteBuilder";
 import { TYPE_LABELS, conversionOptions, inferenceOptions } from "./shared";
 
@@ -88,7 +88,7 @@ export class ImportConfigModal extends Modal {
 		try {
 			if (this.text.trim().length > 0) {
 				this.parsed = parseCsv(this.text, { delimiter: this.cfg.delimiter, hasHeader: this.cfg.hasHeader });
-				this.cfg.columns = reconcileColumns(this.cfg.columns, this.parsed, inferenceOptions(this.cfg, this.host.settings));
+				prepareConfig(this.cfg, this.parsed, this.host.settings.midnightAsDate);
 			} else {
 				this.cfg.columns = [];
 			}
@@ -143,8 +143,7 @@ export class ImportConfigModal extends Modal {
 					.setValue(this.cfg.decimalSeparator)
 					.onChange((v) => {
 						this.cfg.decimalSeparator = v as "." | ",";
-						this.renderColumns();
-						this.updatePreview();
+						this.redetect();
 					}),
 			);
 		new Setting(el)
@@ -323,7 +322,7 @@ export class ImportConfigModal extends Modal {
 
 	private formatConverted(raw: string, type: PropertyType): string {
 		if (raw === "") return "";
-		let v: unknown;
+		let v: ReturnType<typeof convertValue>;
 		try {
 			v = convertValue(raw, type, conversionOptions(this.cfg));
 		} catch {

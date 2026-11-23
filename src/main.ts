@@ -2,7 +2,7 @@ import { MarkdownView, Notice, Plugin, TAbstractFile, TFile, TFolder } from "obs
 import type { CsvImporterHost } from "./host";
 import { ConfigStore } from "./configStore";
 import { parseCsv } from "./csv/parser";
-import { reconcileColumns } from "./csv/typeInference";
+import { prepareConfig } from "./csv/typeInference";
 import { planNotes } from "./import/noteBuilder";
 import { registerPropertyTypes, writeNotes } from "./import/importer";
 import { createDefaultFileConfig, CsvImporterSettingTab, DEFAULT_SETTINGS } from "./settings";
@@ -125,11 +125,7 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 		try {
 			const cfg = this.getFileConfig(file);
 			const parsed = parseCsv(text, cfg);
-			cfg.columns = reconcileColumns(cfg.columns, parsed, {
-				decimalSeparator: cfg.decimalSeparator,
-				midnightAsDate: this.settings.midnightAsDate,
-				listSeparator: cfg.listSeparator,
-			});
+			prepareConfig(cfg, parsed, this.settings.midnightAsDate);
 			const notes = planNotes(parsed, cfg, { path: file.path, basename: file.basename });
 			if (this.settings.registerPropertyTypes) registerPropertyTypes(this.app, cfg.columns);
 
