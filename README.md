@@ -38,6 +38,7 @@ Screenshots live in the [`docs/`](docs) folder. (Placeholder: add `docs/table-vi
 
 1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin.
 2. Run **BRAT: Add a beta plugin for testing** and enter `luis85/obsidian-csv-importer`.
+3. BRAT installs the latest GitHub release and keeps it updated.
 
 ## Usage
 
@@ -162,6 +163,7 @@ Copy `main.js`, `manifest.json` and `styles.css` into `<vault>/.obsidian/plugins
 1. Update `CHANGELOG.md`.
 2. Run `npm version patch` (or `minor` / `major`). This bumps `package.json`, `manifest.json` and `versions.json` and creates a git tag without a `v` prefix.
 3. Push the commit and the tag: `git push && git push --tags`.
+   Alternatively, publish a release in the GitHub UI with a new tag equal to the `manifest.json` version (e.g. `0.1.0`); the workflow attaches the build files to it.
 4. The [release workflow](.github/workflows/release.yml) checks that the tag equals the `manifest.json` version, builds, tests and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`.
 
 To submit the plugin to the community catalog, see [docs/SUBMISSION.md](docs/SUBMISSION.md).
