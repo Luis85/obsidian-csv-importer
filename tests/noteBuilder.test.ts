@@ -4,11 +4,12 @@ import {
 	renderTemplate,
 	resolveRowFolder,
 	resolveTargetFolder,
+	sourceLinkProperty,
 	sanitizeFileName,
 	serializeNote,
 } from "../src/import/noteBuilder";
 import { parseCsv } from "../src/csv/parser";
-import { buildColumnConfigs } from "../src/csv/typeInference";
+import { buildColumnConfigs, suggestKeyColumn } from "../src/csv/typeInference";
 import type { FileImportConfig } from "../src/types";
 
 function cfg(over: Partial<FileImportConfig> = {}): FileImportConfig {
@@ -26,6 +27,7 @@ function cfg(over: Partial<FileImportConfig> = {}): FileImportConfig {
 		emptyValues: "empty",
 		numberPrecision: null,
 		keyColumn: "",
+		adoptExistingNotes: false,
 		encoding: "auto",
 		protectEdits: true,
 		keepValuesOnEmpty: true,
@@ -59,7 +61,7 @@ describe("sanitizeFileName", () => {
 		expect(sanitizeFileName("")).toBe("");
 	});
 	it("limits length", () => {
-		expect(sanitizeFileName("x".repeat(300)).length).toBe(200);
+		expect(sanitizeFileName("x".repeat(300)).length).toBe(240);
 	});
 	it("keeps unicode", () => {
 		expect(sanitizeFileName("Größe Übung")).toBe("Größe Übung");
@@ -123,8 +125,8 @@ describe("planNotes", () => {
 	});
 
 	it("falls back to <file> <row> for empty names and dedupes paths", () => {
-		const parsed = parseCsv("Name\n\n,\nA\nA\na", { delimiter: ",", hasHeader: true });
-		// blank line skipped -> rows: "", A, A, a
+		const parsed = parseCsv("Name,Other\n,x\nA,\nA,\na,", { delimiter: ",", hasHeader: true });
+		// rows: "", A, A, a
 		const notes = planNotes(parsed, cfg({ fileNameTemplate: "{{Name}}" }), { path: "x.csv", basename: "x" });
 		expect(notes.map((n) => n.path)).toEqual(["x/x 1.md", "x/A.md", "x/A 2.md", "x/a 3.md"]);
 	});
@@ -312,5 +314,106 @@ describe("tags / aliases / cssclasses normalization", () => {
 		const parsed = parseCsv("tags,n\n,1\n", { delimiter: ",", hasHeader: true });
 		expect(planNotes(parsed, cfg(), csv)[0].frontmatter["tags"]).toBeNull();
 		expect("tags" in planNotes(parsed, cfg({ emptyValues: "omit" }), csv)[0].frontmatter).toBe(false);
+	});
+});
+
+const csv = { path: "hours.csv", basename: "hours" };
+
+describe("S2 sourceLinkProperty", () => {
+	const col = (property: string, index = 0) => ({ source: property, index, property, type: "text" as const, include: true });
+	it("is null when addSourceLink is off", () => {
+		expect(sourceLinkProperty(cfg())).toBeNull();
+	});
+	it("is 'source' normally and source_csv when a column uses 'source'", () => {
+		expect(sourceLinkProperty(cfg({ addSourceLink: true, columns: [col("a")] }))).toBe("source");
+		expect(sourceLinkProperty(cfg({ addSourceLink: true, columns: [col("Source")] }))).toBe("source_csv");
+		expect(sourceLinkProperty(cfg({ addSourceLink: true, columns: [col("source"), col("source_csv", 1)] }))).toBe(
+			"source_csv 2",
+		);
+	});
+	it("planNotes keeps the source column and writes the link elsewhere", () => {
+		const parsed = parseCsv("source,b\nweb,1", { delimiter: ",", hasHeader: true });
+		const [n] = planNotes(parsed, cfg({ addSourceLink: true }), csv);
+		expect(n.frontmatter["source"]).toBe("web");
+		expect(n.frontmatter["source_csv"]).toBe("[[hours.csv]]");
+	});
+});
+
+describe("S3 suggestKeyColumn", () => {
+	const run = (text: string) => {
+		const parsed = parseCsv(text, { delimiter: ",", hasHeader: true });
+		return suggestKeyColumn(parsed, buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: true, listSeparator: "," }));
+	};
+	it("picks a unique text column", () => {
+		expect(run("name,qty\nann,1\nbob,1")).toBe("name");
+	});
+	it("prefers id-like names and accepts numeric ids", () => {
+		expect(run("name,ID\nann,1\nbob,2")).toBe("ID");
+		expect(run("name,customer_id\nann,1\nbob,2")).toBe("customer_id");
+	});
+	it("does not pick number or date columns without an id name", () => {
+		expect(run("amount,day\n1,2024-01-01\n2,2024-01-02")).toBeNull();
+	});
+	it("requires every value non-empty and unique (case-sensitive, trimmed)", () => {
+		expect(run("n,x\na,1\n,2\nb,3")).toBeNull();
+		expect(run("n\na\n a\nb")).toBeNull();
+		expect(run("n\na\nA\nb")).toBe("n");
+		expect(run("n\n")).toBeNull();
+	});
+});
+
+describe("S4 file names", () => {
+	it("normalizes to NFC", () => {
+		expect(sanitizeFileName("Ma\u0308dchen")).toBe("M\u00e4dchen");
+	});
+	it("truncates to 240 UTF-8 bytes without splitting surrogate pairs", () => {
+		const out = sanitizeFileName("\u{1F600}".repeat(100));
+		expect(new TextEncoder().encode(out).length).toBeLessThanOrEqual(240);
+		expect([...out].every((c) => c === "\u{1F600}")).toBe(true);
+		expect([...out].length).toBe(60);
+		const de = sanitizeFileName("\u00fc".repeat(200));
+		expect(new TextEncoder().encode(de).length).toBe(240);
+	});
+	it("prefixes Windows reserved names", () => {
+		for (const n of ["CON", "nul", "COM1", "lpt9", "con.txt", "Aux.tar.gz"]) expect(sanitizeFileName(n)).toBe("_" + n);
+		expect(sanitizeFileName("console")).toBe("console");
+		expect(sanitizeFileName("COM10")).toBe("COM10");
+	});
+	it("dedupes case-insensitively and avoids collisions with literal suffix names", () => {
+		const parsed = parseCsv("n\nA\na\nA 2\nA", { delimiter: ",", hasHeader: true });
+		const notes = planNotes(parsed, cfg({ fileNameTemplate: "{{n}}" }), csv);
+		const lower = notes.map((x) => x.path.toLowerCase());
+		expect(new Set(lower).size).toBe(4);
+		expect(notes[0].path).toBe("hours/A.md");
+		expect(notes[1].path).toBe("hours/a 2.md");
+		expect(notes[2].path).toBe("hours/A 2 2.md");
+	});
+	it("handles 10k duplicates quickly", () => {
+		const parsed = parseCsv("n\n" + "x\n".repeat(10000), { delimiter: ",", hasHeader: true });
+		const t = Date.now();
+		const notes = planNotes(parsed, cfg({ fileNameTemplate: "{{n}}" }), csv);
+		expect(Date.now() - t).toBeLessThan(1500);
+		expect(new Set(notes.map((x) => x.path)).size).toBe(10000);
+	});
+});
+
+describe("S8 target folder", () => {
+	it("rejects .. segments and drive paths", () => {
+		for (const f of ["../x", "a/../b", "a\\..\\b", "C:\\", "c:/Users"]) {
+			expect(() => resolveTargetFolder(cfg({ targetFolder: f }), "a.csv")).toThrow(
+				"The target folder must be inside the vault",
+			);
+		}
+		const parsed = parseCsv("a\n1", { delimiter: ",", hasHeader: true });
+		expect(() => planNotes(parsed, cfg({ targetFolder: "../{{a}}" }), csv)).toThrow("inside the vault");
+		expect(() =>
+			resolveRowFolder(cfg({ targetFolder: "x/.." }), "a.csv", { headers: [], row: [], rowNumber: 1, fileBasename: "a" }),
+		).toThrow("inside the vault");
+	});
+	it("placeholder values with .. stay safe", () => {
+		const parsed = parseCsv("a\n..", { delimiter: ",", hasHeader: true });
+		const [n] = planNotes(parsed, cfg({ targetFolder: "x/{{a}}" }), csv);
+		expect(n.path.startsWith("x/")).toBe(true);
+		expect(n.path).not.toContain("..");
 	});
 });

@@ -10,13 +10,14 @@ export const TYPE_LABELS: Record<PropertyType, string> = {
 	list: "List",
 };
 
+/** Short labels used on the type badges in the table header. */
 export const TYPE_BADGES: Record<PropertyType, string> = {
-	text: "text",
-	number: "num",
-	checkbox: "bool",
-	date: "date",
-	datetime: "datetime",
-	list: "list",
+	text: "Text",
+	number: "Number",
+	checkbox: "Yes/no",
+	date: "Date",
+	datetime: "Date & time",
+	list: "List",
 };
 
 export function inferenceOptions(cfg: FileImportConfig, settings: PluginSettings): InferenceOptions {

@@ -1,4 +1,4 @@
-import { MarkdownView, normalizePath, Notice, Plugin, TAbstractFile, TFile, TFolder } from "obsidian";
+import { MarkdownView, normalizePath, Notice, Plugin, requireApiVersion, TAbstractFile, TFile, TFolder } from "obsidian";
 import type { CsvImporterHost } from "./host";
 import { ConfigStore } from "./configStore";
 import { parseCsv } from "./csv/parser";
@@ -9,7 +9,8 @@ import { planNotes, resolveTargetFolder } from "./import/noteBuilder";
 import { ImportStorage } from "./storage";
 import { confirmDialog } from "./view/ConfirmModal";
 import { ImportRunModal } from "./view/ImportRunModal";
-import { applyUndoToSnapshot, registerPropertyTypes, writeNotes } from "./import/importer";
+import { applyUndo, applyUndoToSnapshot, registerPropertyTypes, writeNotes } from "./import/importer";
+import { valueHash } from "./import/merge";
 import { createDefaultFileConfig, CsvImporterSettingTab, DEFAULT_SETTINGS } from "./settings";
 import type { SettingsHost } from "./settings";
 import type { FileImportConfig, ImportResult, PluginData, PluginSettings } from "./types";
@@ -82,6 +83,11 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 				if (!checking) void this.importFromDisk(file);
 				return true;
 			},
+		});
+		this.addCommand({
+			id: "reimport-all-csv",
+			name: "Re-import all configured CSV files",
+			callback: () => void this.reimportAll(),
 		});
 		this.addCommand({
 			id: "undo-import-current-csv",
@@ -164,7 +170,7 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 	}
 
 	canUndo(file: TFile): boolean {
-		return this.storage.getUndo(file.path) !== null;
+		return this.storage.hasUndo(file.path);
 	}
 
 	async importFile(file: TFile, text: string): Promise<ImportResult> {
@@ -175,9 +181,14 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 			const drift = cfg.lastImport === null ? null : detectHeaderDrift(cfg.columns, parsed);
 			prepareConfig(cfg, parsed, this.settings.midnightAsDate);
 			const notes = planNotes(parsed, cfg, { path: file.path, basename: file.basename });
-			const stored = await this.storage.load(file.path);
+			const stored = await this.storage.loadSnapshot(file.path);
 			const targetFolder = resolveTargetFolder(cfg, file.path);
 			const staticFolder = staticPrefix(targetFolder);
+			const basePathFor = (): string | null => {
+				if (!staticFolder) return null;
+				const p = normalizePath(`${staticFolder}.base`);
+				return this.app.vault.getAbstractFileByPath(p) instanceof TFile ? p : null;
+			};
 
 			const modal = new ImportRunModal(this.app, {
 				csvPath: file.path,
@@ -185,34 +196,52 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 				reportFolder: file.parent && !file.parent.isRoot() ? file.parent.path : "",
 				drift,
 				preview: async () =>
-					(await writeNotes(this.app, notes, cfg, { dryRun: true, snapshot: stored.snapshot })).result,
+					(await writeNotes(this.app, notes, cfg, { dryRun: true, snapshot: stored, warnings: parsed.warnings })).result,
 				execute: async (opts) => {
 					this.notifyTypeConflicts(cfg);
-					const snap = (await this.storage.load(file.path)).snapshot;
-					const out = await writeNotes(this.app, notes, cfg, { snapshot: snap, ...opts });
-					await this.storage.saveSnapshot(file.path, out.snapshot);
-					const undoable = out.undo.created.length > 0 || out.undo.modified.length > 0;
-					if (undoable) {
-						await this.storage.saveUndo(file.path, { ...out.undo, csvPath: file.path });
-					}
-					cfg.lastImport = Date.now();
-					await this.saveFileConfig(file, cfg);
+					const snap = await this.storage.loadSnapshot(file.path);
+					const out = await writeNotes(this.app, notes, cfg, {
+						snapshot: snap,
+						warnings: parsed.warnings,
+						onCheckpoint: async (s, u) => {
+							try {
+								await this.storage.saveSnapshot(file.path, s);
+								if (u.created.length > 0 || u.modified.length > 0) {
+									await this.storage.saveUndo(file.path, { ...u, csvPath: file.path });
+								}
+							} catch (e) {
+								console.error("CSV Importer: could not save import state", e);
+							}
+						},
+						...opts,
+					});
+					const undo = { ...out.undo, csvPath: file.path };
+					const undoable = undo.created.length > 0 || undo.modified.length > 0;
 					if (cfg.createBase && staticFolder && (out.result.created > 0 || out.result.updated > 0)) {
-						const basePath = await this.createBaseFile(staticFolder, cfg, file.basename);
-						if (basePath) {
+						const created = await this.createBaseFile(staticFolder, cfg, file.basename);
+						if (created) {
 							// Trashed by undo together with the notes it lists.
-							const stored = this.storage.getUndo(file.path);
-							await this.storage.saveUndo(file.path, {
-								...(stored && undoable ? stored : { csvPath: file.path, timestamp: Date.now(), created: [], modified: [] }),
-								created: [...(stored && undoable ? stored.created : []), basePath],
-							});
-							return { result: out.result, undoable: true };
+							undo.created.push(created.path);
+							(undo.writtenHashes ??= {})[created.path] = valueHash(created.content);
 						}
 					}
-					return { result: out.result, undoable };
+					await this.storage.saveSnapshot(file.path, out.snapshot);
+					const keepUndo = undo.created.length > 0 || undo.modified.length > 0;
+					if (keepUndo) await this.storage.saveUndo(file.path, undo);
+					cfg.lastImport = Date.now();
+					await this.saveFileConfig(file, cfg);
+					return { result: out.result, undoable: undoable || keepUndo };
 				},
 				canUndo: () => this.canUndo(file),
 				undo: () => this.undoLastImport(file),
+				targetFolder: staticFolder,
+				openFolder: () => this.revealFolder(staticFolder),
+				basePath: basePathFor,
+				openBase: () => {
+					const p = basePathFor();
+					const f = p ? this.app.vault.getAbstractFileByPath(p) : null;
+					if (f instanceof TFile) void this.app.workspace.getLeaf("tab").openFile(f);
+				},
 			});
 			modal.open();
 			return await modal.closed;
@@ -228,13 +257,14 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 				cancelled: false,
 				dryRun: true,
 				rows: [],
+				warnings: [],
 				errors: [{ row: 0, message: e instanceof Error ? e.message : String(e) }],
 			};
 		}
 	}
 
 	async undoLastImport(file: TFile): Promise<void> {
-		const manifest = this.storage.getUndo(file.path);
+		const manifest = await this.storage.loadUndo(file.path);
 		if (!manifest) {
 			new Notice("There is no import to undo for this file.");
 			return;
@@ -242,44 +272,24 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 		const ok = await confirmDialog(
 			this.app,
 			"Undo last import",
-			`This moves ${manifest.created.length} created ${manifest.created.length === 1 ? "note" : "notes"} to the trash and restores ${manifest.modified.length} modified ${manifest.modified.length === 1 ? "note" : "notes"} to their previous content. Changes you made to these notes since the import are lost.`,
+			`This moves ${manifest.created.length} created ${manifest.created.length === 1 ? "note" : "notes"} to the trash and restores ${manifest.modified.length} modified ${manifest.modified.length === 1 ? "note" : "notes"} to their previous content. Notes you changed after the import are left as they are.`,
 			"Undo import",
 			true,
 		);
 		if (!ok) return;
-		const stored = await this.storage.load(file.path);
-		let trashed = 0;
-		let restored = 0;
-		let failed = 0;
-		for (const path of manifest.created) {
-			try {
-				const f = this.app.vault.getAbstractFileByPath(path);
-				if (f instanceof TFile) {
-					await this.app.fileManager.trashFile(f);
-					trashed++;
-				}
-			} catch (e) {
-				failed++;
-				console.error("CSV Importer: could not trash note", path, e);
-			}
-		}
-		for (const m of manifest.modified) {
-			try {
-				const f = this.app.vault.getAbstractFileByPath(m.path);
-				if (f instanceof TFile) {
-					await this.app.vault.modify(f, m.content);
-					restored++;
-				}
-			} catch (e) {
-				failed++;
-				console.error("CSV Importer: could not restore note", m.path, e);
-			}
-		}
-		await this.storage.saveSnapshot(file.path, applyUndoToSnapshot(stored.snapshot, manifest));
+		const snapshot = await this.storage.loadSnapshot(file.path);
+		const outcome = await applyUndo(this.app, manifest);
+		await this.storage.saveSnapshot(file.path, applyUndoToSnapshot(snapshot, manifest, new Set(outcome.changed)));
 		await this.storage.saveUndo(file.path, null);
-		const parts = [`${trashed} removed`, `${restored} restored`];
-		if (failed > 0) parts.push(`${failed} failed`);
-		new Notice(`Import undone: ${parts.join(", ")}.`, 8000);
+		const parts = [`${outcome.trashed} removed`, `${outcome.restored} restored`];
+		if (outcome.failed > 0) parts.push(`${outcome.failed} failed`);
+		let message = `Import undone: ${parts.join(", ")}.`;
+		if (outcome.changed.length > 0) {
+			const n = outcome.changed.length;
+			message += ` ${n} ${n === 1 ? "note was" : "notes were"} changed after the import and ${n === 1 ? "was" : "were"} left as ${n === 1 ? "it is" : "they are"}.`;
+		}
+		if ((manifest as { truncated?: boolean }).truncated) message += " The import was too large to undo completely.";
+		new Notice(message, 10000);
 	}
 
 	private notifyTypeConflicts(cfg: FileImportConfig): void {
@@ -291,24 +301,61 @@ export default class CsvImporterPlugin extends Plugin implements CsvImporterHost
 			(c) =>
 				`Property "${c.property}" is already typed as ${label(c.existing)} in Obsidian; kept that type. Values were written as ${label(c.wanted)}.`,
 		);
-		console.warn("CSV Importer: property type conflicts", reg.conflicts);
 		new Notice(lines.slice(0, 5).join("\n") + (lines.length > 5 ? `\n…and ${lines.length - 5} more.` : ""), 12000);
 	}
 
-	/** Returns the path of the created base file, or null if none was created. */
-	private async createBaseFile(folder: string, cfg: FileImportConfig, csvBasename: string): Promise<string | null> {
+	/** Creates the base file next to the notes folder (Obsidian 1.9+ only). Returns its path and content, or null. */
+	private async createBaseFile(
+		folder: string,
+		cfg: FileImportConfig,
+		csvBasename: string,
+	): Promise<{ path: string; content: string } | null> {
+		if (!requireApiVersion("1.9.0")) return null;
 		try {
 			const path = normalizePath(`${folder}.base`);
 			if (this.app.vault.getAbstractFileByPath(path)) return null;
 			const props = cfg.columns.filter((c) => c.include).map((c) => c.property);
-			await this.app.vault.create(path, buildBaseFile(folder, props, csvBasename));
+			const content = buildBaseFile(folder, props, csvBasename);
+			await this.app.vault.create(path, content);
 			new Notice(`Created ${path}.`);
-			return path;
+			return { path, content };
 		} catch (e) {
 			console.error("CSV Importer: could not create base file", e);
 			new Notice("Could not create the base file.");
 			return null;
 		}
+	}
+
+	/** Shows a folder in the file explorer; falls back to opening its first note. */
+	private revealFolder(path: string): void {
+		const folder = path ? this.app.vault.getAbstractFileByPath(path) : this.app.vault.getRoot();
+		if (!(folder instanceof TFolder)) {
+			new Notice("The folder does not exist yet.");
+			return;
+		}
+		const leaf = this.app.workspace.getLeavesOfType("file-explorer")[0];
+		const view = leaf?.view as unknown as { revealInFolder?: (f: TAbstractFile) => void } | undefined;
+		if (leaf && typeof view?.revealInFolder === "function") {
+			void this.app.workspace.revealLeaf(leaf);
+			view.revealInFolder(folder);
+			return;
+		}
+		const first = folder.children.find((c): c is TFile => c instanceof TFile);
+		if (first) void this.app.workspace.getLeaf(false).openFile(first);
+		else new Notice("The folder is empty.");
+	}
+
+	/** Runs the import dialog for every configured CSV file that still exists, one after the other. */
+	private async reimportAll(): Promise<void> {
+		const files = this.store
+			.paths()
+			.map((p) => this.app.vault.getAbstractFileByPath(p))
+			.filter(isCsv);
+		if (files.length === 0) {
+			new Notice("No configured CSV files found.");
+			return;
+		}
+		for (const f of files) await this.importFromDisk(f);
 	}
 
 	// --- helpers ---

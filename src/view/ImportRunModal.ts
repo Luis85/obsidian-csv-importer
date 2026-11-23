@@ -1,4 +1,4 @@
-import { Modal, Notice, normalizePath } from "obsidian";
+import { Modal, Notice, normalizePath, setIcon } from "obsidian";
 import type { App } from "obsidian";
 import type { ImportResult, NoteOutcome, RowOutcome } from "../types";
 
@@ -23,15 +23,23 @@ export interface ImportRunControls {
 	}): Promise<{ result: ImportResult; undoable: boolean }>;
 	canUndo(): boolean;
 	undo(): Promise<void>;
+	/** Target folder shown in the preview header (static prefix when it has placeholders). */
+	targetFolder: string;
+	/** Reveal the target folder in the file explorer. */
+	openFolder(): void;
+	/** Path of the .base file for these notes if it exists (after a run), else null. */
+	basePath(): string | null;
+	/** Open the .base file in a new tab. */
+	openBase(): void;
 }
 
 const LIST_LIMIT = 200;
 const OUTCOME_LABEL: Record<NoteOutcome, string> = {
 	created: "New",
-	updated: "Update",
+	updated: "Updated",
 	unchanged: "Unchanged",
-	skipped: "Skip",
-	failed: "Fail",
+	skipped: "Skipped",
+	failed: "Failed",
 };
 
 function pad(n: number): string {
@@ -94,6 +102,9 @@ export class ImportRunModal extends Modal {
 		}
 		this.latest = result;
 		const el = this.reset();
+		const target = this.ctl.targetFolder;
+		if (target) el.createDiv({ cls: "csv-importer-run-target", text: `Notes go to ${target}` });
+		this.renderWarnings(el, result);
 		this.renderDrift(el);
 		this.renderStats(el, result);
 		this.renderRows(el, result.rows, true);
@@ -117,10 +128,10 @@ export class ImportRunModal extends Modal {
 		const bar = el.createEl("progress", { cls: "csv-importer-run-progress" });
 		bar.max = 1;
 		bar.value = 0;
-		const label = el.createDiv({ cls: "csv-importer-run-note", text: "Starting…" });
+		const label = el.createDiv({ cls: "csv-importer-run-note", text: "Starting…", attr: { "aria-live": "polite" } });
 		const stopBtn = this.buttons([
 			{
-				text: "Stop",
+				text: "Stop import",
 				onClick: () => {
 					this.stop = true;
 					label.setText("Stopping after the current row…");
@@ -153,31 +164,33 @@ export class ImportRunModal extends Modal {
 	}
 
 	private showDone(result: ImportResult): void {
-		this.setTitle(result.cancelled ? "Import stopped" : "Import finished");
+		this.setTitle(doneTitle(result));
 		const el = this.reset();
+		el.setAttr("aria-live", "polite");
+		this.renderWarnings(el, result);
 		this.renderStats(el, result);
 		const problems = result.rows.filter((r) => r.outcome === "skipped" || r.outcome === "failed");
 		if (problems.length > 0) {
 			el.createEl("h4", { text: "Skipped and failed rows" });
 			this.renderRows(el, problems, false);
 		}
-		const buttons = [
-			{ text: "Save report", cta: true, onClick: () => void this.saveReport(result) },
-			...(this.undoable && this.ctl.canUndo()
-				? [
-						{
-							text: "Undo import",
-							onClick: () => {
-								void this.ctl.undo().then(() => {
-									this.undoable = false;
-									if (!this.ctl.canUndo()) this.close();
-								});
-							},
-						},
-					]
-				: []),
-			{ text: "Close", onClick: () => this.close() },
+		const buttons: { text: string; cta?: boolean; onClick: () => void }[] = [
+			{ text: "Save report as note", onClick: () => void this.saveReport(result) },
 		];
+		if (this.undoable && this.ctl.canUndo()) {
+			buttons.push({
+				text: "Undo import",
+				onClick: () => {
+					void this.ctl.undo().then(() => {
+						this.undoable = false;
+						if (!this.ctl.canUndo()) this.close();
+					});
+				},
+			});
+		}
+		buttons.push({ text: "Reveal folder", onClick: () => this.ctl.openFolder() });
+		if (this.ctl.basePath() !== null) buttons.push({ text: "Open base", onClick: () => this.ctl.openBase() });
+		buttons.push({ text: "Close", cta: true, onClick: () => this.close() });
 		this.buttons(buttons);
 	}
 
@@ -208,14 +221,22 @@ export class ImportRunModal extends Modal {
 		if (d.removed.length > 0) box.createDiv({ text: `Missing columns: ${d.removed.join(", ")}` });
 	}
 
+	private renderWarnings(el: HTMLElement, r: ImportResult): void {
+		if (!r.warnings || r.warnings.length === 0) return;
+		const box = el.createDiv({ cls: "csv-importer-callout mod-warning", attr: { role: "status" } });
+		setIcon(box.createSpan({ cls: "csv-importer-callout-icon" }), "alert-triangle");
+		const list = box.createDiv({ cls: "csv-importer-callout-text" });
+		for (const w of r.warnings) list.createDiv({ text: w });
+	}
+
 	private renderStats(el: HTMLElement, r: ImportResult): void {
 		const grid = el.createDiv({ cls: "csv-importer-run-stats" });
 		const tiles: [string, number, string][] = [
 			["New", r.created, "created"],
-			["Update", r.updated, "updated"],
+			["Updated", r.updated, "updated"],
 			["Unchanged", r.unchanged, "unchanged"],
-			["Skip", r.skipped, "skipped"],
-			["Fail", r.failed, "failed"],
+			["Skipped", r.skipped, "skipped"],
+			["Failed", r.failed, "failed"],
 		];
 		for (const [name, n, cls] of tiles) {
 			const t = grid.createDiv({ cls: `csv-importer-run-tile is-${cls}${n === 0 ? " is-zero" : ""}` });
@@ -301,5 +322,15 @@ function errText(e: unknown): string {
 }
 
 function emptyResult(): ImportResult {
-	return { created: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0, cancelled: false, dryRun: true, rows: [], errors: [] };
+	return { created: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0, cancelled: false, dryRun: true, rows: [], warnings: [], errors: [] };
+}
+
+function doneTitle(r: ImportResult): string {
+	const parts: string[] = [];
+	if (r.created > 0) parts.push(`${r.created} created`);
+	if (r.updated > 0) parts.push(`${r.updated} updated`);
+	if (r.skipped > 0) parts.push(`${r.skipped} skipped`);
+	if (r.failed > 0) parts.push(`${r.failed} failed`);
+	const head = r.cancelled ? "Import stopped" : "Import finished";
+	return parts.length > 0 ? `${head}: ${parts.join(", ")}` : `${head}: nothing to change`;
 }

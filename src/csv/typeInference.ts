@@ -33,7 +33,10 @@ export function formatNumber(n: number, precision?: number | null): string {
 	if (m) {
 		const exp = Number(m[4]);
 		const mantDigits = (m[3] ?? "").length;
-		if (exp < 0) str = n.toFixed(Math.min(100, mantDigits - exp));
+		if (exp < 0 && mantDigits - exp > 100) {
+			// Too small for toFixed (would round to 0): keep exponent form, always with a decimal point (YAML float).
+			str = `${m[1]}${m[2]}.${m[3] ?? "0"}e${m[4]}`;
+		} else if (exp < 0) str = n.toFixed(mantDigits - exp);
 		else str = (m[1] + m[2] + (m[3] ?? "")).padEnd(m[1].length + 1 + exp, "0");
 	}
 	return str === "-0" ? "0" : str;
@@ -60,6 +63,7 @@ export function parseNumber(raw: string, decimalSeparator: "." | ",", strict = f
 	if (intPart === undefined && frac === undefined) return null;
 	const intDigits = (intPart ?? "").replace(/[.,]/g, "");
 	if (strict) {
+		if (sign === "+" || exp !== undefined) return null;
 		if (intDigits.length > 1 && intDigits.startsWith("0")) return null;
 		if (intDigits.length + (frac?.length ?? 0) > 15) return null;
 	}
@@ -81,7 +85,7 @@ export interface ParsedDate {
 const DATE_RE = /^(?:(\d{4})-(\d{2})-(\d{2})|(\d{4})\/(\d{2})\/(\d{2})|(\d{2})\.(\d{2})\.(\d{4}))$/;
 const DATE_SRC = "(\\d{4}-\\d{2}-\\d{2}|\\d{4}/\\d{2}/\\d{2}|\\d{2}\\.\\d{2}\\.\\d{4})";
 const DATETIME_RE = new RegExp(
-	`^${DATE_SRC}[T ](\\d{1,2}):(\\d{2})(?::(\\d{2})(?:[.,]\\d+)?)?\\s*(?:Z|[+-]\\d{2}(?::?\\d{2})?)?$`,
+	`^${DATE_SRC}[T ](\\d{1,2}):(\\d{2})(?::(\\d{2})(?:[.,]\\d+)?)?\\s*(Z|[+-]\\d{2}(?::?\\d{2})?)?$`,
 );
 
 function pad(n: number | string, len = 2): string {
@@ -118,9 +122,18 @@ export function parseDateValue(raw: string): ParsedDate | null {
 	return { kind: "datetime", date: d, time: `${pad(h)}:${pad(mi)}:${pad(sec)}` };
 }
 
+/** True when at least one value is a datetime carrying a `Z` / UTC-offset suffix (which conversion drops). */
+export function hasTimezoneOffsets(values: string[]): boolean {
+	for (const v of values) {
+		const m = DATETIME_RE.exec(v.trim());
+		if (m && m[5] !== undefined && parseDatePart(m[1]) !== null) return true;
+	}
+	return false;
+}
+
 /**
  * Interpret a plain number as an Excel serial date (1900 date system incl. the Lotus leap-year bug:
- * serial 60 is the fake 1900-02-29, serials > 60 count from 1899-12-30). Fraction = time of day.
+ * serial 60 is the fake 1900-02-29 and is rejected, serials > 60 count from 1899-12-30). Fraction = time of day.
  * Range 1..2958465. Never used for inference.
  */
 export function parseExcelSerial(raw: string, decimalSeparator: "." | ","): ParsedDate | null {
@@ -134,13 +147,10 @@ export function parseExcelSerial(raw: string, decimalSeparator: "." | ","): Pars
 		day += 1;
 		secs -= 86400;
 	}
-	let date: string;
-	if (day === 60) date = "1900-02-29";
-	else {
-		const base = day < 60 ? Date.UTC(1899, 11, 31) : Date.UTC(1899, 11, 30);
-		const d = new Date(base + day * 86400000);
-		date = `${pad(d.getUTCFullYear(), 4)}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-	}
+	if (day === 60) return null; // fake 1900-02-29 (Lotus bug): not a real date
+	const base = day < 60 ? Date.UTC(1899, 11, 31) : Date.UTC(1899, 11, 30);
+	const dt = new Date(base + day * 86400000);
+	const date = `${pad(dt.getUTCFullYear(), 4)}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
 	if (secs === 0) return { kind: "date", date };
 	return { kind: "datetime", date, time: `${pad(Math.floor(secs / 3600))}:${pad(Math.floor((secs % 3600) / 60))}:${pad(secs % 60)}` };
 }
@@ -160,23 +170,60 @@ function parseBool(raw: string): boolean | null {
 // ---------------------------------------------------------------- API
 
 /**
- * Infer the property type of a column from its raw (string) values. Empty values are ignored.
- * Order: checkbox (true/false/yes/no), number, date, datetime, else text. `list` is never inferred.
+ * Single pass over `count` values (via `get`) deciding the column type. Empty values are ignored.
+ * Order: checkbox, number, date, datetime, else text.
  */
-export function inferColumnType(values: string[], opts: InferenceOptions): PropertyType {
-	const vals = values.map((v) => v.trim()).filter((v) => v !== "");
-	if (vals.length === 0) return "text";
-	if (vals.every((v) => parseBool(v) !== null)) return "checkbox";
-	if (vals.every((v) => parseNumber(v, opts.decimalSeparator, true) !== null)) return "number";
-	const dates = vals.map(parseDateValue);
-	if (dates.every((d) => d !== null)) {
-		const list = dates.filter((d): d is ParsedDate => d !== null);
-		const anyTime = list.some((d) => d.kind === "datetime");
+function inferFrom(count: number, get: (i: number) => string, opts: InferenceOptions): PropertyType {
+	let n = 0;
+	let allBool = true;
+	let anyNotNo = false;
+	let allNum = true;
+	let allDate = true;
+	let anyTime = false;
+	let allMidnight = true;
+	for (let i = 0; i < count; i++) {
+		const v = get(i).trim();
+		if (v === "") continue;
+		n++;
+		if (allBool) {
+			if (parseBool(v) === null) allBool = false;
+			else if (v !== "no" && v !== "No" && v !== "NO") anyNotNo = true;
+		}
+		if (allNum && parseNumber(v, opts.decimalSeparator, true) === null) allNum = false;
+		if (allDate) {
+			const d = parseDateValue(v);
+			if (d === null) allDate = false;
+			else if (d.kind === "datetime") {
+				anyTime = true;
+				if (d.time !== "00:00:00") allMidnight = false;
+			}
+		}
+		if (!allBool && !allNum && !allDate) return "text";
+	}
+	if (n === 0) return "text";
+	// A column of only bare "no" is far more likely a text/word column than a checkbox.
+	if (allBool && anyNotNo) return "checkbox";
+	if (allNum) return "number";
+	if (allDate) {
 		if (!anyTime) return "date";
-		if (opts.midnightAsDate && list.every((d) => d.kind === "date" || d.time === "00:00:00")) return "date";
+		if (opts.midnightAsDate && allMidnight) return "date";
 		return "datetime";
 	}
 	return "text";
+}
+
+/**
+ * Infer the property type of a column from its raw (string) values. Empty values are ignored.
+ * Order: checkbox (true/false/yes/no), number, date, datetime, else text. `list` is never inferred.
+ * Strict: "+49..." and exponents ("1e5") are text; a column of only bare "no" is text.
+ */
+export function inferColumnType(values: string[], opts: InferenceOptions): PropertyType {
+	return inferFrom(values.length, (i) => values[i], opts);
+}
+
+function inferColumn(parsed: ParsedCsv, index: number, opts: InferenceOptions): PropertyType {
+	const rows = parsed.rows;
+	return inferFrom(rows.length, (i) => rows[i][index] ?? "", opts);
 }
 
 /**
@@ -228,19 +275,22 @@ export function toPropertyName(header: string): string {
 		.trim();
 	// strip leading indicator characters
 	s = s.replace(/^[-?:!&*|>'"%@`\s]+/, "").trim();
+	if (s.length > 200) {
+		let cut = 200;
+		const c = s.charCodeAt(cut - 1);
+		if (c >= 0xd800 && c <= 0xdbff) cut--; // do not split a surrogate pair
+		s = s.slice(0, cut).trim();
+	}
 	return s === "" ? "property" : s;
 }
 
+/** `used` holds lower-cased names: property names are unique case-insensitively ("Name" vs "name" -> "name 2"). */
 function uniqueName(base: string, used: Set<string>): string {
 	let name = base;
 	let n = 2;
-	while (used.has(name)) name = `${base} ${n++}`;
-	used.add(name);
+	while (used.has(name.toLowerCase())) name = `${base} ${n++}`;
+	used.add(name.toLowerCase());
 	return name;
-}
-
-function columnValues(parsed: ParsedCsv, index: number): string[] {
-	return parsed.rows.map((r) => r[index] ?? "");
 }
 
 /** Build fresh column configs (inferred types, all included) for a parsed CSV. Property names are unique. */
@@ -250,7 +300,7 @@ export function buildColumnConfigs(parsed: ParsedCsv, opts: InferenceOptions): C
 		source,
 		index,
 		property: uniqueName(toPropertyName(source), used),
-		type: inferColumnType(columnValues(parsed, index), opts),
+		type: inferColumn(parsed, index, opts),
 		include: true,
 	}));
 }
@@ -266,7 +316,7 @@ export function reconcileColumns(existing: ColumnConfig[], parsed: ParsedCsv, op
 	const used = new Set<string>();
 	for (const h of parsed.headers) {
 		const c = bySource.get(h);
-		if (c) used.add(c.property);
+		if (c) used.add(c.property.toLowerCase());
 	}
 	return parsed.headers.map((source, index) => {
 		const c = bySource.get(source);
@@ -275,7 +325,7 @@ export function reconcileColumns(existing: ColumnConfig[], parsed: ParsedCsv, op
 			source,
 			index,
 			property: uniqueName(toPropertyName(source), used),
-			type: inferColumnType(columnValues(parsed, index), opts),
+			type: inferColumn(parsed, index, opts),
 			include: true,
 		};
 	});
@@ -290,10 +340,18 @@ export function detectDecimalSeparator(parsed: ParsedCsv): "." | "," | null {
 	let comma = 0;
 	let dot = 0;
 	for (let c = 0; c < parsed.headers.length; c++) {
-		const vals = parsed.rows.map((r) => (r[c] ?? "").trim()).filter((v) => v !== "");
-		if (vals.length === 0) continue;
-		const asDot = vals.every((v) => parseNumber(v, ".", true) !== null);
-		const asComma = vals.every((v) => parseNumber(v, ",", true) !== null);
+		let seen = false;
+		let asDot = true;
+		let asComma = true;
+		for (const r of parsed.rows) {
+			const v = (r[c] ?? "").trim();
+			if (v === "") continue;
+			seen = true;
+			if (asDot && parseNumber(v, ".", true) === null) asDot = false;
+			if (asComma && parseNumber(v, ",", true) === null) asComma = false;
+			if (!asDot && !asComma) break;
+		}
+		if (!seen) continue;
 		if (asComma && !asDot) comma++;
 		else if (asDot && !asComma) dot++;
 	}
@@ -335,4 +393,36 @@ export function detectHeaderDrift(columns: ColumnConfig[], parsed: ParsedCsv): {
 		added: parsed.headers.filter((h) => !saved.has(h)),
 		removed: columns.map((c) => c.source).filter((s) => !current.has(s)),
 	};
+}
+
+const ID_NAME_RE = /^(?:id|key|uuid|nr|no|nummer|number|code)$/i;
+
+/**
+ * Suggest a column to use as the note key: the first included column whose values are non-empty in every row
+ * and unique (case-sensitive, trimmed). Id-like headers (id, key, uuid, nr, no, nummer, number, code, or ending
+ * in "id") are preferred; number/date/checkbox/list columns are only considered when named like an id.
+ * Returns the column's `source` or null.
+ */
+export function suggestKeyColumn(parsed: ParsedCsv, columns: ColumnConfig[]): string | null {
+	if (parsed.rows.length === 0) return null;
+	let fallback: string | null = null;
+	for (const col of columns) {
+		if (!col.include) continue;
+		const idLike = ID_NAME_RE.test(col.source.trim()) || /id$/i.test(col.source.trim());
+		if (!idLike && col.type !== "text") continue;
+		const seen = new Set<string>();
+		let ok = true;
+		for (const r of parsed.rows) {
+			const v = (r[col.index] ?? "").trim();
+			if (v === "" || seen.has(v)) {
+				ok = false;
+				break;
+			}
+			seen.add(v);
+		}
+		if (!ok) continue;
+		if (idLike) return col.source;
+		fallback ??= col.source;
+	}
+	return fallback;
 }

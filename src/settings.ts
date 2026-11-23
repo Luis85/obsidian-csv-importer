@@ -1,5 +1,6 @@
-import { App, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { Plugin } from "obsidian";
+import { confirmDialog } from "./view/ConfirmModal";
 import type { ConflictStrategy, CsvEncoding, DelimiterOption, EmptyValueMode, PluginSettings } from "./types";
 
 export { DEFAULT_SETTINGS, createDefaultFileConfig } from "./defaults";
@@ -9,37 +10,6 @@ export interface SettingsHost {
 	settings: PluginSettings;
 	saveSettings(): Promise<void>;
 	forgetAllFileConfigs(): Promise<void>;
-}
-
-class ConfirmModal extends Modal {
-	constructor(
-		app: App,
-		private readonly message: string,
-		private readonly confirmText: string,
-		private readonly onConfirm: () => void,
-	) {
-		super(app);
-	}
-
-	onOpen(): void {
-		this.setTitle("Are you sure?");
-		this.contentEl.createEl("p", { text: this.message });
-		new Setting(this.contentEl)
-			.addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()))
-			.addButton((b) =>
-				b
-					.setButtonText(this.confirmText)
-					.setWarning()
-					.onClick(() => {
-						this.close();
-						this.onConfirm();
-					}),
-			);
-	}
-
-	onClose(): void {
-		this.contentEl.empty();
-	}
 }
 
 export class CsvImporterSettingTab extends PluginSettingTab {
@@ -58,7 +28,10 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 		};
 		containerEl.empty();
 
-		new Setting(containerEl).setName("Defaults for new files").setHeading();
+		new Setting(containerEl)
+			.setDesc("Defaults for CSV files you have not configured yet. Each file keeps its own settings once you save them.");
+
+		new Setting(containerEl).setName("Reading CSV files").setHeading();
 
 		new Setting(containerEl)
 			.setName("Encoding")
@@ -109,6 +82,41 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("List separator")
+			.setDesc("Splits cell values of list columns into items.")
+			.addText((t) =>
+				t.setValue(s.defaultListSeparator).onChange((v) => {
+					s.defaultListSeparator = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Empty cells")
+			.setDesc("How empty cells are written into the properties of a note.")
+			.addDropdown((d) =>
+				d
+					.addOptions({ empty: "Leave property empty", omit: "Omit property" })
+					.setValue(s.defaultEmptyValues)
+					.onChange((v) => {
+						s.defaultEmptyValues = v as EmptyValueMode;
+						save();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Treat midnight timestamps as dates")
+			.setDesc("Detect a date instead of a date and time when every time in a column is 00:00:00.")
+			.addToggle((t) =>
+				t.setValue(s.midnightAsDate).onChange((v) => {
+					s.midnightAsDate = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl).setName("Creating notes").setHeading();
+
+		new Setting(containerEl)
 			.setName("Target folder")
 			.setDesc("Leave empty to create notes in a folder named like the CSV file, next to it.")
 			.addText((t) =>
@@ -122,7 +130,7 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Note name template")
+			.setName("File name template")
 			.setDesc("Use {{Column name}} for cell values, {{row}} for the row number and {{file}} for the CSV name.")
 			.addText((t) =>
 				t.setValue(s.defaultFileNameTemplate).onChange((v) => {
@@ -132,7 +140,7 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Note body template")
+			.setName("Body template")
 			.setDesc("Text placed below the properties. Supports the same placeholders.")
 			.addTextArea((t) =>
 				t.setValue(s.defaultBodyTemplate).onChange((v) => {
@@ -142,15 +150,57 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Existing notes")
-			.setDesc("Update keeps properties you added in Obsidian and the note body. Overwrite replaces the whole note.")
+			.setName("Comma-separated tags")
+			.setDesc("Added to every imported note.")
+			.addText((t) =>
+				t.setValue(s.defaultTags).onChange((v) => {
+					s.defaultTags = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Add link to the CSV file")
+			.setDesc("Writes a source property that links back to the CSV file.")
+			.addToggle((t) =>
+				t.setValue(s.defaultAddSourceLink).onChange((v) => {
+					s.defaultAddSourceLink = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Create a base")
+			.setDesc("Create a .base file next to the target folder that shows the imported notes as a table.")
+			.addToggle((t) =>
+				t.setValue(s.defaultCreateBase).onChange((v) => {
+					s.defaultCreateBase = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Register property types")
+			.setDesc("Also tell Obsidian the type of each imported property so it shows the right editor.")
+			.addToggle((t) =>
+				t.setValue(s.registerPropertyTypes).onChange((v) => {
+					s.registerPropertyTypes = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl).setName("Existing notes").setHeading();
+
+		new Setting(containerEl)
+			.setName("When a note already exists")
+			.setDesc("Update properties keeps properties you added in Obsidian and the note body. Replace whole note overwrites the note completely.")
 			.addDropdown((d) =>
 				d
 					.addOptions({
-						update: "Update",
+						update: "Update properties",
 						skip: "Skip",
 						rename: "Create a copy",
-						overwrite: "Overwrite",
+						overwrite: "Replace whole note",
 					})
 					.setValue(s.defaultConflict)
 					.onChange((v) => {
@@ -179,113 +229,48 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 				}),
 			);
 
-		new Setting(containerEl)
-			.setName("Create a base")
-			.setDesc("Create a .base file next to the target folder that shows the imported notes as a table.")
-			.addToggle((t) =>
-				t.setValue(s.defaultCreateBase).onChange((v) => {
-					s.defaultCreateBase = v;
-					save();
-				}),
-			);
+		new Setting(containerEl).setName("Table view").setHeading();
 
-		new Setting(containerEl)
-			.setName("Tags")
-			.setDesc("Comma-separated tags added to every imported note.")
-			.addText((t) =>
-				t.setValue(s.defaultTags).onChange((v) => {
-					s.defaultTags = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Add link to the CSV file")
-			.setDesc("Writes a source property that links back to the CSV file.")
-			.addToggle((t) =>
-				t.setValue(s.defaultAddSourceLink).onChange((v) => {
-					s.defaultAddSourceLink = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("List separator")
-			.setDesc("Splits cell values of list columns into items.")
-			.addText((t) =>
-				t.setValue(s.defaultListSeparator).onChange((v) => {
-					s.defaultListSeparator = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Empty cells")
-			.setDesc("How empty cells are written into the properties of a note.")
-			.addDropdown((d) =>
-				d
-					.addOptions({ empty: "Leave property empty", omit: "Omit property" })
-					.setValue(s.defaultEmptyValues)
-					.onChange((v) => {
-						s.defaultEmptyValues = v as EmptyValueMode;
-						save();
-					}),
-			);
-
-		new Setting(containerEl).setName("Behavior").setHeading();
-
-		new Setting(containerEl)
-			.setName("Treat midnight timestamps as dates")
-			.setDesc("Detect a date instead of a date and time when every time in a column is 00:00:00.")
-			.addToggle((t) =>
-				t.setValue(s.midnightAsDate).onChange((v) => {
-					s.midnightAsDate = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Register property types")
-			.setDesc("Also tell Obsidian the type of each imported property so it shows the right editor.")
-			.addToggle((t) =>
-				t.setValue(s.registerPropertyTypes).onChange((v) => {
-					s.registerPropertyTypes = v;
-					save();
-				}),
-			);
-
-		new Setting(containerEl)
+		const pageSetting = new Setting(containerEl)
 			.setName("Rows shown per page")
-			.setDesc("Maximum number of rows rendered in the table before showing more.")
-			.addText((t) =>
-				t.setValue(String(s.pageSize)).onChange((v) => {
-					const n = Math.floor(Number(v));
-					if (Number.isFinite(n) && n >= 10 && n <= 100000) {
-						s.pageSize = n;
-						save();
-					}
-				}),
-			);
+			.setDesc("Maximum number of rows rendered in the table before showing more.");
+		const pageError = pageSetting.descEl.createDiv({ cls: "csv-importer-field-error" });
+		pageError.hide();
+		pageSetting.addText((t) =>
+			t.setValue(String(s.pageSize)).onChange((v) => {
+				const n = Math.floor(Number(v));
+				if (Number.isFinite(n) && n >= 10 && n <= 100000) {
+					s.pageSize = n;
+					t.inputEl.removeClass("csv-importer-invalid");
+					pageError.hide();
+					save();
+				} else {
+					t.inputEl.addClass("csv-importer-invalid");
+					pageError.setText("Enter a whole number from 10 to 100000.");
+					pageError.show();
+				}
+			}),
+		);
 
 		new Setting(containerEl).setName("Data").setHeading();
 
 		new Setting(containerEl)
-			.setName("Forget all per-file import settings")
-			.setDesc("Removes the saved import configuration of every CSV file. Imported notes are not affected.")
-			.addButton((b) =>
-				b
-					.setButtonText("Forget all")
-					.setWarning()
-					.onClick(() => {
-						new ConfirmModal(
-							this.app,
-							"This removes the saved import configuration of all CSV files. This cannot be undone.",
-							"Forget all",
-							() => {
-								void this.host.forgetAllFileConfigs().then(() => new Notice("Per-file import settings cleared."));
-							},
-						).open();
-					}),
-			);
+			.setName("Reset all import settings")
+			.setDesc("Removes the saved import settings of every CSV file. Imported notes are not affected.")
+			.addButton((b) => {
+				b.setButtonText("Reset all").onClick(() => {
+					void confirmDialog(
+						this.app,
+						"Reset all import settings?",
+						"This removes the saved import settings of all CSV files. This cannot be undone.",
+						"Reset all",
+						true,
+					).then((ok) => {
+						if (!ok) return;
+						void this.host.forgetAllFileConfigs().then(() => new Notice("Import settings reset."));
+					});
+				});
+				b.buttonEl.addClass("mod-warning");
+			});
 	}
 }

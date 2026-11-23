@@ -3,7 +3,7 @@
 	"name": "CSV Importer",
 	"version": "0.1.0",
 	"minAppVersion": "1.6.6",
-	"description": "View CSV files in a table and import every row as a note with correctly typed properties. Import settings are saved per file.",
+	"description": "Turn CSV files into one note per row with typed properties that Bases can sum and filter. Re-import safely when the CSV changes: your edits are kept. Includes table view, preview and undo.",
 	"author": "Luis Mendez",
 	"authorUrl": "https://github.com/luis85",
 	"isDesktopOnly": false

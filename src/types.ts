@@ -97,6 +97,12 @@ export interface FileImportConfig {
 	keepValuesOnEmpty: boolean;
 	/** Create a `.base` file listing the imported notes (only if it does not exist yet). */
 	createBase: boolean;
+	/**
+	 * Allow re-imports to update existing notes that this CSV did not create (no snapshot entry and no source
+	 * link to this CSV) when they match by key or path. Off by default: such notes are skipped as "not created
+	 * by this import" so unrelated notes are never changed.
+	 */
+	adoptExistingNotes: boolean;
 	/** Column configs. Empty array means "not configured yet" -> infer on open. */
 	columns: ColumnConfig[];
 	/** Epoch ms of the last import, or null. */
@@ -144,6 +150,8 @@ export interface ParsedCsv {
 	rows: string[][];
 	/** Delimiter actually used. */
 	delimiter: Exclude<DelimiterOption, "auto">;
+	/** Non-fatal problems found while parsing, e.g. "Unterminated quote starting in row 12." Shown to the user. */
+	warnings: string[];
 }
 
 /** Value that can be written into YAML frontmatter. */
@@ -200,6 +208,11 @@ export interface UndoManifest {
 	modified: { path: string; content: string }[];
 	/** Snapshot entries of the modified notes as they were before the import, restored on undo. */
 	snapshotBefore?: ImportSnapshot;
+	/**
+	 * Hash (valueHash of the full text) of each created/modified note right after the import. Undo skips notes
+	 * whose current content no longer matches (edited after the import) and reports them instead.
+	 */
+	writtenHashes?: Record<string, string>;
 }
 
 /** Summary of an import run. */
@@ -214,5 +227,7 @@ export interface ImportResult {
 	/** True for a dry run (nothing written). */
 	dryRun: boolean;
 	rows: RowOutcome[];
+	/** Run-level warnings shown in the preview/report, e.g. "No key column: notes are matched by file name." */
+	warnings: string[];
 	errors: { row: number; message: string }[];
 }

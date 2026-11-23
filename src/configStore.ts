@@ -62,6 +62,11 @@ export class ConfigStore {
 		await this.persist();
 	}
 
+	/** Vault paths of all stored file configs. */
+	paths(): string[] {
+		return Object.keys(this.files);
+	}
+
 	count(): number {
 		return Object.keys(this.files).length;
 	}

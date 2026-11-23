@@ -30,3 +30,19 @@ Research into the problems people have importing CSV files into Obsidian and sim
 - Protection for edits made in Obsidian. The Importer compares file modification times, which protects the whole note. We track each property separately, so properties you add in Bases don't stop the CSV values from updating.
 - A progress view with Stop, and an import report you can save as a note.
 - An auto-generated `.base` file.
+
+## Competitive comparison (as documented on 2026-11-23)
+
+Based only on the sources linked above and in the November 2026 review (`docs/REVIEW-2026-11.md`); competitor facts may be outdated and were not verified by testing.
+
+| Area | CSV Importer | [Official Importer](https://obsidian.md/help/import/csv), CSV format | [Bases Data Studio](https://community.obsidian.md/plugins/bases-data-studio) | [JSON/CSV Importer](https://github.com/farling42/obsidian-import-json) |
+| --- | --- | --- | --- | --- |
+| Scope | CSV only, per-file settings kept in the vault | Many formats, CSV among them | Data import for Bases | JSON and CSV, template based |
+| Column names | `{{Column with spaces}}` as written | Bracket syntax needed | Not covered by our sources | Handlebars-safe names needed |
+| Typed values | One type per column, typed YAML, types registered | Not covered by our sources | Not covered by our sources | Not covered by our sources |
+| Preview | Dry run with per-note changes | Not covered by our sources | Yes | Not covered by our sources |
+| Re-import | Key column, per-property edit protection, only own notes updated | "Existing notes" option; compares modification times (whole note) | Key matching | Handles duplicates only within one import |
+| Undo | Last import, skips notes changed since | Not covered by our sources | Users are told to back up the vault | Not covered by our sources |
+| Table view | Yes | No | Not covered by our sources | No |
+
+Where we are weaker: no automatic re-import, no row filtering, no export back to CSV, and one-way sync only (see Deferred in the review).

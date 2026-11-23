@@ -130,6 +130,22 @@ export class MockVault {
 		return this.files.get(file.path) ?? "";
 	}
 
+	async process(file: TFile, fn: (data: string) => string): Promise<string> {
+		const next = fn(this.files.get(file.path) ?? "");
+		this.files.set(file.path, next);
+		return next;
+	}
+
+	/** Test helper: remove a note like trashing it. */
+	remove(path: string): void {
+		const f = this.nodes.get(path);
+		if (!f) return;
+		const parent = this.parentFolder(path);
+		parent.children = parent.children.filter((c) => c !== f);
+		this.nodes.delete(path);
+		this.files.delete(path);
+	}
+
 	/** Test helper: rename a note like the user would. */
 	rename(oldPath: string, newPath: string): void {
 		const f = this.nodes.get(oldPath) as TFile;
@@ -156,7 +172,15 @@ export class MockApp {
 			fn(fm);
 			this.vault.files.set(file.path, `---\n${stringify(fm)}---\n${body}`);
 		},
+		trashFile: async (file: TAbstractFile): Promise<void> => {
+			this.vault.remove(file.path);
+		},
 	};
 }
 
 export type App = MockApp;
+
+/** Bases and other recent features are available in the mock. */
+export function requireApiVersion(_version: string): boolean {
+	return true;
+}

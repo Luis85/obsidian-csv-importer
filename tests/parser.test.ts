@@ -38,9 +38,10 @@ describe("parseCsv", () => {
 		expect(r.rows).toEqual([["1", "2"]]);
 	});
 
-	it("keeps rows that only contain empty cells", () => {
-		const r = parseCsv("a,b\n,\n", { delimiter: ",", hasHeader: true });
-		expect(r.rows).toEqual([["", ""]]);
+	it("skips rows that only contain blank cells and warns", () => {
+		const r = parseCsv("a,b\n,\n 1,2\n  , \n", { delimiter: ",", hasHeader: true });
+		expect(r.rows).toEqual([[" 1", "2"]]);
+		expect(r.warnings).toEqual(["2 blank rows were skipped."]);
 	});
 
 	it("pads short and truncates long rows", () => {
@@ -113,5 +114,27 @@ describe("detectDelimiter", () => {
 
 	it("works with a BOM", () => {
 		expect(detectDelimiter("﻿a;b\n1;2")).toBe(";");
+	});
+});
+
+describe("parser warnings (S6)", () => {
+	const opts = { delimiter: ",", hasHeader: true } as const;
+	it("returns an empty warnings array when all is well", () => {
+		expect(parseCsv("a,b\n1,2", opts).warnings).toEqual([]);
+		expect(parseCsv("", opts).warnings).toEqual([]);
+	});
+	it("warns about an unterminated quote with the data row number", () => {
+		const r = parseCsv('a,b\n1,2\n3,"oops\n4,5\n', opts);
+		expect(r.warnings).toEqual(["Unterminated quote starting in row 2. The rest of the file was read as one value."]);
+		expect(r.rows).toHaveLength(2);
+	});
+	it("numbers rows from 1 without a header", () => {
+		const r = parseCsv('"abc\n', { delimiter: ",", hasHeader: false });
+		expect(r.warnings[0]).toContain("row 1.");
+	});
+	it("aggregates rows longer than the header", () => {
+		const r = parseCsv("a,b\n1,2,3\n4,5\n6,7,8,9", opts);
+		expect(r.warnings).toEqual(["2 rows have more values than the header; extra values were ignored."]);
+		expect(r.rows).toEqual([["1", "2"], ["4", "5"], ["6", "7"]]);
 	});
 });

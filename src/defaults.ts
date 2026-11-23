@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	defaultEncoding: "auto",
 	defaultProtectEdits: true,
 	defaultKeepValuesOnEmpty: true,
-	defaultCreateBase: false,
+	defaultCreateBase: true,
 	midnightAsDate: true,
 	registerPropertyTypes: true,
 	pageSize: 200,
@@ -41,6 +41,7 @@ export function createDefaultFileConfig(settings: PluginSettings): FileImportCon
 		protectEdits: settings.defaultProtectEdits,
 		keepValuesOnEmpty: settings.defaultKeepValuesOnEmpty,
 		createBase: settings.defaultCreateBase,
+		adoptExistingNotes: false,
 		columns: [],
 		lastImport: null,
 	};

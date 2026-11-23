@@ -26,13 +26,13 @@ class ConfirmModal extends Modal {
 		this.setTitle(this.heading);
 		this.contentEl.createEl("p", { text: this.message });
 		const row = this.contentEl.createDiv({ cls: "modal-button-container" });
+		row.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
 		const ok = row.createEl("button", { text: this.confirmLabel, cls: this.warning ? "mod-warning" : "mod-cta" });
 		ok.addEventListener("click", () => {
 			this.answered = true;
 			this.done(true);
 			this.close();
 		});
-		row.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
 	}
 
 	onClose(): void {

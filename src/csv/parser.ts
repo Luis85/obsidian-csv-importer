@@ -7,7 +7,13 @@ const CANDIDATES: Delim[] = [",", ";", "\t", "|"];
  * Split text into records. Quote-aware; accepts CRLF/LF/CR. Completely blank lines are skipped
  * (so trailing empty lines never produce rows). Stops after `maxRecords` records.
  */
-function parseRecords(text: string, delimiter: string, maxRecords = Infinity): string[][] {
+function parseRecords(
+	text: string,
+	delimiter: string,
+	maxRecords = Infinity,
+	info?: { unterminatedAt: number },
+): string[][] {
+	let quoteStartRecord = -1;
 	const records: string[][] = [];
 	let row: string[] = [];
 	let field = "";
@@ -48,6 +54,7 @@ function parseRecords(text: string, delimiter: string, maxRecords = Infinity): s
 		}
 		if (ch === '"' && !started) {
 			inQuotes = true;
+			quoteStartRecord = records.length;
 			quoted = true;
 			started = true;
 		} else if (ch === delimiter) {
@@ -60,6 +67,7 @@ function parseRecords(text: string, delimiter: string, maxRecords = Infinity): s
 			started = true;
 		}
 	}
+	if (inQuotes && info) info.unterminatedAt = quoteStartRecord;
 	if (records.length < maxRecords && (row.length > 0 || started || field !== "" || quoted)) {
 		endField();
 		records.push(row);
@@ -119,26 +127,60 @@ function uniqueHeaders(raw: string[]): string[] {
  * RFC 4180 parser: quoted fields, escaped quotes (""), embedded delimiters/newlines,
  * CRLF/LF/CR line endings, UTF-8 BOM stripped, blank lines ignored.
  * Headers are trimmed, made non-empty ("Column N") and unique ("Name", "Name 2").
- * Rows are padded with "" / truncated to the header count.
+ * Rows are padded with "" / truncated to the header count. Rows whose cells are all blank are skipped.
+ * Non-fatal problems are reported in `warnings` (always an array).
  */
 export function parseCsv(text: string, opts: { delimiter: DelimiterOption; hasHeader: boolean }): ParsedCsv {
 	text = stripBom(text);
 	const delimiter: Delim = opts.delimiter === "auto" ? detectDelimiter(text) : opts.delimiter;
-	const records = parseRecords(text, delimiter);
+	const info = { unterminatedAt: -1 };
+	const records = parseRecords(text, delimiter, Infinity, info);
+	const warnings: string[] = [];
+	if (info.unterminatedAt >= 0) {
+		const rowNo = opts.hasHeader ? info.unterminatedAt : info.unterminatedAt + 1;
+		warnings.push(
+			`Unterminated quote starting in row ${Math.max(rowNo, 1)}. The rest of the file was read as one value.`,
+		);
+	}
 
 	let headers: string[];
 	if (opts.hasHeader) {
 		const first = records.shift();
 		headers = uniqueHeaders(first ?? []);
 	} else {
-		const width = records.reduce((m, r) => Math.max(m, r.length), 0);
+		let width = 0;
+		for (const r of records) if (r.length > width) width = r.length;
 		headers = Array.from({ length: width }, (_, i) => `Column ${i + 1}`);
 	}
 	const w = headers.length;
-	const rows = records.map((r) => {
-		if (r.length === w) return r;
-		if (r.length > w) return r.slice(0, w);
-		return r.concat(new Array<string>(w - r.length).fill(""));
-	});
-	return { headers, rows, delimiter };
+	const rows: string[][] = [];
+	let tooLong = 0;
+	let blank = 0;
+	for (const r of records) {
+		let allBlank = true;
+		for (let i = 0; i < r.length; i++) {
+			if (r[i].trim() !== "") {
+				allBlank = false;
+				break;
+			}
+		}
+		if (allBlank) {
+			blank++;
+			continue;
+		}
+		if (r.length === w) rows.push(r);
+		else if (r.length > w) {
+			tooLong++;
+			rows.push(r.slice(0, w));
+		} else rows.push(r.concat(new Array<string>(w - r.length).fill("")));
+	}
+	if (tooLong > 0) {
+		warnings.push(
+			tooLong === 1
+				? "1 row has more values than the header; extra values were ignored."
+				: `${tooLong} rows have more values than the header; extra values were ignored.`,
+		);
+	}
+	if (blank > 0) warnings.push(`${blank} blank ${blank === 1 ? "row was" : "rows were"} skipped.`);
+	return { headers, rows, delimiter, warnings };
 }

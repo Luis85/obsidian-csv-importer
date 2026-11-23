@@ -3,13 +3,13 @@
 ## Checklist
 
 1. Make sure `main` is green (CI passes: lint, test, build).
-1b. After testing the 0.x beta with BRAT, bump to 1.0.0 with `npm version 1.0.0` (updates manifest.json and versions.json).
+1b. BRAT beta step: the current version is 0.1.0 (beta). Install it with BRAT (`luis85/obsidian-csv-importer`) in a clean vault and run through the README walkthrough. Then release 1.0.0: run the Release workflow with version `1.0.0` (see CONTRIBUTING.md), or `npm version 1.0.0` locally (updates manifest.json and versions.json).
 2. Confirm `manifest.json` has `id` `csv-importer`, version `1.0.0`, and the same description as below. `versions.json` contains `"1.0.0": "1.6.6"`.
 3. Create the release. Either push the tag (the release workflow publishes it):
    ```sh
    git tag 1.0.0 && git push origin 1.0.0
    ```
-   or run `npm version` as described in the README. The tag must be `1.0.0` (no `v` prefix) and equal the manifest version.
+   or run the Release workflow as described in CONTRIBUTING.md. The tag must be `1.0.0` (no `v` prefix) and equal the manifest version.
 4. Verify the GitHub release has `main.js`, `manifest.json` and `styles.css` as individual assets.
 5. Fork `obsidianmd/obsidian-releases`, and append this entry at the end of `community-plugins.json`:
    ```json
@@ -17,7 +17,7 @@
      "id": "csv-importer",
      "name": "CSV Importer",
      "author": "Luis Mendez",
-     "description": "View CSV files in a table and import every row as a note with correctly typed properties. Import settings are saved per file.",
+     "description": "Turn CSV files into one note per row with typed properties that Bases can sum and filter. Re-import safely when the CSV changes: your edits are kept. Includes table view, preview and undo.",
      "repo": "luis85/obsidian-csv-importer"
    }
    ```
@@ -38,6 +38,15 @@
 - [ ] `isDesktopOnly` is accurate (no Node/Electron APIs when `false`).
 - [ ] `README.md` explains the plugin; `LICENSE` is present.
 - [ ] `npm run lint` passes with `eslint-plugin-obsidianmd` recommended config.
+
+## Disclosures for the PR and reviewers
+
+- [ ] Network: the plugin makes no network requests and has no telemetry.
+- [ ] Data stored: settings in `data.json`; import state (hashes of last imported values) and undo data (previous note content, may contain row data) in `.obsidian/plugins/csv-importer/imports/`. Documented in the README under "Privacy and data".
+- [ ] Files outside notes: optional `.base` file, optional import report note. The CSV is never modified.
+- [ ] Internal API note for reviewers: `app.metadataTypeManager` (not in the public typings) is used to register property types. It is feature-detected, optional, and can be turned off with the "Register property types" setting. The plugin works without it.
+- [ ] `vault.adapter` is used only for plugin-folder state (`imports/`); notes are written with the Vault API (`vault.process`, `processFrontMatter` where applicable).
+- [ ] README has no screenshot placeholder; screenshots are optional (`docs/images/`).
 
 ## Automated review
 

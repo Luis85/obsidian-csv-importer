@@ -3,6 +3,9 @@ import {
 	buildColumnConfigs,
 	convertValue,
 	detectHeaderDrift,
+	formatNumber,
+	hasTimezoneOffsets,
+	parseExcelSerial,
 	inferColumnType,
 	parseNumber,
 	reconcileColumns,
@@ -52,7 +55,7 @@ describe("parseNumber", () => {
 
 describe("inferColumnType", () => {
 	it("infers numbers (dot)", () => {
-		expect(inferColumnType(["0.625", "5", "-3", "1e2"], dot)).toBe("number");
+		expect(inferColumnType(["0.625", "5", "-3", "12"], dot)).toBe("number");
 		expect(inferColumnType(["1,234.5", "2"], dot)).toBe("number");
 	});
 	it("infers numbers (comma)", () => {
@@ -211,5 +214,56 @@ describe("detectHeaderDrift", () => {
 	});
 	it("empty columns -> nothing", () => {
 		expect(detectHeaderDrift([], parsed)).toEqual({ added: [], removed: [] });
+	});
+});
+
+describe("S5 strict inference", () => {
+	const dot = { decimalSeparator: ".", midnightAsDate: true, listSeparator: "," } as const;
+	it("keeps +49 phone numbers and exponents as text, convertValue stays lenient", () => {
+		expect(inferColumnType(["+491234", "+4955"], dot)).toBe("text");
+		expect(inferColumnType(["1e5", "2"], dot)).toBe("text");
+		expect(inferColumnType(["12E3"], dot)).toBe("text");
+		expect(convertValue("1e5", "number", { decimalSeparator: ".", listSeparator: "," })).toBe(100000);
+		expect(convertValue("+5", "number", { decimalSeparator: ".", listSeparator: "," })).toBe(5);
+	});
+	it("a column of only 'no' is text, other bool columns stay checkboxes", () => {
+		for (const v of ["no", "No", "NO"]) expect(inferColumnType([v, v], dot)).toBe("text");
+		expect(inferColumnType(["no", "yes"], dot)).toBe("checkbox");
+		expect(inferColumnType(["no", "false"], dot)).toBe("checkbox");
+		expect(inferColumnType(["yes", "yes"], dot)).toBe("checkbox");
+		expect(inferColumnType(["true", "false", ""], dot)).toBe("checkbox");
+	});
+	it("Excel serial 60 is not converted", () => {
+		expect(parseExcelSerial("60", ".")).toBeNull();
+		expect(convertValue("60", "date", { decimalSeparator: ".", listSeparator: "," })).toBe("60");
+		expect(parseExcelSerial("61", ".")?.date).toBe("1900-03-01");
+		expect(parseExcelSerial("59", ".")?.date).toBe("1900-02-28");
+	});
+	it("tiny numbers do not collapse to 0 and stay YAML numbers", () => {
+		const out = formatNumber(1.5e-120);
+		expect(out).toBe("1.5e-120");
+		expect(Number(out)).toBe(1.5e-120);
+		expect(formatNumber(1e-130)).toBe("1.0e-130");
+		expect(formatNumber(1e-7)).toBe("0.0000001");
+		expect(formatNumber(0)).toBe("0");
+		expect(formatNumber(1e-120, 3)).toBe("0");
+	});
+});
+
+describe("hasTimezoneOffsets", () => {
+	it("detects Z and offsets on datetimes only", () => {
+		expect(hasTimezoneOffsets(["2024-01-01T10:00:00Z"])).toBe(true);
+		expect(hasTimezoneOffsets(["x", "2024-01-01 10:00+02:00"])).toBe(true);
+		expect(hasTimezoneOffsets(["2024-01-01T10:00:00", "2024-01-01", "-5"])).toBe(false);
+	});
+});
+
+describe("property name uniqueness", () => {
+	it("is case-insensitive and truncated", () => {
+		const parsed = { headers: ["Name", "name", "NAME"], rows: [["a", "b", "c"]], delimiter: "," as const, warnings: [] };
+		const cols = buildColumnConfigs(parsed, { decimalSeparator: ".", midnightAsDate: true, listSeparator: "," });
+		expect(cols.map((c) => c.property)).toEqual(["Name", "name 2", "NAME 3"]);
+		expect(toPropertyName("x".repeat(500))).toHaveLength(200);
+		expect(toPropertyName("\u{1F600}".repeat(150))).toHaveLength(200);
 	});
 });

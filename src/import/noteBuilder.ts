@@ -67,7 +67,28 @@ export function renderTemplate(template: string, ctx: TemplateContext): string {
 	});
 }
 
-/** Make a string safe as an Obsidian file name: strip \ / : * ? " < > | # ^ [ ] and control chars, collapse whitespace, trim dots/spaces, max 200 chars. Empty -> "". */
+const RESERVED_NAME_RE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+const MAX_NAME_BYTES = 240;
+
+/** Truncate to at most `max` UTF-8 bytes without splitting a code point (surrogate pair). */
+function truncateUtf8(s: string, max: number): string {
+	let bytes = 0;
+	let i = 0;
+	while (i < s.length) {
+		const cp = s.codePointAt(i) as number;
+		const len = cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+		if (bytes + len > max) break;
+		bytes += len;
+		i += cp > 0xffff ? 2 : 1;
+	}
+	return s.slice(0, i);
+}
+
+/**
+ * Make a string safe as an Obsidian file name: strip \ / : * ? " < > | # ^ [ ] and control chars, collapse whitespace,
+ * trim dots/spaces, normalize to NFC, truncate to 240 UTF-8 bytes (callers add the suffix and ".md"), and prefix
+ * Windows reserved names (CON, NUL, COM1...) with "_". Empty -> "".
+ */
 export function sanitizeFileName(name: string): string {
 	const clean = (s: string) =>
 		s
@@ -76,9 +97,50 @@ export function sanitizeFileName(name: string): string {
 			.replace(/[\\/:*?"<>|#^[\]]/g, "")
 			.replace(/\s+/g, " ")
 			.replace(/^[\s.]+|[\s.]+$/g, "");
-	let s = clean(name);
-	if (s.length > 200) s = clean(s.slice(0, 200));
+	let s = clean(name).normalize("NFC");
+	if (s.length > MAX_NAME_BYTES / 3) s = clean(truncateUtf8(s, MAX_NAME_BYTES));
+	if (RESERVED_NAME_RE.test(s)) s = "_" + s;
 	return s;
+}
+
+// ---------------------------------------------------------------- compiled templates
+
+type Seg = string | { col: number } | { row: true } | { file: true } | { value: true };
+type Compiled = Seg[];
+
+/** Parse a template once into literal strings and placeholders (column indexes resolved against `headers`). */
+function compileTemplate(template: string, headerIndex: Map<string, number>, withValue = false): Compiled {
+	const re = withValue ? /\{\{([^{}]*)\}\}|\$value/g : /\{\{([^{}]*)\}\}/g;
+	const out: Compiled = [];
+	let last = 0;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(template)) !== null) {
+		if (m.index > last) out.push(template.slice(last, m.index));
+		const key = m[1]?.trim();
+		if (key === undefined || (withValue && key === "value")) out.push({ value: true });
+		else if (key === "row") out.push({ row: true });
+		else if (key === "file") out.push({ file: true });
+		else {
+			const idx = headerIndex.get(key);
+			if (idx !== undefined) out.push({ col: idx });
+		}
+		last = m.index + m[0].length;
+	}
+	if (last < template.length) out.push(template.slice(last));
+	return out;
+}
+
+function renderCompiled(c: Compiled, ctx: TemplateContext, value = ""): string {
+	if (c.length === 1 && typeof c[0] === "string") return c[0];
+	let out = "";
+	for (const seg of c) {
+		if (typeof seg === "string") out += seg;
+		else if ("col" in seg) out += (ctx.formatted?.[seg.col] ?? ctx.row[seg.col] ?? "").trim();
+		else if ("row" in seg) out += String(ctx.rowNumber);
+		else if ("file" in seg) out += ctx.fileBasename;
+		else out += value;
+	}
+	return out;
 }
 
 const LIST_PROPS = new Set(["tags", "aliases", "cssclasses"]);
@@ -92,12 +154,22 @@ function splitPath(p: string): string[] {
 	return p.replace(/\\/g, "/").split("/").filter((x) => x !== "");
 }
 
+/** Split a configured static folder and reject anything that could leave the vault ("..", "C:\\"). */
+function splitTargetFolder(raw: string): string[] {
+	const t = raw.trim();
+	const segs = splitPath(t);
+	if (/^[a-zA-Z]:/.test(t) || segs.some((seg) => seg === "..")) {
+		throw new Error(`The target folder must be inside the vault: ${raw.trim()}`);
+	}
+	return segs;
+}
+
 /**
  * Resolve the target folder: config.targetFolder (normalized, no leading/trailing slash; "/" means vault root)
  * or, when blank, `<csv dir>/<csv basename>`.
  */
 export function resolveTargetFolder(config: FileImportConfig, csvPath: string): string {
-	if (config.targetFolder.trim() !== "") return splitPath(config.targetFolder.trim()).join("/");
+	if (config.targetFolder.trim() !== "") return splitTargetFolder(config.targetFolder).join("/");
 	return defaultFolder(csvPath);
 }
 
@@ -108,7 +180,7 @@ export function resolveTargetFolder(config: FileImportConfig, csvPath: string): 
 export function resolveRowFolder(config: FileImportConfig, csvPath: string, ctx: TemplateContext): string {
 	const t = config.targetFolder.trim();
 	if (t === "") return defaultFolder(csvPath);
-	return splitPath(t)
+	return splitTargetFolder(t)
 		.map((seg) => (/\{\{[^{}]*\}\}/.test(seg) ? sanitizeFileName(renderTemplate(seg, ctx)) : seg))
 		.filter((seg) => seg !== "")
 		.join("/");
@@ -146,9 +218,29 @@ function normalizeListProp(name: string, v: FrontmatterValue): string[] {
 }
 
 /**
+ * Property that receives the source link, or null when `addSourceLink` is off. Normally "source"; when a column's
+ * property is already "source" (case-insensitive) it is "source_csv" (then "source_csv 2"...) so the column survives.
+ */
+export function sourceLinkProperty(config: FileImportConfig): string | null {
+	return sourceLinkFor(config, config.columns);
+}
+
+function sourceLinkFor(config: FileImportConfig, columns: ColumnConfig[]): string | null {
+	if (!config.addSourceLink) return null;
+	const taken = new Set(columns.map((c) => c.property.toLowerCase()));
+	let name = "source";
+	let n = 1;
+	while (taken.has(name.toLowerCase())) {
+		name = n === 1 ? "source_csv" : `source_csv ${n}`;
+		n++;
+	}
+	return name;
+}
+
+/**
  * Plan one note per data row. Frontmatter contains included columns (typed via convertValue),
  * `tags` (when config.tags non-empty, merged with a `tags` column if present), and
- * `source: "[[path/to/file.csv]]"` when addSourceLink. Null values are kept (empty property).
+ * `source: "[[path/to/file.csv]]"` when addSourceLink (property name: see sourceLinkProperty). Null values are kept (empty property).
  * Empty file names fall back to `<file> <row>`. Duplicate paths within one run (case-insensitive)
  * get " 2", " 3" suffixes. If config.columns is empty, columns are inferred on the fly
  * (midnightAsDate = true).
@@ -177,9 +269,27 @@ export function planNotes(
 		precision: config.numberPrecision,
 	};
 	const configTags = parseTags(config.tags);
-	const used = new Set<string>();
+	const linkProp = sourceLinkFor(config, columns);
+	const taken = new Set<string>(); // lower-cased paths already planned
+	const nextSuffix = new Map<string, number>(); // lower-cased path -> next " N" suffix to try
 	const notes: PlannedNote[] = [];
 	const byIndex = new Map<number, ColumnConfig>(columns.map((c) => [c.index, c]));
+
+	const headerIndex = new Map<string, number>();
+	parsed.headers.forEach((h, i) => {
+		if (!headerIndex.has(h)) headerIndex.set(h, i);
+	});
+	const nameTpl = compileTemplate(config.fileNameTemplate, headerIndex);
+	const bodyTpl = compileTemplate(config.bodyTemplate, headerIndex);
+	const valueTpls = new Map<ColumnConfig, Compiled>();
+	for (const col of included) {
+		if (col.valueTemplate) valueTpls.set(col, compileTemplate(col.valueTemplate, headerIndex, true));
+	}
+	const folderSegs = dynamicFolder
+		? splitTargetFolder(config.targetFolder).map((seg) =>
+				/\{\{[^{}]*\}\}/.test(seg) ? compileTemplate(seg, headerIndex) : seg,
+			)
+		: [];
 
 	parsed.rows.forEach((row, i) => {
 		const rowNumber = i + 1;
@@ -203,14 +313,25 @@ export function planNotes(
 		const nameCtx: TemplateContext = { ...base, formatted: nameVals };
 		const bodyCtx: TemplateContext = { ...base, formatted: bodyVals };
 
-		const folder = dynamicFolder ? resolveRowFolder(config, csv.path, nameCtx) : staticFolder;
+		let folder = staticFolder;
+		if (dynamicFolder) {
+			const parts: string[] = [];
+			for (const seg of folderSegs) {
+				const v = typeof seg === "string" ? seg : sanitizeFileName(renderCompiled(seg, nameCtx));
+				if (v !== "") parts.push(v);
+			}
+			folder = parts.join("/");
+		}
 		const fm: Record<string, FrontmatterValue> = {};
 		const types: Record<string, PropertyType> = {};
 		for (const col of included) {
 			let v = converted.get(col.index) ?? null;
 			let type = col.type;
-			if (col.valueTemplate && v !== null) {
-				v = applyValueTemplate(col.valueTemplate, v, bodyCtx);
+			const vt = valueTpls.get(col);
+			if (vt && v !== null) {
+				v = Array.isArray(v)
+					? v.map((x) => renderCompiled(vt, bodyCtx, x))
+					: renderCompiled(vt, bodyCtx, formatValue(v));
 				if (type !== "list") type = "text";
 			}
 			if (v === null && config.emptyValues === "omit") continue;
@@ -232,9 +353,9 @@ export function planNotes(
 			fm["tags"] = [...new Set([...colTags, ...configTags])];
 			types["tags"] = "list";
 		}
-		if (config.addSourceLink) {
-			fm["source"] = `[[${csv.path}]]`;
-			types["source"] = "text";
+		if (linkProp !== null) {
+			fm[linkProp] = `[[${csv.path}]]`;
+			types[linkProp] = "text";
 		}
 
 		let key: PlannedNote["key"] = null;
@@ -244,18 +365,24 @@ export function planNotes(
 			if (kv !== null && kv !== undefined && !Array.isArray(kv)) key = { property: keyCol.property, value: formatValue(kv) };
 		}
 
-		let name = sanitizeFileName(renderTemplate(config.fileNameTemplate, nameCtx));
+		let name = sanitizeFileName(renderCompiled(nameTpl, nameCtx));
 		if (name === "") name = sanitizeFileName(`${csv.basename} ${rowNumber}`) || `Note ${rowNumber}`;
 		const make = (n: string) => (folder ? `${folder}/${n}.md` : `${n}.md`);
 		let path = make(name);
-		let suffix = 2;
-		while (used.has(path.toLowerCase())) path = make(`${name} ${suffix++}`);
-		used.add(path.toLowerCase());
+		const lower = path.toLowerCase();
+		if (taken.has(lower)) {
+			// Amortized O(1): remember where the suffix search for this path stopped.
+			let suffix = nextSuffix.get(lower) ?? 2;
+			path = make(`${name} ${suffix}`);
+			while (taken.has(path.toLowerCase())) path = make(`${name} ${++suffix}`);
+			nextSuffix.set(lower, suffix + 1);
+		}
+		taken.add(path.toLowerCase());
 
 		notes.push({
 			path,
 			frontmatter: fm,
-			body: renderTemplate(config.bodyTemplate, bodyCtx),
+			body: renderCompiled(bodyTpl, bodyCtx),
 			row: rowNumber,
 			types,
 			key,
