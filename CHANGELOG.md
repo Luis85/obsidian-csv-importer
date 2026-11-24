@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 0.3.0
 ### Fixes
 - CSS: replaced `column-gap` (flagged as partially supported multi-column CSS in the 0.2.0 review) with `gap`, and removed other partially supported features; Stylelint now checks browser support.
 
