@@ -215,7 +215,7 @@ export class ImportService {
 			.map((p) => this.app.vault.getAbstractFileByPath(p))
 			.filter(isCsv);
 		if (files.length === 0) {
-			new Notice("No configured CSV files found.");
+			new Notice("No CSV files with import settings found.");
 			return;
 		}
 		for (const f of files) await this.importFromDisk(f);
@@ -485,8 +485,8 @@ export class ImportService {
 		const fileName = csvPath.split("/").pop() ?? csvPath;
 		const ok = await confirmDialog(
 			this.app,
-			"Remove from index?",
-			`Remove ${fileName} from the index? Its import settings and import history are deleted. Imported notes stay.`,
+			"Remove from CSV imports?",
+			`Remove ${fileName} from CSV imports? Its import settings and import history are deleted. Imported notes stay.`,
 			"Remove",
 			true,
 		);
@@ -494,7 +494,7 @@ export class ImportService {
 		await this.store.delete(csvPath);
 		await this.storage.delete(csvPath);
 		triggerCsvChanged(this.app, csvPath);
-		new Notice(`Removed ${fileName} from the index.`);
+		new Notice(`Removed ${fileName} from CSV imports.`);
 		return true;
 	}
 

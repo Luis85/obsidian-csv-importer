@@ -33,10 +33,10 @@ describe("settings tab", function () {
 		expect(await pluginProblems()).toEqual([]);
 	});
 
-	it("opens the CSV imports index from its Imports section", async function () {
+	it("opens CSV imports from the row under the intro", async function () {
 		await openSettings();
 		await browser.waitUntil(async () => (await browser.executeObsidian(({ app }) => (app as unknown as { setting: { activeTab?: unknown } }).setting.activeTab !== undefined)));
-		await clickSettingsButton("Open CSV imports");
+		await clickSettingsButton("CSV imports");
 		await closeSettings();
 		await waitForViewType("csv-importer-index");
 	});

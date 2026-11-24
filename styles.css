@@ -57,7 +57,9 @@
 	min-height: 32px;
 }
 
-.csv-importer-hidden {
+/* The button selector outweighs Obsidian's `button:not(.clickable-icon)` display rule. */
+.csv-importer-hidden,
+button.csv-importer-hidden:not(.clickable-icon) {
 	display: none;
 }
 
@@ -1388,29 +1390,41 @@
 	min-width: 0;
 }
 
-.csv-importer-index-name {
+/* File name: a link, not a button. Scoped to the view so it beats Obsidian's `button:not(.clickable-icon)` chrome. */
+.csv-importer-index .csv-importer-index-name {
 	flex: 0 1 auto;
 	min-width: 0;
-	padding: 0;
 	height: auto;
+	padding: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	background: transparent;
 	box-shadow: none;
 	border: none;
+	border-radius: var(--radius-s);
 	color: var(--text-normal);
+	font-size: var(--font-ui-small);
 	font-weight: var(--font-medium);
 	text-align: left;
 	cursor: pointer;
 }
 
-.csv-importer-index-name:hover:not(:disabled) {
+.csv-importer-index .csv-importer-index-name:hover:not(:disabled) {
+	background: transparent;
 	color: var(--text-accent);
 	text-decoration: underline;
 }
 
-.csv-importer-index-name:disabled {
+.csv-importer-index .csv-importer-index-name:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+.csv-importer-index .csv-importer-index-name:disabled {
+	background: transparent;
 	color: var(--text-muted);
 	cursor: default;
 }
@@ -1449,8 +1463,29 @@
 	color: var(--text-muted);
 }
 
+.csv-importer-index-count.mod-none {
+	color: var(--text-faint);
+}
+
 .csv-importer-index-summary {
 	display: none;
+}
+
+/* Add CSV menu button: label and a small chevron. */
+.csv-importer-index-add {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.csv-importer-index-add-chevron {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+
+.csv-importer-index-add-chevron .svg-icon {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
 }
 
 .csv-importer-index-actions {
@@ -1479,7 +1514,8 @@
 }
 
 .csv-importer-index-primary:focus-visible,
-.csv-importer-index-all:focus-visible {
+.csv-importer-index-all:focus-visible,
+.csv-importer-index-add:focus-visible {
 	box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
 }
 
@@ -1529,10 +1565,12 @@
 		grid-column: 2;
 	}
 
+	/* The summary line carries folder, result, edits and changes, so the desktop meta lines are hidden. */
 	.csv-importer-index-row.mod-head,
 	.csv-importer-index-last,
 	.csv-importer-index-count,
-	.csv-importer-index-path {
+	.csv-importer-index-path,
+	.csv-importer-index-meta {
 		display: none;
 	}
 
@@ -1554,7 +1592,7 @@
 
 .is-phone .csv-importer-index-primary,
 .is-phone .csv-importer-index-all,
-.is-phone .csv-importer-index-name,
+.is-phone .csv-importer-index .csv-importer-index-name,
 .is-phone .csv-importer-index-more,
 .is-phone .csv-importer-index-search {
 	min-height: 44px;
@@ -1733,7 +1771,6 @@
 	padding: var(--size-2-2) 0;
 }
 
-.is-phone .csv-importer-index-scan,
 .is-phone .csv-importer-index-add,
 .is-phone .csv-importer-scan-bar .csv-importer-scan-link,
 .is-phone .csv-importer-scan-row {

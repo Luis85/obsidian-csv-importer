@@ -166,7 +166,7 @@ export class AddCsvModal extends Modal {
 		try {
 			const data = await f.arrayBuffer();
 			const added = await this.host.addExternalCsv(data, this.folder, this.name, this.conflict);
-			new Notice(`Added ${added.path} to the vault and the index.`);
+			new Notice(`Added ${added.path} to the vault and to CSV imports.`);
 			this.close();
 			this.onAdded();
 		} catch (e) {

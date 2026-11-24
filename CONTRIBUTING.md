@@ -36,7 +36,7 @@ Modules in `src/`:
 | `main.ts` | Plugin class: commands, ribbon icon, file menu, view registration, wiring |
 | `host.ts` | Interfaces the views and modals use to talk to the plugin (no circular imports) |
 | `types.ts`, `defaults.ts` | Shared types, default settings and config migration (schema version) |
-| `settings.ts` | Settings tab, declarative (`getSettingDefinitions()`), grouped as Reading files, New notes, Re-import, Table view, Imports, Danger zone |
+| `settings.ts` | Settings tab, declarative (`getSettingDefinitions()`), intro and "Open CSV imports" first, then grouped as New notes, Re-import, Reading files, Table view, Danger zone |
 | `configStore.ts` | In-memory per-file configs keyed by vault path |
 | `storage.ts` | Persistence: `data.json`, and under `imports/` the `index.json`, `<hash>.json` (snapshot) and `<hash>.undo.json` per CSV |
 | `core/result.ts`, `core/util.ts` | Outcome reasons and small pure helpers |

@@ -9,7 +9,7 @@ It works with Excel and German exports: semicolon delimiter, decimal comma, Wind
 | Import settings | Import preview |
 | --- | --- |
 | ![Import settings: columns, types and live note preview](docs/images/import-settings.png) | ![Import preview grouped by outcome](docs/images/import-preview.png) |
-| ![Re-import tab: keep edited values, composite key, extra ID property](docs/images/import-settings-reimport.png) | ![CSV imports index](docs/images/imports-index.png) |
+| ![Re-import tab: keep edited values, composite key, extra ID property](docs/images/import-settings-reimport.png) | ![CSV imports](docs/images/imports-index.png) |
 
 <sub>Screenshots are captured in real Obsidian with the default theme by the end-to-end test suite (`npm run screenshots:readme`). Your theme may look different.</sub>
 
@@ -27,12 +27,12 @@ Sample files are in [`examples/`](examples).
 This uses [`examples/timesheet.csv`](examples/timesheet.csv): one row per working day with `Datum`, `Rolle`, `Beschreibung`, `Stunden` and `Tage`.
 
 1. Copy `timesheet.csv` to `Data/timesheet.csv` and open it. `Stunden` and `Tage` show a number badge, `Datum` a date badge.
-2. Select **Configure** in the table view. On the **Notes** tab, **Create a base** is on by default. On the **Re-import** tab, tick a column under **Match notes by** that is unique per row. The sample timesheet has one entry per day, so `Datum` works. Real timesheets often have several entries per day: tick two columns (for example `Datum` and `Rolle`) for a composite key, or add an ID column to the export. Without a key, notes are matched by file name (for example `{{Datum}} {{Rolle}}`). Select **Import now** (it also saves; **Save** only saves).
+2. Select **Import settings** in the table view. On the **Notes** tab, **Create a base** is on by default. On the **Re-import** tab, tick a column under **Match notes by** that is unique per row. The sample timesheet has one entry per day, so `Datum` works. Real timesheets often have several entries per day: tick two columns (for example `Datum` and `Rolle`) for a composite key, or add an ID column to the export. Without a key, notes are matched by file name (for example `{{Datum}} {{Rolle}}`). Select **Import now** (it also saves; **Save** only saves).
 3. Review the preview and import. You get one note per row, and a `.base` file next to the folder that lists them as a table.
 4. Open the base. In the table view, use the column menu of `Stunden` to add a summary and choose **Sum**. This works because `Stunden` is a real number in every note, not text. (Menu names depend on your Obsidian version.)
 5. Add a property `Abgerechnet` (checkbox) to a few notes, or add the column in the base.
 6. Edit `Data/timesheet.csv` outside Obsidian, or replace the file with a version where some `Stunden` values changed, keeping the same name and path.
-7. Select **Re-import** in the CSV imports index, or **Import 6 rows** in the table view. The preview lists the notes that will be updated and which properties change. `Abgerechnet` is not touched. Select **Import 6 notes**.
+7. Select **Re-import** in **CSV imports**, or **Import 6 rows** in the table view. The preview lists the notes that will be updated and which properties change. `Abgerechnet` is not touched. Select **Import 6 notes**.
 
 The Sum in the base now reflects the new hours, and `Abgerechnet` is still set.
 
@@ -175,33 +175,47 @@ Importing first shows **Import preview** without writing anything: one line of c
 - **Open base**: opens the generated base, if there is one (on phones it is in the menu).
 - **...** menu (**More actions**): **Open first note**, **Save report as note**, and **Undo import**.
 
-**Undo import** (also **Undo** in the table view, the command **Undo last import of current CSV file**, **Undo last CSV import** in the file menu, and **Undo last import** in the index) moves notes created by the import to the trash and restores the previous content of notes it modified. Notes you changed after the import are skipped and listed.
+**Undo import** (also **Undo** in the table view, the command **Undo last import of current CSV file**, and **Undo last import** in the file menu and in CSV imports) moves notes created by the import to the trash and restores the previous content of notes it modified. Notes you changed after the import are skipped and listed.
 
-The command **Re-import all configured CSV files** opens the import dialog for each CSV that has saved settings, one after the other.
+The command **Re-import all CSV imports** opens the import dialog for each CSV that has import settings, one after the other.
 
-## CSV imports index
+## Commands and menus
 
-The ribbon icon **Open CSV imports** (or the command of the same name, or the button in the plugin's settings) opens an index of every CSV file with saved import settings. It opens in its own tab; opening it again reveals the existing one. Files are sorted by last import, newest first, then by name.
+Commands (in the command palette, none has a default hotkey):
 
-Each row shows the CSV (click to open it in the table view), its folder, when it was last imported (or "Never imported"), and how many notes this import owns. A missing file is marked **CSV missing**. Actions per row:
+- **Open CSV imports**
+- **Import current CSV file**
+- **Open import settings for current CSV file**
+- **Undo last import of current CSV file** (only when the last import can be undone)
+- **Re-import all CSV imports**
+
+The file menu of a CSV file (right-click in the file explorer) has **Import** (**Re-import** once the file was imported), **Import settings**, and **Undo last import** when the last import can be undone. The ribbon icon **Open CSV imports** opens the CSV imports view.
+
+## CSV imports
+
+The ribbon icon **Open CSV imports** (or the command of the same name, or the button at the top of the plugin's settings) opens **CSV imports**, a list of every CSV file with import settings. It opens in its own tab; opening it again reveals the existing one. Files are sorted by last import, newest first, then by name.
+
+Each row shows the CSV's name as a link (click it to open the CSV in the table view), its folder, when it was last imported (or "Never imported"), and how many notes this import owns (a dash when there are none). A missing file is marked **CSV missing**. Actions per row:
 
 - **Import** (never imported) or **Re-import**: runs the normal import dialog.
-- **Configure** (icon button): opens the import settings.
-- **...** menu: **Configure**, **Open base** (if a base exists), **Undo last import** (when an undo is available), then **Delete imported notes...** and **Remove from index...**.
+- **Import settings** (icon button, shown on hover): opens the import settings.
+- **...** menu: **Import settings**, **Open base** (if a base exists), **Undo last import** (when an undo is available), then **Delete imported notes...** and **Remove from CSV imports...**.
 
 Under the name, the row also shows the result of the last import ("12 new · 5 updated · 120 unchanged · 2 skipped"; imports from before this was recorded show only the note count) and, when you edited some notes in Obsidian since, "N edited since import". Hover it to see which properties differ. A note counts as edited when a property the import manages no longer has the value the import wrote.
 
-**Changed CSV files.** After each import the plugin remembers the CSV's size, modification time and a hash of its content. When the file differs (it is compared by size and modification time first, and read only when those differ), the row gets a **Changed** badge with how long ago it changed, **Re-import** becomes the highlighted button, and a line at the top says "N CSV files changed since their last import" with a **Re-import changed** button that runs the import dialog for each one after the other. The list updates by itself when a CSV is modified, renamed or deleted. A file that was only saved again with the same content is not marked. An import from before this was recorded counts as changed until you import it once more. The table view's status line shows the same state.
+**Changed CSV files.** After each import the plugin remembers the CSV's size, modification time and a hash of its content. When the file differs (it is compared by size and modification time first, and read only when those differ), the row gets a **Changed** badge and a line with how long ago it changed, that row's **Re-import** becomes the highlighted button (other rows keep a plain one), and a line at the top says "N CSV files changed since their last import" with a **Re-import changed** button that runs the import dialog for each one after the other. The list updates by itself when a CSV is modified, renamed or deleted. A file that was only saved again with the same content is not marked. An import from before this was recorded counts as changed until you import it once more. The table view's status line shows the same state.
 
-**Scan vault** lists every CSV file in the vault that is not in the index yet, with its folder, size and number of rows. All are checked; uncheck what you do not want and choose **Add to index**. The files get default import settings and nothing is imported. Scan again later and only new files are listed.
+**Add CSV** at the top opens a menu with two ways to add a CSV file.
 
-**Add CSV file...** copies a CSV from anywhere on your device into the vault. Choose the file with the system file picker (it works on desktop and mobile), the folder in the vault and the file name. If a file of that name already exists you choose **Replace the existing file** or **Keep both** (the new file gets a free name such as `name 1.csv`). The bytes are copied unchanged. The file is then added to the index and opened in the table view. The plugin cannot follow the original file: to update the copy, add the file again with the same folder and name and choose Replace; the index then shows it as changed.
+**Scan vault for CSV files...** lists every CSV file in the vault that is not in CSV imports yet, with its folder, size and number of rows. All are checked; uncheck what you do not want and choose **Add N to CSV imports**. The files get default import settings and nothing is imported. Scan again later and only new files are listed.
 
-At the top: a filter box, **Scan vault**, **Add CSV file...**, **Re-import all**, and a refresh button. **Re-import all** runs the import dialog for every listed CSV that still exists. With no entries, the view shows "No imports yet" and how to set one up.
+**Copy a file from your device...** opens **Add CSV file**, which copies a CSV from anywhere on your device into the vault. Choose the file with the system file picker (it works on desktop and mobile), the folder in the vault and the file name. If a file of that name already exists you choose **Replace the existing file** or **Keep both** (the new file gets a free name such as `name 1.csv`). The bytes are copied unchanged. The file is then added to CSV imports and opened in the table view. The plugin cannot follow the original file: to update the copy, add the file again with the same folder and name and choose Replace; CSV imports then shows it as changed.
+
+At the top: a filter box, **Add CSV**, **Re-import all**, and a refresh button. **Re-import all** runs the import dialog for every listed CSV that still exists. With no entries, the view shows "No imports yet" and how to set one up; the filter box and **Re-import all** are hidden.
 
 **Delete imported notes...** moves the notes this import owns to the trash (using your Obsidian trash setting) after a confirmation that states the count. A note counts as owned when the import history lists it and it still exists as a Markdown note, even if you renamed or moved it. Notes you created yourself, even in the same folder, are never touched. A checkbox, **Also delete the base file**, also trashes the base. Afterwards the import history and undo data are cleared and "last import" is reset, but the CSV's settings stay, so you can import again. This works even when the CSV file is missing. It does not use the undo data, so it cannot be undone from the plugin; restore from Obsidian's trash instead.
 
-**Remove from index...** deletes the CSV's settings and import history after a confirmation. Imported notes stay.
+**Remove from CSV imports...** deletes the CSV's import settings and import history after a confirmation. Imported notes stay.
 
 ## Encoding
 
@@ -209,13 +223,7 @@ The encoding is detected automatically: byte order mark, then UTF-8, and Windows
 
 ## Settings reference
 
-**Settings > CSV Importer** holds defaults for CSV files you have not configured yet. Once you save a file's import settings, that file keeps its own values. The settings are searchable in Obsidian's settings search.
-
-**Reading files**
-
-- Encoding, Delimiter, First row contains column names, Decimal separator, List separator
-- Empty cells (leave property empty or omit it)
-- Treat midnight timestamps as dates
+**Settings > CSV Importer** starts with "Defaults for CSV files you have not set up yet. Each CSV keeps its own import settings." Once you save a file's import settings, that file keeps its own values. Below the intro, **CSV imports** has an **Open CSV imports** button. The settings are searchable in Obsidian's settings search, and use the same names and descriptions as the import settings dialog.
 
 **New notes**
 
@@ -230,17 +238,19 @@ The encoding is detected automatically: byte order mark, then UTF-8, and Windows
 - Keep values edited in Obsidian
 - Keep values when the CSV cell is empty
 
+**Reading files**
+
+- Encoding, Delimiter, First row contains column names, Decimal separator, List separator
+- Empty cells (leave property empty or omit it)
+- Treat midnight timestamps as dates
+
 **Table view**
 
 - Rows shown per page
 
-**Imports**
-
-- **Open CSV imports** opens the index.
-
 **Danger zone**
 
-- **Reset all import settings...** removes the saved import settings of every CSV file. Imported notes are not affected.
+- **Reset all import settings**: **Reset...** removes the saved import settings of every CSV file after a confirmation. Imported notes are not affected.
 
 Per file only (import settings, not in the settings tab): column types, property names and value templates, ignore units, extra properties, match notes by and key property, Update existing notes not created by this import, date order, number precision and Filter rows.
 

@@ -1,6 +1,6 @@
 import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
-import { INDEX, hasIndexRow, indexRow, openIndex, shot } from "../flows";
+import { chooseAddCsv, hasIndexRow, indexRow, openIndex, shot } from "../flows";
 import { activeViewType, clickButton, installConsoleSpy, pluginProblems, resetEverything, waitForModal, waitForNoModal } from "../support";
 
 const SPEC = "index-add-outside";
@@ -41,7 +41,7 @@ describe("Index: add a CSV file from outside the vault", function () {
 
 	const open = async () => {
 		await openIndex();
-		await browser.$(`${INDEX} [data-testid=csv-index-add]`).click();
+		await chooseAddCsv("device");
 		await waitForModal("Add CSV file");
 		await expect(browser.$(`${MODAL} [data-testid=add-csv-input]`)).toHaveAttribute("accept", ".csv,text/csv");
 	};
