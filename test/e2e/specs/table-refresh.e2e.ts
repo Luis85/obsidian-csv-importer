@@ -47,6 +47,7 @@ describe("table view: stays in step with the file and the plugin's state", funct
 		await waitForNoModal();
 		await expect(status()).toHaveText(expect.stringContaining("Imported"));
 		await expect(browser.$(`${view} .csv-importer-status .csv-importer-link-btn`)).toHaveText("Undo");
+		await expect(browser.$("[data-testid=csv-undo]")).toHaveAttribute("aria-label", "Undo last import");
 		// And the undo made with the command takes the link away again.
 		await runCommand("undo-import-current-csv");
 		await waitForModal("Undo last import");

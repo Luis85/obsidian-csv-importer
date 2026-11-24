@@ -59,7 +59,9 @@ Clicking a `.csv` file opens it as a table. Each column header shows a type badg
 - **Link values ([[…]])** (writes each value as `[[value]]`; the item becomes **Unlink values** once set),
 - **Exclude from import** (or **Include in import**).
 
-Above the table: a filter box, **Configure**, and one primary button, **Import 6 rows**. A status line shows rows, columns, delimiter, extra properties, when the file was last imported and **Undo**. At most one callout is shown at a time: a read error, changed columns (with **Review columns**), or a note for the first import. If a row filter is set, the callout says how many rows will be imported. Long tables are shown in pages; **Show more** appends rows.
+Above the table: a filter box, **Import settings** (an icon on phones), and one primary button, **Import 6 rows**. A status line shows rows, columns, delimiter, extra properties, when the file was last imported and **Undo** (undoes the last import). At most one callout is shown at a time: a read error, changed columns (with **Review columns**), or a note for the first import. Its title names the problem, for example **Columns changed**; when unrelated problems are listed together it says how many there are (**2 things to check**). If a row filter is set, the callout says how many rows will be imported. Long tables are shown in pages; **Show more** appends rows.
+
+Tick rows to import only those: the header checkbox selects every row that matches the filter, shift-click selects a range, and the primary button becomes **Import 2 selected rows**. **Clear selection** in the status line drops the selection. The view's more-options menu (⋮) has **Import settings** and **Open CSV imports**.
 
 ## Typed properties
 
@@ -169,13 +171,13 @@ For number columns, **Ignore units (€, $, %)** under the column's **Options** 
 
 ## Import dialog
 
-Importing first shows **Import preview** without writing anything: one line of counts (`2 new · 2 updated · 1 unchanged · 2 skipped · 1 failed`) and results grouped as **Failed**, **Skipped**, **New**, **Updated** and **Unchanged**, with paths relative to the target folder and the changed properties per note. Warnings (parser, no key, duplicate keys, large imports, active row filter, extra properties that clash with columns) are shown here too. Select **Import 4 notes** to write them. You then see progress with **Stop import**, and the title changes to **Import finished** with these buttons:
+Importing first shows **Import preview** without writing anything. It starts with one sentence, such as "4 notes will be written to Data/timesheet/. 3 rows need attention.", then one line of counts (`2 new · 2 updated · 1 unchanged · 2 skipped · 1 failed`) and results grouped as **Failed**, **Skipped**, **New**, **Updated** and **Unchanged**, with paths relative to the target folder and the changed properties per note. Uncheck notes under **New** or **Updated** to leave them out of this run. Warnings (parser, no key, duplicate keys, large imports, active row filter, extra properties that clash with columns) are shown in a callout whose title names the problem, for example **Notes are matched by file name**, or **2 things to check** when there are several kinds. Select **Import 4 notes** to write them. You then see progress with **Stop import**, and the title changes to **Import finished** ("4 notes written to Data/timesheet/.") with these buttons:
 
+- **Open base** (the primary button) when the import has a base; otherwise **Open first note**. Both close the dialog.
 - **Close**.
-- **Open base**: opens the generated base, if there is one (on phones it is in the menu).
-- **...** menu (**More actions**): **Open first note**, **Save report as note**, and **Undo import**.
+- **...** (**More actions**): **Open first note** (when **Open base** is the primary button), **Save report as note**, and **Undo last import**.
 
-**Undo import** (also **Undo** in the table view, the command **Undo last import of current CSV file**, and **Undo last import** in the file menu and in CSV imports) moves notes created by the import to the trash and restores the previous content of notes it modified. Notes you changed after the import are skipped and listed.
+**Undo last import** (also **Undo** in the table view, the command **Undo last import of current CSV file**, and **Undo last import** in the file menu and in CSV imports) moves notes created by the import to the trash and restores the previous content of notes it modified. Notes you changed after the import are skipped and listed.
 
 The command **Re-import all CSV imports** opens the import dialog for each CSV that has import settings, one after the other.
 

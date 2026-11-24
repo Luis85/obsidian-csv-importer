@@ -52,6 +52,8 @@ describe("table view: select rows and import only those", function () {
 	it("the header checkbox selects every matching row and clears them again", async function () {
 		await openCsv(CSV);
 		const all = browser.$("[data-testid=csv-select-all]");
+		// Before anything is ticked, the header checkbox says what selection is for.
+		await expect(all).toHaveAttribute("aria-label", "Select rows to import only those");
 		await all.click();
 		await expect(importBtn()).toHaveText("Import 6 selected rows");
 		expect(await all.getProperty("checked")).toBe(true);

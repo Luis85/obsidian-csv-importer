@@ -21,6 +21,7 @@ describe("import dialog: preview, progress, report", function () {
 		expect(await countsLine()).toMatch(/6 new/);
 		await expect(browser.$(`${MODAL} .csv-importer-run-group.is-created`)).toBeDisplayed();
 		await expect(browser.$("[data-testid=run-import]")).toHaveText("Import 6 notes");
+		await expect(browser.$("[data-testid=run-headline]")).toHaveText("6 notes will be written to Data/timesheet/.");
 		await shot(SPEC, "preview", true);
 		await clickButton("Cancel");
 		await waitForNoModal();
@@ -43,7 +44,13 @@ describe("import dialog: preview, progress, report", function () {
 
 	it("opens the generated base from the finished dialog", async function () {
 		await importViaDialog(CSV, false);
+		await expect(browser.$("[data-testid=run-headline]")).toHaveText("6 notes written to Data/timesheet/.");
+		// With a base, Open base is the primary button and Close a plain one.
+		await expect(browser.$("[data-testid=run-open-base]")).toHaveElementClass("mod-cta");
+		await expect(browser.$("[data-testid=run-close]")).not.toHaveElementClass("mod-cta");
+		await expect(browser.$("[data-testid=run-more]")).toHaveAttribute("aria-label", "More actions");
 		await browser.$(`${MODAL} .csv-importer-run-base`).click();
+		await waitForNoModal();
 		await browser.waitUntil(async () => (await activeViewType()) === "bases", { timeoutMsg: "the base did not open" });
 		expect(await vaultExists("Data/timesheet.base")).toBe(true);
 	});
@@ -76,7 +83,7 @@ describe("import dialog: preview, progress, report", function () {
 	it("undoes the import from the more-actions menu of the finished dialog", async function () {
 		await importViaDialog(CSV, false);
 		await browser.$(`${MODAL} .csv-importer-run-more`).click();
-		await clickMenuItem("Undo import");
+		await clickMenuItem("Undo last import");
 		await waitForModal("Undo last import");
 		await clickButton("Undo import");
 		await browser.waitUntil(async () => (await listNotes(NOTES_DIR)).length === 0, { timeoutMsg: "notes still there after undo" });
