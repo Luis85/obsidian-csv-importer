@@ -100,7 +100,8 @@ describe("tags, aliases and cssclasses", () => {
 	it("an empty tags column is omitted entirely or kept as an empty list property", () => {
 		const omitted = plan("tags,a\n,1", { emptyValues: "omit" })[0];
 		expect(omitted?.frontmatter).not.toHaveProperty("tags");
-		expect(omitted?.types).not.toHaveProperty("tags");
+		// Omitted, but still managed by the import, as a list.
+		expect(omitted?.types.tags).toBe("list");
 		const kept = plan("tags,a\n,1", { emptyValues: "empty" })[0];
 		expect(kept?.frontmatter.tags).toBeNull();
 		expect(kept?.types.tags).toBe("list");

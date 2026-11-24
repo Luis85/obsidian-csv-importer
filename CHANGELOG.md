@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+- **Empty cells: Omit property**: a value you add in Obsidian to a property the CSV left empty is now protected on re-import (with **Keep values edited in Obsidian**), instead of being overwritten once the CSV has a value. Omitted properties stay managed by the import, and a tags cell that holds no tags (for example `#`) is treated like an empty cell.
+
 ## 0.4.0
 ### UI and UX
 Second UI/UX pass with a clearer information architecture; see `docs/archive/UX-REVIEW-2026-11.md`.

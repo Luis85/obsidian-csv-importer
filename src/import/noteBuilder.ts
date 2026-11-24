@@ -139,7 +139,12 @@ function buildRowContext(
 	return { converted, nameCtx: { ...base, formatted: nameVals }, bodyCtx: { ...base, formatted: bodyVals } };
 }
 
-/** Typed frontmatter of included columns: value templates applied, empty values omitted per config. */
+/**
+ * Typed frontmatter of included columns: value templates applied, empty values omitted per config.
+ * `types` lists every included column, also the ones omitted from `fm`: they stay managed by the import (see
+ * `MergeInput.managed`), so their snapshot entry records "empty" and a value the user adds in Obsidian later is
+ * protected like any other edit.
+ */
 function buildFrontmatter(
 	included: ColumnConfig[],
 	converted: Map<number, FrontmatterValue>,
@@ -159,9 +164,9 @@ function buildFrontmatter(
 				: renderCompiled(vt, bodyCtx, formatValue(v));
 			if (type !== "list") type = "text";
 		}
+		types[col.property] = type;
 		if (v === null && config.emptyValues === "omit") continue;
 		fm[col.property] = v;
-		types[col.property] = type;
 	}
 	return { fm, types };
 }
@@ -173,12 +178,14 @@ function normalizeListProps(
 	config: FileImportConfig,
 ): void {
 	for (const name of LIST_PROPS) {
+		// A list property is typed "list" whether it holds tags, is empty, or was omitted: the same for an empty
+		// cell and for a cell like "#" that normalizes to no tags.
+		if (name in types) types[name] = "list";
 		if (name in fm) {
 			const list = normalizeListProp(name, fm[name] ?? null);
 			if (list.length > 0) fm[name] = list;
 			else if (config.emptyValues === "omit") delete fm[name];
 			else fm[name] = null;
-			if (name in fm) types[name] = "list";
 		}
 	}
 }

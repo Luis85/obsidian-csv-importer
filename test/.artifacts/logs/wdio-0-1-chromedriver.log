@@ -1,9 +1,0 @@
-Starting ChromeDriver 150.0.7871.250 (890858cefc089b8747693707494cc68b9f8f6ddc-refs/heads/main@{#1719864}) on port 40177
-Only local connections are allowed.
-Please see https://chromedriver.chromium.org/security-considerations for suggestions on keeping ChromeDriver safe.
-[1795473533.228][SEVERE]: CreatePlatformSocket() failed: Address family not supported by protocol (97)
-ChromeDriver was started successfully on port 40177.
-Updates disabled.
-2026-11-23 22:38:53 Loaded updated app /tmp/obsidian-launcher-config-FpKpma/obsidian-1.15.1.asar
-Ignored: Error: ENOENT: no such file or directory, open '/tmp/obsidian-launcher-config-FpKpma/0ab40dc18dd21740.json'
-[1795473533.493][SEVERE]: CreatePlatformSocket() failed: Address family not supported by protocol (97)

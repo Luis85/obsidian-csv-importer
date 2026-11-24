@@ -1,8 +1,0 @@
-2026-11-23T22:35:22.705Z WARN webdriver: WebDriverError: element not interactable
-  (Session info: chrome=150.0.7871.250) when running "element/f.F2A94EB849A36ED444E76DFC1042FA05.d.FFB014675B2F7F956260818B2BC95961.e.24/click" with method "POST"
-2026-11-23T22:35:23.217Z WARN webdriver: WebDriverError: element not interactable
-  (Session info: chrome=150.0.7871.250) when running "element/f.F2A94EB849A36ED444E76DFC1042FA05.d.FFB014675B2F7F956260818B2BC95961.e.24/click" with method "POST"
-2026-11-23T22:35:24.231Z WARN webdriver: WebDriverError: element not interactable
-  (Session info: chrome=150.0.7871.250) when running "element/f.F2A94EB849A36ED444E76DFC1042FA05.d.FFB014675B2F7F956260818B2BC95961.e.24/click" with method "POST"
-2026-11-23T22:35:24.246Z ERROR webdriver: WebDriverError: element not interactable
-  (Session info: chrome=150.0.7871.250) when running "element/f.F2A94EB849A36ED444E76DFC1042FA05.d.FFB014675B2F7F956260818B2BC95961.e.24/click" with method "POST"
