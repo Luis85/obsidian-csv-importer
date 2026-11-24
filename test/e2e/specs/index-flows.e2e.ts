@@ -104,7 +104,7 @@ describe("CSV imports index", function () {
 		expect(await menuItems()).toEqual(["Configure", "Open base", "Undo last import", "Delete imported notes...", "Remove from index..."]);
 		await shot(SPEC, "row-menu", true);
 		await clickMenuItem("Configure");
-		await waitForModal("Columns");
+		await waitForModal("Properties");
 		await clickButton("Cancel");
 		await waitForNoModal();
 	});

@@ -35,9 +35,9 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Import settings: Replace whole note + confirm | import-settings | asks for confirmation before choosing Replace whole note; declining keeps the strategy |
 | Import settings: column Options, value template | import-settings | sets a value template under a column's Options |
 | Import settings: Extra properties, ID | import-settings | adds an ID extra property from the Add property menu |
-| Import settings: extra properties as rows of the Columns table (add, type, default `{{uuid}}`, sample and preview, import, remove, inline warning) | config-extra-properties | adds a row, sets a {{uuid}} default, shows it in the sample and preview, and imports it; flags a name that is also a CSV column and removes the row with the trash button |
-| Import settings: summary parts and tabs are flat (no Obsidian button chrome, also on hover), tabs fit on a phone | appearance | gives the summary parts / tabs only what their style says; keeps them flat while hovered; does not reach past the dialog and shows all four tabs |
-| Import settings: row filter | import-settings | filters rows from the File & rows tab |
+| Import settings: extra properties section of the Properties tab (add, type, default `{{uuid}}`, sample and preview, import, remove, inline warning) | config-extra-properties | adds a row, sets a {{uuid}} default, shows it in the sample and preview, and imports it; flags a name that is also a CSV column and removes the row with the trash button |
+| Import settings: summary parts and tabs are flat (no Obsidian button chrome, also on hover), tabs fit on a phone | appearance | gives the summary parts / tabs only what their style says; keeps them flat while hovered; does not reach past the dialog and shows all five tabs |
+| Import settings: row filter | import-settings | filters rows from the Rows tab |
 | Import settings: live preview | import-settings | shows the live note preview |
 | Typed properties (text IDs, numbers, checkboxes, empty cells) | import-options | writes typed properties |
 | Value templates | table-view, import-settings | links values as wikilinks; sets a value template |

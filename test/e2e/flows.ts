@@ -84,14 +84,14 @@ export async function chooseOption(scope: string, name: string, label: string): 
 }
 
 /** Switches to a tab of the import settings dialog. */
-export async function openConfigTab(id: "columns" | "notes" | "reimport" | "file"): Promise<void> {
+export async function openConfigTab(id: "columns" | "notes" | "rows" | "reimport" | "file"): Promise<void> {
 	await browser.$(`[data-testid=config-tab-${id}]`).click();
 }
 
 /** Opens the import settings dialog for the active CSV through the command. */
 export async function openConfigDialog(): Promise<void> {
 	await runCommand("configure-current-csv");
-	await waitForModal("Columns");
+	await waitForModal("Properties");
 	await browser.$("[data-testid=import-config-modal]").waitForDisplayed();
 }
 

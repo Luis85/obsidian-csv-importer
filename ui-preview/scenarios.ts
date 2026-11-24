@@ -168,16 +168,24 @@ function extrasConfig(host, text) {
 }
 
 // --- owner:config scenarios (helper) ---
-async function mountConfig(tab, extras = false) {
-	const host = new FakeHost(timesheetEn);
-	const { app, file } = mountTableView(host, timesheetEn);
-	if (extras) host.configs.set(file.path, extrasConfig(host, timesheetEn));
-	new ImportConfigModal(app, host, file, timesheetEn).open();
+async function mountConfig(tab, extras = false, text = timesheetEn) {
+	const host = new FakeHost(text);
+	const { app, file } = mountTableView(host, text);
+	if (extras) host.configs.set(file.path, extrasConfig(host, text));
+	new ImportConfigModal(app, host, file, text).open();
 	await sleep(300);
-	const idx = { columns: 0, notes: 1, reimport: 2, file: 3 }[tab];
-	document.querySelectorAll(".csv-importer-tab")[idx]?.click();
+	document.querySelector(`[data-testid=config-tab-${tab}]`)?.click();
 	await sleep(200);
 }
+
+/** A CSV with a short ID-like column, so the Re-import tab suggests a key ("Use ISBN"). */
+const BOOKS_CSV = [
+	"Title,Author,ISBN,Year,Genre",
+	"The Left Hand of Darkness,Ursula K. Le Guin,978-0441478125,1969,Science fiction",
+	"Kindred,Octavia E. Butler,978-0807083697,1979,Science fiction",
+	"The Remains of the Day,Kazuo Ishiguro,978-0679731726,1989,Literary fiction",
+	"Piranesi,Susanna Clarke,978-1635575637,2020,Fantasy",
+].join("\n");
 
 const INDEX_ITEMS = [
 	{ csvPath: "Data/timesheet.csv", fileName: "timesheet.csv", exists: true, targetFolder: "Data/timesheet", lastImport: Date.now() - 2 * 3600e3, hasUndo: true, basePath: "Data/timesheet/timesheet.base" },
@@ -354,13 +362,18 @@ export const scenarios = {
 		},
 	},
 	// --- owner:config scenarios ---
-	"c-config": { title: "Import settings dialog, Columns tab", async mount() { await mountConfig("columns"); } },
+	"c-config": { title: "Import settings dialog, Properties tab", async mount() { await mountConfig("columns"); } },
 	"c-config-notes": { title: "Import settings dialog, Notes tab", async mount() { await mountConfig("notes"); } },
-	"c-config-reimport": { title: "Import settings dialog, Re-import tab", async mount() { await mountConfig("reimport"); } },
-	"c-config-file": { title: "Import settings dialog, File & rows tab", async mount() { await mountConfig("file"); } },
-	"c-config-extras": { title: "Import settings dialog: extra properties (ID uuid), Columns tab", async mount() { await mountConfig("columns", true); } },
+	"c-config-rows": { title: "Import settings dialog, Rows tab (no filter)", async mount() { await mountConfig("rows"); } },
+	"c-config-reimport": { title: "Import settings dialog, Re-import tab (no key, nothing to suggest)", async mount() { await mountConfig("reimport"); } },
+	"c-config-reimport-suggest": {
+		title: "Import settings dialog, Re-import tab with a key suggestion (Use ISBN)",
+		async mount() { await mountConfig("reimport", false, BOOKS_CSV); },
+	},
+	"c-config-format": { title: "Import settings dialog, File format tab", async mount() { await mountConfig("file"); } },
+	"c-config-extras": { title: "Import settings dialog: extra properties (ID uuid), Properties tab", async mount() { await mountConfig("columns", true); } },
 	"c-config-extras-reimport": { title: "Import settings dialog: composite key, Re-import tab", async mount() { await mountConfig("reimport", true); } },
-	"c-config-extras-filter": { title: "Import settings dialog: active row filter, File & rows tab", async mount() { await mountConfig("file", true); } },
+	"c-config-extras-filter": { title: "Import settings dialog: active row filter, Rows tab", async mount() { await mountConfig("rows", true); } },
 	"c-config-options": {
 		title: "Import settings dialog, column options expanded (number column)",
 		async mount() {
@@ -381,7 +394,7 @@ export const scenarios = {
 			await sleep(150);
 		},
 	},
-	"d-config-advanced": { title: "Import settings dialog, File & rows tab (alias)", async mount() { await mountConfig("file"); } },
+	"d-config-advanced": { title: "Import settings dialog, File format tab (alias)", async mount() { await mountConfig("file"); } },
 	// --- end owner:config scenarios ---
 	"h-index": {
 		title: "CSV imports index view (4 imports, one missing CSV, one with undo)",

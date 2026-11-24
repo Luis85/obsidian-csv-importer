@@ -3,8 +3,8 @@ import type { App } from "obsidian";
 import type { ConflictStrategy } from "../../types";
 import { CONFIG_DESC, CONFLICT_DESCRIPTIONS, CONFLICT_OPTIONS, MATCH_NOTES_BY, NAME, suggestedKey } from "../labels";
 import { safeTargetFolder } from "../dom";
-import { FILE_NAME_DESC, KEY_PROPERTY, UNIQUE_IN_EVERY_ROW, keyExample } from "./copy";
-import { isUniqueColumn, suggestShortKey } from "./keys";
+import { FILE_NAME_DESC, KEY_HAS_DUPLICATES, KEY_HAS_EMPTY, KEY_PROPERTY, KEY_SUGGESTED, keyExample, useKey } from "./copy";
+import { keyColumnStatus, suggestShortKey } from "./keys";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
 import { FolderSuggest } from "./FolderSuggest";
@@ -57,8 +57,17 @@ export class OutputSection {
 		this.renderChips();
 	}
 
+	/** "Match notes by" first: it is what makes a re-import safe. Then what happens to existing notes. */
 	buildReimport(el: HTMLElement): void {
 		const { cfg } = this.draft;
+		this.keySettingEl = new Setting(el).setName(MATCH_NOTES_BY).setDesc(CONFIG_DESC.key);
+		this.keySettingEl.settingEl.addClass("csv-importer-key-setting");
+		this.keyHintEl = el.createDiv({ cls: "csv-importer-key-hint" });
+		this.keyListEl = el.createDiv({ cls: "csv-importer-key-list", attr: { role: "group", "aria-label": MATCH_NOTES_BY, "data-testid": "config-key-list" } });
+		this.keyPropertyEl = el.createDiv({ cls: "csv-importer-sub-settings" });
+		this.renderKeyList();
+		this.draft.on("parsing", () => this.renderKeyList());
+
 		const conflictSetting = new Setting(el).setName(NAME.conflict);
 		const updateConflictDesc = (): void => {
 			conflictSetting.setDesc(CONFLICT_DESCRIPTIONS[cfg.conflict]);
@@ -77,13 +86,6 @@ export class OutputSection {
 		);
 		this.updateOptionsEl = el.createDiv({ cls: "csv-importer-sub-settings" });
 		this.renderUpdateOptions();
-
-		this.keySettingEl = new Setting(el).setName(MATCH_NOTES_BY).setDesc(CONFIG_DESC.key);
-		this.keyHintEl = this.keySettingEl.descEl.createDiv({ cls: "csv-importer-key-hint" });
-		this.keyListEl = el.createDiv({ cls: "csv-importer-key-list", attr: { role: "group", "aria-label": MATCH_NOTES_BY } });
-		this.keyPropertyEl = el.createDiv({ cls: "csv-importer-sub-settings" });
-		this.renderKeyList();
-		this.draft.on("parsing", () => this.renderKeyList());
 	}
 
 	private updateFolderPlaceholder(): void {
@@ -153,13 +155,18 @@ export class OutputSection {
 		const sources = new Set(cfg.columns.map((c) => c.source));
 		this.setKeys(this.keys().filter((k) => sources.has(k)));
 		const keys = this.keys();
+		const suggestion = keys.length === 0 ? this.suggestion() : null;
 		for (const c of cfg.columns) {
 			const label = list.createEl("label", { cls: "csv-importer-key-option" });
 			const cb = label.createEl("input", { type: "checkbox" });
 			cb.checked = keys.includes(c.source);
 			cb.addEventListener("change", () => this.toggleKey(c.source, cb.checked));
-			label.createSpan({ cls: "csv-importer-key-name", text: c.source });
-			if (parsed && isUniqueColumn(parsed, c)) label.createSpan({ cls: "csv-importer-key-meta", text: UNIQUE_IN_EVERY_ROW });
+			label.createSpan({ cls: "csv-importer-key-name", text: c.source, attr: { title: c.source } });
+			// Only what helps the choice: the suggested column, and columns that cannot identify a row on their own.
+			const status = parsed ? keyColumnStatus(parsed, c) : "unique";
+			if (c.source === suggestion) label.createSpan({ cls: "csv-importer-key-meta", text: KEY_SUGGESTED });
+			else if (status === "duplicates") label.createSpan({ cls: "csv-importer-key-meta mod-warning", text: KEY_HAS_DUPLICATES });
+			else if (status === "empty") label.createSpan({ cls: "csv-importer-key-meta mod-warning", text: KEY_HAS_EMPTY });
 		}
 		const propBox = this.keyPropertyEl;
 		if (propBox) {
@@ -177,25 +184,29 @@ export class OutputSection {
 					);
 			}
 		}
-		this.renderKeyHint();
+		this.renderKeyHint(suggestion);
 	}
 
-	private renderKeyHint(): void {
-		const hint = this.keyHintEl;
+	/** The suggested key column, or null. Never a long free-text column (see `suggestShortKey`). */
+	private suggestion(): string | null {
 		const { cfg, parsed } = this.draft;
+		if (!parsed) return null;
+		try {
+			return suggestShortKey(parsed, cfg.columns);
+		} catch {
+			return null;
+		}
+	}
+
+	/** "Suggested: ID (unique in every row) [Use ID]" while no key is set and a good column exists. */
+	private renderKeyHint(suggestion: string | null): void {
+		const hint = this.keyHintEl;
 		if (!hint) return;
 		hint.empty();
-		if (this.keys().length > 0 || !parsed) return;
-		let suggestion: string | null = null;
-		try {
-			suggestion = suggestShortKey(parsed, cfg.columns);
-		} catch {
-			suggestion = null;
-		}
 		if (!suggestion) return;
 		const name = suggestion;
 		hint.createSpan({ text: suggestedKey(name) });
-		const btn = hint.createEl("button", { cls: "csv-importer-chip", text: `Use ${name}`, attr: { type: "button" } });
+		const btn = hint.createEl("button", { cls: "csv-importer-use-key", text: useKey(name), attr: { type: "button", "data-testid": "config-use-key" } });
 		btn.addEventListener("click", () => {
 			this.setKeys([name]);
 			this.renderKeyList();

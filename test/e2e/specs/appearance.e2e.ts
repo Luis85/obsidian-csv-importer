@@ -94,7 +94,7 @@ describe("appearance in Obsidian's default theme", function () {
 			await openFile(CSV);
 			await waitForViewType("csv-importer-view");
 			await runCommand("configure-current-csv");
-			await waitForModal("Columns");
+			await waitForModal("Properties");
 			await expect(browser.$(`${MODAL} [data-testid=config-summary-link]`)).toBeDisplayed();
 		});
 
@@ -109,9 +109,9 @@ describe("appearance in Obsidian's default theme", function () {
 			).toEqual(["summary", "tab"]);
 		});
 
-		it("does not reach past the dialog and shows all four tabs", async function () {
+		it("does not reach past the dialog and shows all five tabs", async function () {
 			const tabs = await browser.$$(`${MODAL} [data-testid^=config-tab-]`).map((el) => el.getText());
-			expect(tabs).toHaveLength(4);
+			expect(tabs).toHaveLength(5);
 			const { past } = await overflow(MODAL);
 			expect(past).toEqual([]);
 		});
@@ -142,7 +142,7 @@ describe("appearance in Obsidian's default theme", function () {
 			await blurFocus();
 			await parkPointer();
 			const tabs = await stylesOf(MODAL, "[data-testid^=config-tab-]", ["background-color", "box-shadow", "border-top-width"]);
-			expect(tabs.length).toBe(4);
+			expect(tabs.length).toBe(5);
 			for (const tab of tabs) {
 				expect(tab).toMatchObject({ "background-color": "rgba(0, 0, 0, 0)", "box-shadow": "none", "border-top-width": "0px" });
 			}

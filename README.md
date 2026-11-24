@@ -27,7 +27,7 @@ Sample files are in [`examples/`](examples).
 This uses [`examples/timesheet.csv`](examples/timesheet.csv): one row per working day with `Datum`, `Rolle`, `Beschreibung`, `Stunden` and `Tage`.
 
 1. Copy `timesheet.csv` to `Data/timesheet.csv` and open it. `Stunden` and `Tage` show a number badge, `Datum` a date badge.
-2. Select **Configure** in the table view. On the **Notes** tab, **Create a base** is on by default. On the **Re-import** tab, tick a column under **Match notes by** that is unique per row. The sample timesheet has one entry per day, so `Datum` works. Real timesheets often have several entries per day: tick two columns (for example `Datum` and `Rolle`) for a composite key, or add an ID column to the export. Without a key, notes are matched by file name (for example `{{Datum}} {{Rolle}}`). Select **Import now** (it also saves; **Save** only saves).
+2. Select **Import settings** in the table view. On the **Notes** tab, **Create a base** is on by default. On the **Re-import** tab, tick a column under **Match notes by** that is unique per row. The sample timesheet has one entry per day, so `Datum` works. Real timesheets often have several entries per day: tick two columns (for example `Datum` and `Rolle`) for a composite key, or add an ID column to the export. Without a key, notes are matched by file name (for example `{{Datum}} {{Rolle}}`). Select **Import now** (it also saves; **Save** only saves).
 3. Review the preview and import. You get one note per row, and a `.base` file next to the folder that lists them as a table.
 4. Open the base. In the table view, use the column menu of `Stunden` to add a summary and choose **Sum**. This works because `Stunden` is a real number in every note, not text. (Menu names depend on your Obsidian version.)
 5. Add a property `Abgerechnet` (checkbox) to a few notes, or add the column in the base.
@@ -38,14 +38,15 @@ The Sum in the base now reflects the new hours, and `Abgerechnet` is still set.
 
 ## Import settings
 
-Select **Configure** in the table view (or run **Configure import for current CSV file**, or use **Configure CSV import** in the file menu) to open the import settings. The title shows the file name, and a summary line under it (rows, delimiter, target folder, key, filter) links to the matching tab. The preview of a note is next to the settings on wide screens and behind a **Preview** button on narrow ones. A dot on a tab means it has settings that differ from the defaults.
+Select **Import settings** in the table view (or run **Open import settings for current CSV file**, or use **Import settings** in the file menu) to open the import settings. The title shows the file name, and a summary line under it (for example `6 rows · comma · → Data/timesheet/ · matched by file name · filter: 4 of 6 rows`) links to the matching tab. The preview of a note is next to the settings on wide screens; on narrow ones it is behind a **Preview** button at the bottom. A dot on a tab means it has settings that differ from the defaults.
 
 | Tab | What is on it |
 | --- | --- |
-| **Columns** | Per column: use, property name, type, sample. **Re-detect types**. **Extra properties**. |
+| **Properties** | Per column: use, property name, type, options and a sample of the converted value. **Re-detect types**. **Extra properties** (own section). **Values**: **Empty cells**, **Number precision**. |
 | **Notes** | Target folder, file name template, body template, tags, **Link notes to the CSV**, **Create a base**. |
-| **Re-import** | **When a note already exists** (with its options), **Match notes by**, **Update existing notes not created by this import**. |
-| **File & rows** | Encoding, delimiter, header row, decimal separator, date order, list separator, empty cells, number precision, **Filter rows**. |
+| **Rows** | **Filter rows**, with the number of matching rows. |
+| **Re-import** | **Match notes by**, **When a note already exists** (with its options), **Update notes not created by this import**. |
+| **File format** | Encoding, delimiter, header row, decimal separator, date order, list separator. |
 
 Buttons at the bottom: **Import now** (saves, then opens the import preview), **Save** and **Cancel**.
 
@@ -96,11 +97,11 @@ Each column can have a value template applied after type conversion. `{{value}}`
 | `[[{{value}}]]` | `Softwareentwickler` | `Rolle: "[[Softwareentwickler]]"` |
 | `{{value}} h` | `0,5` | `Stunden: 0.5 h` (text) |
 
-For list columns the template is applied to every item, so `[[{{value}}]]` creates a list of links. Empty cells stay empty. Set a template under **Options** > **Value template** on the **Columns** tab, or use **Link values ([[…]])** in the badge menu of the table to set `[[{{value}}]]` in one click.
+For list columns the template is applied to every item, so `[[{{value}}]]` creates a list of links. Empty cells stay empty. Set a template under **Options** > **Value template** on the **Properties** tab, or use **Link values ([[…]])** in the badge menu of the table to set `[[{{value}}]]` in one click.
 
 ## Extra properties and IDs
 
-On the **Columns** tab of the import settings, **Extra properties** adds properties to the imported notes that are not columns of the CSV, for example `status: open` for every new note. Extra properties are written only to the notes: the CSV file is never changed.
+On the **Properties** tab of the import settings, the **Extra properties** section adds properties to the imported notes that are not columns of the CSV, for example `status: open` for every new note. Extra properties are written only to the notes: the CSV file is never changed.
 
 Each extra property has a name, a type and a default value. The default value can use:
 
@@ -145,13 +146,13 @@ With **Update properties** two more options apply:
 - **Keep values edited in Obsidian** (on by default): if you changed a CSV property in a note, re-imports keep your value. The plugin remembers the last imported value per note and property, so it can tell your edits from changes in the CSV.
 - **Keep values when the CSV cell is empty** (on by default): an empty cell never clears a value in the note.
 
-Notes that were not created by this import are never changed. A note counts as created by this import if the plugin has import state for it or if its source link points to this CSV. Any other note, for example an unrelated note with the same name, is skipped with the reason "not created by this import". To change that, turn on **Update existing notes not created by this import** on the **Re-import** tab.
+Notes that were not created by this import are never changed. A note counts as created by this import if the plugin has import state for it or if its source link points to this CSV. Any other note, for example an unrelated note with the same name, is skipped with the reason "not created by this import". To change that, turn on **Update notes not created by this import** on the **Re-import** tab.
 
 ## Matching notes on re-import
 
 Notes are matched in one of two ways:
 
-- **Match notes by** (recommended): on the **Re-import** tab, tick the columns that identify a row, such as an ID. Notes in the target folder whose key property matches are updated, even if you renamed or moved them within that folder. A single key column is always written to the notes, even if you excluded it, because it has to be stored to find the note again. The plugin suggests a column marked "unique in every row" when no key is set (**Use** button); long free-text columns are never suggested.
+- **Match notes by** (recommended): on the **Re-import** tab, tick the columns that identify a row, such as an ID. Notes in the target folder whose key property matches are updated, even if you renamed or moved them within that folder. A single key column is always written to the notes, even if you excluded it, because it has to be stored to find the note again. When no key is set, the plugin suggests a short column that is unique in every row (marked "suggested", with a **Use** button); long or free-text columns are never suggested. Columns marked "has duplicates" or "has empty cells" cannot identify a row on their own.
 - **Composite key**: tick two or more columns (for example `Datum` and `Rolle`). Their values are joined with ` | ` and stored in one **Key property** (default `import_key`), with an example shown under it. The individual columns follow their own **Use** setting. A row where any key column is empty gets no key.
 - **File name**: without a key column, notes with the same generated file name are updated. If you insert or re-sort rows, or change the file name template, notes no longer line up and you get wrong updates or duplicates. The preview warns when no key is set, and when the CSV has duplicate keys or the vault has duplicate notes for a key (for example sync conflict copies).
 
@@ -159,7 +160,7 @@ If the CSV has a column named `source`, the source link is written to `source_cs
 
 ## Row filter
 
-On the **File & rows** tab, **Filter rows** limits the import to rows where one column meets a condition: **Import rows where** a column *equals*, *does not equal*, *contains*, *does not contain*, *is empty*, *is not empty*, *is greater than* or *is less than* a value. Text comparisons ignore case; numbers are compared as numbers when both sides parse. The preview, the import button count and the table view follow the filter. Rows that do not match are not imported and existing notes for them are left alone. There is one condition per file.
+On the **Rows** tab, **Filter rows** limits the import to rows where one column meets a condition: **Import rows where** a column *equals*, *does not equal*, *contains*, *does not contain*, *is empty*, *is not empty*, *is greater than* or *is less than* a value. Text comparisons ignore case; numbers are compared as numbers when both sides parse. The preview, the import button count and the table view follow the filter. Rows that do not match are not imported and existing notes for them are left alone. There is one condition per file.
 
 ## Date formats and units
 
@@ -275,7 +276,7 @@ Per file only (import settings, not in the settings tab): column types, property
 ## Troubleshooting
 
 **Numbers are imported as text.**
-Check **Decimal separator** on the **File & rows** tab: `0,625` needs a comma. A single non-numeric value in a column makes it text. Fix the value or set the column type to Number. For values such as `12,50 €` or `12 %`, turn on **Ignore units (€, $, %)** under the column's **Options**.
+Check **Decimal separator** on the **File format** tab: `0,625` needs a comma. A single non-numeric value in a column makes it text. Fix the value or set the column type to Number. For values such as `12,50 €` or `12 %`, turn on **Ignore units (€, $, %)** under the column's **Options**.
 
 **Nothing happens when I click a CSV file.**
 Another plugin probably handles `.csv` files. Obsidian lets only one plugin register an extension. Disable the other plugin's CSV view, or use the commands and file-menu entries of CSV Importer, which work without the table view.
@@ -284,13 +285,13 @@ Another plugin probably handles `.csv` files. Obsidian lets only one plugin regi
 Without a key, notes are matched by file name. Tick a key under **Match notes by** on the **Re-import** tab, then import again. Remove the duplicates by hand or with **Undo import** if it was the last run.
 
 **Characters look garbled.**
-The encoding was detected wrongly. Set **Encoding** on the **File & rows** tab (Windows-1252 for most Excel exports).
+The encoding was detected wrongly. Set **Encoding** on the **File format** tab (Windows-1252 for most Excel exports).
 
 **Rows are skipped with "not created by this import".**
 A note with that name or key already exists but this CSV did not create it. Rename or move that note, or turn on **Update existing notes not created by this import**.
 
 **Dates are not recognized.**
-Slash dates like `03/04/2026` are ambiguous and the column stays text unless another value settles the order. Set **Date order for dates like 03/04/2026** on the **File & rows** tab. Excel serial numbers are inferred as numbers; set the column type to Date to convert them.
+Slash dates like `03/04/2026` are ambiguous and the column stays text unless another value settles the order. Set **Date order for dates like 03/04/2026** on the **File format** tab. Excel serial numbers are inferred as numbers; set the column type to Date to convert them.
 
 ## FAQ
 
@@ -301,7 +302,7 @@ No. The plugin only reads CSV files.
 If the property already has a different type in your vault, Obsidian keeps showing that type, because CSV Importer does not change Obsidian's property types. Change the type in Obsidian's properties view.
 
 **Can I import only some rows?**
-Yes: use **Filter rows** on the **File & rows** tab. Exclude columns with the badge menu in the table view.
+Yes: use **Filter rows** on the **Rows** tab. Exclude columns with the badge menu in the table view.
 
 **Do I lose my notes if I choose Delete imported notes?**
 They go to Obsidian's trash, so you can restore them there. Only notes this import owns are moved.

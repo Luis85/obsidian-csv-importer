@@ -76,6 +76,12 @@ function convertedSample(draft: ConfigDraft, col: ColumnConfig): string {
 	return Array.isArray(v) ? JSON.stringify(v) : formatValue(v);
 }
 
+/** Tooltip of a sample: the full value, and the raw cell before it when the conversion changed it. */
+export function sampleTitle(raw: string, converted: string): string {
+	if (raw === "") return "";
+	return raw === converted ? raw : `${raw} → ${converted}`;
+}
+
 /**
  * One column of the CSV: include checkbox, source name, property input, type dropdown, an options button and the sample.
  * The options (value template, ignore units) expand inline below the row. On narrow layouts CSS turns the row into
@@ -111,9 +117,8 @@ export function renderColumnRow(list: HTMLElement, col: ColumnConfig, draft: Con
 	setIcon(optBtn, "sliders-horizontal");
 	const optDot = optBtn.createSpan({ cls: "csv-importer-options-dot" });
 
-	const sampleEl = main.createDiv({ cls: "csv-importer-col-sample" });
-	const sampleBefore = sampleEl.createSpan({ cls: "csv-importer-col-before" });
-	const sampleArrow = sampleEl.createSpan({ cls: "csv-importer-col-arrow", text: "→" });
+	// The value the note gets; the raw cell is in the tooltip when the two differ. One ellipsis, not one per side.
+	const sampleEl = main.createDiv({ cls: "csv-importer-col-sample", attr: { "data-testid": "config-col-sample" } });
 	const sampleAfter = sampleEl.createSpan({ cls: "csv-importer-col-after" });
 
 	// Second line on narrow layouts; tapping it opens the options.
@@ -162,13 +167,11 @@ export function renderColumnRow(list: HTMLElement, col: ColumnConfig, draft: Con
 	const sample = firstSample(draft, col);
 	function refresh(): void {
 		const out = convertedSample(draft, col);
-		const same = sample === out;
-		sampleBefore.setText(sample);
-		sampleArrow.toggleClass("csv-importer-hidden", sample === "" || same);
-		sampleAfter.toggleClass("csv-importer-hidden", sample === "" || same);
-		sampleAfter.setText(out);
-		sampleEl.setAttr("title", sample === "" ? "" : same ? sample : `${sample} → ${out}`);
-		summaryText.setText(`→ ${col.property || col.source}${sample === "" ? "" : ` · ${same ? sample : `${sample} → ${out}`}`}`);
+		const shown = sample === "" ? "" : out;
+		sampleAfter.setText(shown);
+		sampleEl.setAttr("title", sampleTitle(sample, out));
+		summary.setAttr("title", sampleTitle(sample, out));
+		summaryText.setText(`→ ${col.property || col.source}${shown === "" ? "" : ` · ${shown}`}`);
 		result.setText(sample === "" ? "" : `${RESULT}: ${out}`);
 		const hasOptions = !!col.valueTemplate || (col.type === "number" && !!col.stripUnits);
 		optDot.toggleClass("csv-importer-hidden", !hasOptions);
