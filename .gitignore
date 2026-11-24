@@ -12,3 +12,4 @@ ui-preview/screenshots/
 reports/e2e/
 .stryker-tmp/
 reports/mutation/
+test/.artifacts/
