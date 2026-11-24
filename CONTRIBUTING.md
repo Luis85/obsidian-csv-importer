@@ -99,7 +99,7 @@ npm run test:mutation
 
 `stryker.config.mjs` mutates the pure logic: `src/core/`, `src/csv/`, `src/import/` (without `vaultGateway.ts`, an interface), `src/configStore.ts` and `src/defaults.ts`. The views are not mutated; they are covered by the end-to-end suite. Reports go to `reports/mutation/` (`index.html` to browse survivors, `mutation.json`), gitignored. A full run takes several minutes; to check one file, pass `--mutate src/csv/parser.ts`.
 
-The release workflow runs the suite in its own `mutation` job before building and publishing, and the release fails when the mutation score is below `thresholds.break` in `stryker.config.mjs`. Raise the threshold when the score goes up; do not lower it to get a release through. The HTML report is uploaded as the `mutation-report` artifact.
+The release workflow runs the suite in its own `mutation` job before building and publishing, and the release fails when the mutation score is below `thresholds.break` in `stryker.config.mjs` (65 %; the first full run scored 68.2 %, with `src/import/checkpointer.ts`, `src/import/yaml.ts`, `src/csv/encoding.ts` and `src/defaults.ts` the weakest). Raise the threshold when the score goes up; do not lower it to get a release through. The HTML report is uploaded as the `mutation-report` artifact.
 
 ## Lint
 
