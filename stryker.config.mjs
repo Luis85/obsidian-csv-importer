@@ -8,7 +8,9 @@ export default {
 	plugins: ["@stryker-mutator/vitest-runner"],
 	mutate: ["src/core/**/*.ts", "src/csv/**/*.ts", "src/import/**/*.ts", "src/configStore.ts", "src/defaults.ts", "!src/import/vaultGateway.ts"],
 	coverageAnalysis: "perTest",
-	ignoreStatic: true,
+	// Static mutants (module-level constants such as regexes and lookup tables) are tested too: with ignoreStatic the vitest
+	// runner credits module loading to one unrelated test, so those mutants would survive whatever the tests check.
+	ignoreStatic: false,
 	reporters: ["progress", "clear-text", "html", "json"],
 	htmlReporter: { fileName: "reports/mutation/index.html" },
 	jsonReporter: { fileName: "reports/mutation/mutation.json" },
