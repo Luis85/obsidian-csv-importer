@@ -20,7 +20,7 @@ export default defineConfig([
 			globals: { ...globals.browser },
 			parserOptions: {
 				projectService: {
-					allowDefaultProject: ["eslint.config.*"],
+					allowDefaultProject: ["eslint.config.*", "stryker.config.*"],
 				},
 				tsconfigRootDir: import.meta.dirname,
 			},

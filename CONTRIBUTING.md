@@ -20,6 +20,7 @@ Copy (or symlink) `main.js`, `manifest.json` and `styles.css` into `<vault>/.obs
 | `npm run typecheck` | `tsc` only |
 | `npm test` | vitest, single run |
 | `npm run test:watch` | vitest in watch mode |
+| `npm run test:mutation` | Mutation testing with Stryker (see below) |
 | `npm run lint` | ESLint (with `eslint-plugin-obsidianmd`), Stylelint and the API version check |
 | `npm run lint:css` | Stylelint only |
 | `npm run lint:api` | API version check only |
@@ -71,6 +72,18 @@ Pure logic (`core/`, `csv/`, and most of `import/`) does not need Obsidian at ru
 ## Testing
 
 Tests are in `tests/` and run with vitest. `tests/mocks/obsidian.ts` is a mock of the parts of the `obsidian` module the code uses (vault, files, `Notice`, and so on); `tests/mocks/setup.ts` wires it in. Add a test with every behavior change. `acceptance.test.ts` and `reimport.test.ts` cover end-to-end imports and re-imports.
+
+## Mutation testing
+
+[Stryker](https://stryker-mutator.io) changes the code under test in small ways (mutants: a flipped condition, a removed statement, a different constant) and runs the vitest suite against each. A mutant the tests do not notice ("survived") points at behavior no test pins down.
+
+```sh
+npm run test:mutation
+```
+
+`stryker.config.mjs` mutates the pure logic: `src/core/`, `src/csv/`, `src/import/` (without `vaultGateway.ts`, an interface), `src/configStore.ts` and `src/defaults.ts`. The views are not mutated; they are covered by the end-to-end suite. Reports go to `reports/mutation/` (`index.html` to browse survivors, `mutation.json`), gitignored. A full run takes several minutes; to check one file, pass `--mutate src/csv/parser.ts`.
+
+The release workflow runs the suite in its own `mutation` job before building and publishing, and the release fails when the mutation score is below `thresholds.break` in `stryker.config.mjs`. Raise the threshold when the score goes up; do not lower it to get a release through. The HTML report is uploaded as the `mutation-report` artifact.
 
 ## Lint
 
