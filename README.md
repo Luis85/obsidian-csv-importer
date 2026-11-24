@@ -255,7 +255,7 @@ The encoding is detected automatically: byte order mark, then UTF-8, and Windows
 
 - **Reset all import settings**: **Reset...** removes the saved import settings of every CSV file after a confirmation. Imported notes are not affected.
 
-Per file only (import settings, not in the settings tab): column types, property names and value templates, ignore units, extra properties, match notes by and key property, Update existing notes not created by this import, date order, number precision and Filter rows.
+Per file only (import settings, not in the settings tab): column types, property names and value templates, ignore units, extra properties, match notes by and key property, Update notes not created by this import, date order, number precision and Filter rows.
 
 `tags`, `aliases` and `cssclasses` columns are always written as lists.
 
@@ -294,13 +294,13 @@ Check **Decimal separator** on the **File format** tab: `0,625` needs a comma. A
 Another plugin probably handles `.csv` files. Obsidian lets only one plugin register an extension. Disable the other plugin's CSV view, or use the commands and file-menu entries of CSV Importer, which work without the table view.
 
 **I got duplicate notes after changing the file name template.**
-Without a key, notes are matched by file name. Tick a key under **Match notes by** on the **Re-import** tab, then import again. Remove the duplicates by hand or with **Undo import** if it was the last run.
+Without a key, notes are matched by file name. Tick a key under **Match notes by** on the **Re-import** tab, then import again. Remove the duplicates by hand or with **Undo last import** if it was the last run.
 
 **Characters look garbled.**
 The encoding was detected wrongly. Set **Encoding** on the **File format** tab (Windows-1252 for most Excel exports).
 
 **Rows are skipped with "not created by this import".**
-A note with that name or key already exists but this CSV did not create it. Rename or move that note, or turn on **Update existing notes not created by this import**.
+A note with that name or key already exists but this CSV did not create it. Rename or move that note, or turn on **Update notes not created by this import** on the **Re-import** tab.
 
 **Dates are not recognized.**
 Slash dates like `03/04/2026` are ambiguous and the column stays text unless another value settles the order. Set **Date order for dates like 03/04/2026** on the **File format** tab. Excel serial numbers are inferred as numbers; set the column type to Date to convert them.

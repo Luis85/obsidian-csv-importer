@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### UI and UX
-Second UI/UX pass with a clearer information architecture; see `docs/UX-REVIEW-2026-11.md`.
+Second UI/UX pass with a clearer information architecture; see `docs/archive/UX-REVIEW-2026-11.md`.
 - **One name per concept** across buttons, menus and commands: **Import settings** (was Configure / Configure CSV import), **Undo last import**, **CSV imports**. Command names changed, command IDs did not: **Import current CSV file**, **Open import settings for current CSV file**, **Re-import all CSV imports**.
 - **Import settings** tabs are ordered as you decide: **Properties** (columns, **Extra properties** with its own heading, **Values**: empty cells and number precision), **Notes**, **Rows** (the row filter, moved out of the file tab), **Re-import** (**Match notes by** first), **File format**. The summary says "matched by file name" instead of "no key"; the Preview button is hidden while the preview pane is visible; samples show the converted value once, with the raw value in the tooltip.
 - **Key suggestion** never picks free text (columns whose values are mostly several words), prefers code-like columns, and marks columns with duplicates or empty cells; **Use X** is a real button.

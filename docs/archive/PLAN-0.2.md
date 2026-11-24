@@ -1,5 +1,7 @@
 # Plan for 0.2: architecture, rules, user needs
 
+> Historical: implemented in 0.2.0. Kept for the reasoning behind the architecture. The current module map is in [CONTRIBUTING.md](../../CONTRIBUTING.md#architecture); test counts and paths below are as of the plan (tests now live in `tests/unit/` and `tests/e2e/`).
+
 This plan draws on three reviews from November 2026:
 
 - **User research, round 2:** Bases workflows, common CSV sources, competitor issues, mobile, locales and sync.

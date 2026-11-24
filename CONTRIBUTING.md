@@ -69,7 +69,7 @@ Modules in `src/`:
 | `view/dom.ts` | `renderCallout`, `badge`, `iconButton`, `relPath` and other DOM helpers |
 | `view/ConfirmModal.ts`, `view/shared.ts`, `view/relativeTime.ts` | Small shared UI pieces |
 
-Pure logic (`core/`, `csv/`, and most of `import/`) does not need Obsidian at runtime beyond types, so it is tested without it. UI strings live in `view/labels.ts`, `view/config/copy.ts` and `view/runCopy.ts`; reuse them rather than writing literals, and keep `README.md` labels in step. `docs/UI-SPEC.md` is the design spec for the interface.
+Pure logic (`core/`, `csv/`, and most of `import/`) does not need Obsidian at runtime beyond types, so it is tested without it. UI strings live in `view/labels.ts`, `view/config/copy.ts` and `view/runCopy.ts`; reuse them rather than writing literals, and keep `README.md` labels in step. [docs/UI-SPEC.md](docs/UI-SPEC.md) is the current spec for the interface; [docs/README.md](docs/README.md) lists the other project docs.
 
 ## Testing
 
@@ -106,7 +106,7 @@ The release workflow runs the suite in its own `mutation` job, next to the relea
 `npm run lint` runs three checks, in this order:
 
 1. `eslint .` with `eslint-plugin-obsidianmd` (the rules the community plugin review applies). Typical points: sentence case UI text, no `innerHTML`, no default hotkeys, `vault.process` instead of `vault.modify`, no stray `console.log`.
-2. `stylelint styles.css` (`.stylelintrc.json`), mainly to catch duplicate declarations, which the community directory review reports.
+2. `stylelint styles.css` (`.stylelintrc.json`): duplicate declarations, `:has()` selectors and CSS features not fully supported in Chrome 120 and later, all of which the community directory review reports.
 3. `node scripts/check-api-versions.mjs`. It uses the TypeScript compiler to report every Obsidian API (method or property) whose `@since` is newer than `minAppVersion` in `manifest.json` and is not guarded by `requireApiVersion`. Why: the community directory review checks this, but `eslint-plugin-obsidianmd`'s `no-unsupported-api` rule only checks methods, not plain properties (for example `Plugin.settings`). Run it alone with `npm run lint:api`; `npm run lint:css` runs Stylelint alone.
 
 `minAppVersion` is 1.15.1. Raising it relaxes the API check; lowering it can make the check fail. See [docs/SUBMISSION.md](docs/SUBMISSION.md) for the full checklist.
@@ -155,7 +155,7 @@ README images: `npm run screenshots:readme` runs only `readme-screenshots.e2e.ts
 | `owner:table-run` | Table view and import run dialog |
 | `owner:index-settings` | CSV imports index and settings tab |
 
-Use Obsidian CSS variables and the spacing rules in `docs/UI-SPEC.md` section 7. Do not repeat a property in one rule (Stylelint fails on it).
+Use Obsidian CSS variables and the component and CSS rules in [docs/UI-SPEC.md](docs/UI-SPEC.md#7-component-rules) section 7. Do not use `:has()` (Stylelint rejects it). Do not repeat a property in one rule (Stylelint fails on it).
 
 ## Release process
 

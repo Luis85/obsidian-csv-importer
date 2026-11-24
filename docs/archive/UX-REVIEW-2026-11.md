@@ -1,6 +1,8 @@
 # UI/UX review and information architecture, November 2026 (second pass)
 
-Follows `docs/UI-SPEC.md` (first redesign). Evidence: `node ui-preview/build.mjs && node ui-preview/screenshot.mjs`, all scenarios, light and dark, desktop and phone. This review looks at the plugin as one product: can a user tell where they are, what to do next, and where a setting lives?
+> Historical: implemented in the Unreleased changes after 0.2.0 (see CHANGELOG). The information architecture, vocabulary and tab order from §2 now live in the current spec, [UI-SPEC.md](../UI-SPEC.md). Not done: the second half of finding 6 ("Imported 3 days ago" as a link to the run history), tracked in [REVIEW-2026-11.md](../REVIEW-2026-11.md#open-backlog). Finding 24 was implemented with `setDestructive()` rather than `setWarning()`.
+
+Follows the first redesign ([UI-SPEC-first-pass.md](UI-SPEC-first-pass.md)). Evidence: `node ui-preview/build.mjs && node ui-preview/screenshot.mjs`, all scenarios, light and dark, desktop and phone. This review looks at the plugin as one product: can a user tell where they are, what to do next, and where a setting lives?
 
 ## 1. The user's goals
 
@@ -70,7 +72,7 @@ Severity: **H** blocks or misleads a goal, **M** costs time or trust, **L** poli
 8. **H Row filter lives on the "File & rows" tab** with encoding and delimiters. → **Rows** tab.
 9. **H Extra properties have no heading.** "Add property" and an unexplained sentence float under the columns table (`c-config`). → own heading "Extra properties" and description "Properties that are not columns, such as status or an ID. Written to the notes only."
 10. **M Duplicate heading** "Columns" right under the "Columns" tab.
-11. **M Re-import tab buries the key.** "Match notes by" is the decision that makes re-import safe, yet comes after the update-mode dropdown. Every column says "unique in every row", which is noise; the suggestion picks a long free-text column (`Beschreibung`), against UI-SPEC §2. Show the hint only where it helps (suggested, or "has duplicates" as a warning), never suggest a column whose average length is over 30 characters, and render "Use …" as a real button, not a code chip.
+11. **M Re-import tab buries the key.** "Match notes by" is the decision that makes re-import safe, yet comes after the update-mode dropdown. Every column says "unique in every row", which is noise; the suggestion picks a long free-text column (`Beschreibung`), against the first-pass spec (§2). Show the hint only where it helps (suggested, or "has duplicates" as a warning), never suggest a column whose average length is over 30 characters, and render "Use …" as a real button, not a code chip.
 12. **M "no key"** in the summary is jargon. → "matched by file name" (or `key: Datum + Rolle`).
 13. **M The Preview toggle in the footer is shown while the preview pane is already visible** on wide screens. Hide it when the pane is shown.
 14. **L Sample column truncates both sides** (`2026-11-18 00… → 2026-1…`). Show the converted value first, raw value in `title` when they differ.
