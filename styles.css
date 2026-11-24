@@ -860,6 +860,20 @@
 	text-decoration: none;
 }
 
+/* Undo in the status line: a way back, not the next step, so muted instead of accent. */
+.csv-importer-status .csv-importer-link-btn.mod-muted {
+	color: var(--text-muted);
+	text-decoration: underline;
+}
+
+.csv-importer-status .csv-importer-link-btn.mod-muted:hover {
+	color: var(--text-normal);
+}
+
+.csv-importer-status .csv-importer-link-btn.mod-muted:disabled {
+	color: var(--text-faint);
+}
+
 .csv-importer-banner-slot {
 	padding: 0 var(--size-4-4);
 }
@@ -989,6 +1003,19 @@
 	gap: 0 var(--size-2-2);
 }
 
+.csv-importer-status-part {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0 var(--size-2-2);
+	white-space: nowrap;
+}
+
+/* An empty part would still add a gap to the status line. */
+.csv-importer-status-changed:empty,
+.csv-importer-status-selection:empty {
+	display: none;
+}
+
 .csv-importer-changed {
 	color: var(--text-normal);
 }
@@ -1072,6 +1099,24 @@
 	min-width: 44px;
 }
 
+/* Phone header row stays one line: the type badge keeps its compact height and centers on the name. */
+.is-phone .csv-importer-table thead th {
+	vertical-align: middle;
+}
+
+.is-phone .csv-importer-table .csv-importer-badge.is-clickable {
+	position: relative;
+	min-height: 24px;
+	min-width: 24px;
+}
+
+/* The touch target is taller than the badge: it fills the header cell instead of growing the row. */
+.is-phone .csv-importer-table .csv-importer-badge.is-clickable::after {
+	content: "";
+	position: absolute;
+	inset: calc(-1 * var(--size-4-2)) calc(-1 * var(--size-2-2));
+}
+
 .is-phone .csv-importer-run-item:has(.csv-importer-check) {
 	min-height: 44px;
 	align-items: center;
@@ -1079,7 +1124,31 @@
 
 .is-phone .csv-importer-link-btn {
 	min-height: 44px;
-	padding: 0 var(--size-4-2);
+	padding: 0 var(--size-2-2);
+}
+
+/* Phone: the import history starts its own line, without a separator in front. */
+.csv-importer-status-break {
+	display: none;
+}
+
+.is-phone .csv-importer-status-break {
+	display: block;
+	flex-basis: 100%;
+	height: 0;
+}
+
+.is-phone .csv-importer-status-break + .csv-importer-status-part > .csv-importer-status-sep {
+	display: none;
+}
+
+/* Phone: the selection part starts its own line instead of wrapping with a stray separator in front. */
+.is-phone .csv-importer-status-selection {
+	flex-basis: 100%;
+}
+
+.is-phone .csv-importer-status-selection > .csv-importer-status-sep:first-child {
+	display: none;
 }
 
 .csv-importer-badge.is-clickable {
@@ -1165,6 +1234,12 @@
 	background: var(--background-primary);
 }
 
+.csv-importer-run-headline {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	overflow-wrap: anywhere;
+}
+
 .csv-importer-run-target {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
@@ -1173,6 +1248,7 @@
 
 .csv-importer-run-counts {
 	margin-top: var(--size-2-2);
+	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 	font-variant-numeric: tabular-nums;
 }
@@ -1283,17 +1359,14 @@
 	min-height: 44px;
 }
 
-/* Footer on phone: Close fills the row, the "more" menu sits beside it, Open base moves into the menu. */
+/* Footer on phone: the primary button (Open base / Open first note, else Close) fills the row; "More actions" sits at the end. */
 .is-phone .csv-importer-run-buttons button {
 	min-height: 44px;
 }
 
-.is-phone .csv-importer-run-buttons .csv-importer-run-close {
+.is-phone .csv-importer-run-buttons .csv-importer-run-primary,
+.is-phone .csv-importer-run-buttons:not(.has-primary) .csv-importer-run-close {
 	flex: 1 1 auto;
-}
-
-.is-phone .csv-importer-run-buttons .csv-importer-run-base {
-	display: none;
 }
 
 .is-phone .csv-importer-run-buttons .clickable-icon {

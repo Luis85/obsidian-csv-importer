@@ -1018,6 +1018,8 @@ export class View extends Component {
 	}
 	onOpen(): Promise<void> | void {}
 	onClose(): Promise<void> | void {}
+	/** The real one adds the default "more options" items (close, split, ...); the harness adds none. */
+	onPaneMenu(_menu: Menu, _source: string): void {}
 	addAction(icon: string, title: string, cb: (e: MouseEvent) => any): HTMLElement {
 		const el = this.actionsEl.createDiv({ cls: "clickable-icon view-action", attr: { "aria-label": title, role: "button" } });
 		setIcon(el, icon);

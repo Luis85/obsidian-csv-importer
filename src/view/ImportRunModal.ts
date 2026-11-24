@@ -1,4 +1,4 @@
-import { Menu, Modal, Notice, Platform, normalizePath, setIcon } from "obsidian";
+import { Menu, Modal, Notice, normalizePath, setIcon } from "obsidian";
 import type { App } from "obsidian";
 import type { HeaderDrift, ImportResult, NoteOutcome, RowOutcome } from "../types";
 import { ROW_REASON, emptyResult } from "../core/result";
@@ -7,8 +7,8 @@ import { iconButton, relPath, renderCallout } from "./dom";
 import { CLOSE, IMPORT_FINISHED, driftMessage } from "./labels";
 import {
 	CANCEL, CHECKING_ROWS, IMPORTING_TITLE, MORE_ACTIONS, NOTHING_TO_CHANGE, NO_DATA_ROWS, OPEN_BASE, OPEN_FIRST_NOTE, OUTCOME_LABEL,
-	OUTCOME_ORDER, PREVIEW_TITLE, SAVE_REPORT, STARTING, STOPPING, STOP_IMPORT, UNDO_IMPORT, countsLine, moreRows, previewImportLabel,
-	rowsProgress, selectGroupLabel, selectNoteLabel, targetLine,
+	OUTCOME_ORDER, PREVIEW_TITLE, SAVE_REPORT, STARTING, STOPPING, STOP_IMPORT, UNDO_IMPORT, calloutTitle, countsLine, moreRows,
+	previewImportLabel, rowsProgress, runHeadline, selectGroupLabel, selectNoteLabel, targetLine,
 } from "./runCopy";
 
 export type { HeaderDrift };
@@ -48,6 +48,11 @@ export interface ImportRunControls {
 const LIST_LIMIT = 200;
 /** New and Updated groups start open up to this many rows. */
 const OPEN_LIMIT = 10;
+
+/** Rows that need a look: failed and skipped. */
+function attention(r: ImportResult): number {
+	return r.failed + r.skipped;
+}
 
 function pad(n: number): string {
 	return String(n).padStart(2, "0");
@@ -116,7 +121,7 @@ export class ImportRunModal extends Modal {
 		this.excluded.clear();
 		this.syncChecks = [];
 		const el = this.reset();
-		this.renderHead(result);
+		this.renderHead(result, "preview");
 		this.renderWarnings(el, result, true);
 		this.renderGroups(el, result.rows, true);
 		const [importBtn] = this.buttons([
@@ -146,6 +151,7 @@ export class ImportRunModal extends Modal {
 		const total = this.actionableRows().length;
 		const selected = total - this.excluded.size;
 		btn.setText(previewImportLabel(selected, total));
+		this.headlineEl?.setText(runHeadline("preview", selected, attention(this.latest), this.ctl.targetFolder));
 		btn.disabled = this.latest.rows.length === 0 || (total > 0 && selected === 0);
 	}
 
@@ -160,7 +166,7 @@ export class ImportRunModal extends Modal {
 		this.stop = false;
 		this.setTitle(IMPORTING_TITLE);
 		const el = this.reset();
-		this.renderHead(null);
+		this.renderHead(null, "progress");
 		const bar = el.createEl("progress", { cls: "csv-importer-run-progress" });
 		bar.max = 1;
 		bar.value = 0;
@@ -204,7 +210,7 @@ export class ImportRunModal extends Modal {
 	private showDone(result: ImportResult): void {
 		this.setTitle(result.cancelled ? "Import stopped" : IMPORT_FINISHED);
 		const el = this.reset();
-		this.renderHead(result, true);
+		this.renderHead(result, result.cancelled ? "stopped" : "done");
 		this.renderWarnings(el, result, false);
 		this.renderGroups(el, result.rows);
 
@@ -220,23 +226,45 @@ export class ImportRunModal extends Modal {
 				})
 				.catch((e: unknown) => new Notice(`Undo failed: ${errorMessage(e)}`));
 		};
+		// Opening the result is where the user is headed: open it and get the dialog out of the way.
+		const openBase = (): void => {
+			this.ctl.openBase();
+			this.close();
+		};
+		const openFirst = (path: string): void => {
+			this.ctl.openNote(path);
+			this.close();
+		};
 
+		// The next step is the CTA (UX review finding 16): Open base when there is a base, else Open first note.
+		// Close is always a plain button. Everything else is in the "More actions" menu.
 		const row = this.footer();
-		const close = row.createEl("button", { text: CLOSE, cls: "mod-cta csv-importer-run-close", attr: { type: "button", "data-testid": "run-close" } });
-		close.addEventListener("click", () => this.close());
+		let primary: HTMLButtonElement | null = null;
 		if (hasBase) {
-			const base = row.createEl("button", { text: OPEN_BASE, cls: "csv-importer-run-base", attr: { type: "button" } });
-			base.addEventListener("click", () => this.ctl.openBase());
+			primary = row.createEl("button", {
+				text: OPEN_BASE,
+				cls: "mod-cta csv-importer-run-primary csv-importer-run-base",
+				attr: { type: "button", "data-testid": "run-open-base" },
+			});
+			primary.addEventListener("click", openBase);
+		} else if (first) {
+			primary = row.createEl("button", {
+				text: OPEN_FIRST_NOTE,
+				cls: "mod-cta csv-importer-run-primary csv-importer-run-first",
+				attr: { type: "button", "data-testid": "run-open-note" },
+			});
+			primary.addEventListener("click", () => openFirst(first.path));
 		}
-		iconButton(row, {
+		row.toggleClass("has-primary", primary !== null);
+		const close = row.createEl("button", { text: CLOSE, cls: "csv-importer-run-close", attr: { type: "button", "data-testid": "run-close" } });
+		close.addEventListener("click", () => this.close());
+		const more = iconButton(row, {
 			icon: "more-horizontal",
 			label: MORE_ACTIONS,
 			cls: "csv-importer-run-more",
 			onClick: (ev) => {
 				const menu = new Menu();
-				if (first) menu.addItem((i) => i.setTitle(OPEN_FIRST_NOTE).setIcon("file-text").onClick(() => this.ctl.openNote(first.path)));
-				// On phone the footer only has Close and this menu.
-				if (hasBase && Platform.isPhone) menu.addItem((i) => i.setTitle(OPEN_BASE).setIcon("layout-list").onClick(() => this.ctl.openBase()));
+				if (first && hasBase) menu.addItem((i) => i.setTitle(OPEN_FIRST_NOTE).setIcon("file-text").onClick(() => openFirst(first.path)));
 				menu.addItem((i) => i.setTitle(SAVE_REPORT).setIcon("file-plus").onClick(() => void this.saveReport(result)));
 				if (canUndo) {
 					menu.addSeparator();
@@ -245,11 +273,15 @@ export class ImportRunModal extends Modal {
 				menu.showAtMouseEvent(ev);
 			},
 		});
+		more.setAttr("data-testid", "run-more");
+		(primary ?? close).focus();
 	}
 
 	// --- rendering helpers ---
 
 	private headEl: HTMLElement | null = null;
+	/** Headline sentence of the preview; follows the checkboxes. */
+	private headlineEl: HTMLElement | null = null;
 
 	/** Clears the dialog and returns the scrolling body. Header and footer sit outside of it. */
 	private reset(): HTMLElement {
@@ -258,16 +290,27 @@ export class ImportRunModal extends Modal {
 		return this.contentEl.createDiv({ cls: "csv-importer-run-body" });
 	}
 
-	/** Sticky header: target folder and the one-line counts. */
-	private renderHead(result: ImportResult | null, live = false): void {
+	/**
+	 * Sticky header. With a result: a one-sentence headline (what will be or was written, and where, UX review
+	 * finding 15) above the muted counts line. While importing: the target folder.
+	 */
+	private renderHead(result: ImportResult | null, phase: "preview" | "progress" | "done" | "stopped"): void {
 		const head = this.headEl;
+		this.headlineEl = null;
 		if (!head) return;
 		const target = this.ctl.targetFolder;
-		if (target) head.createDiv({ cls: "csv-importer-run-target", text: targetLine(target) });
-		if (result) {
-			const line = head.createDiv({ cls: "csv-importer-run-counts", text: countsLine(result) });
-			if (live) line.setAttr("role", "status");
+		if (!result || phase === "progress") {
+			if (target) head.createDiv({ cls: "csv-importer-run-target", text: targetLine(target) });
+			return;
 		}
+		const headline = head.createDiv({
+			cls: "csv-importer-run-headline",
+			text: runHeadline(phase, result.created + result.updated, attention(result), target),
+			attr: { "data-testid": "run-headline" },
+		});
+		if (phase === "preview") this.headlineEl = headline;
+		const line = head.createDiv({ cls: "csv-importer-run-counts", text: countsLine(result) });
+		if (phase !== "preview") line.setAttr("role", "status");
 	}
 
 	private footer(): HTMLElement {
@@ -292,7 +335,8 @@ export class ImportRunModal extends Modal {
 		const d = withDrift ? this.ctl.drift : null;
 		if (d && (d.added.length > 0 || d.removed.length > 0)) items.push(driftMessage(d.added, d.removed));
 		items.push(...(r.warnings ?? []));
-		if (items.length > 0) renderCallout(el, "warning", { items });
+		// A title that names the problem, or "2 things to check" for unrelated ones (UX review finding 2).
+		if (items.length > 0) renderCallout(el, "warning", { title: calloutTitle(items), items });
 	}
 
 	/** Rows grouped by outcome: failed and skipped open, new and updated open when short, unchanged closed. */

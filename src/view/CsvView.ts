@@ -9,12 +9,12 @@ import { onCsvChanged } from "../obsidian/events";
 import { ImportConfigModal } from "./ImportConfigModal";
 import { TableRenderer } from "./TableRenderer";
 import { renderCallout, safeTargetFolder } from "./dom";
-import { REVIEW_COLUMNS, TYPE_LABELS, delimiterLabel, driftMessage, importRowsLabel, NO_ROWS } from "./labels";
+import { OPEN_CSV_IMPORTS, REVIEW_COLUMNS, TYPE_LABELS, delimiterLabel, driftMessage, importRowsLabel, NO_ROWS } from "./labels";
 import { relativeTime } from "./relativeTime";
 import {
-	CHANGED_SINCE_IMPORT, CHECK_DELIMITER, CLEAR_SELECTION, COLUMNS_CHANGED_TITLE, CONFIGURE_IMPORT, FILTER_LABEL, FILTER_PLACEHOLDER,
-	FIRST_IMPORT_TITLE, READ_ERROR_TITLE, RE_IMPORT, ROW_FILTER_TITLE, UNDO, filterBullet, firstImportItems, importSelectedLabel, importedAgo,
-	selectedCount,
+	CHANGED_SINCE_IMPORT, CHECK_DELIMITER, CLEAR_SELECTION, FILTER_LABEL, FILTER_PLACEHOLDER, FIRST_IMPORT_TITLE, IMPORT_ACTION, IMPORT_SETTINGS,
+	READ_ERROR_TITLE, RE_IMPORT, ROW_FILTER_TITLE, UNDO, UNDO_LAST_IMPORT, calloutTitle, filterBullet, firstImportItems, importSelectedLabel,
+	importedAgo, selectedCount,
 } from "./runCopy";
 import { LINK_TEMPLATE } from "./shared";
 
@@ -68,7 +68,7 @@ export class CsvView extends TextFileView {
 
 	constructor(leaf: WorkspaceLeaf, private host: CsvImporterHost) {
 		super(leaf);
-		this.addAction("file-plus", "Import rows as notes", () => void this.runImport());
+		this.addAction("file-plus", IMPORT_ACTION, () => void this.runImport(this.table.selectionSize > 0));
 		// Settings saved, an import, an undo or a delete (from the dialog, a command or another view): draw again.
 		onCsvChanged(this, (csvPath) => {
 			if (csvPath !== this.file?.path) return;
@@ -114,6 +114,17 @@ export class CsvView extends TextFileView {
 
 	getViewType(): string {
 		return VIEW_TYPE_CSV;
+	}
+
+	/** More-options menu of the tab: the two places this view leads to (UX review finding 6). */
+	override onPaneMenu(menu: Menu, source: string): void {
+		if (source === "more-options" && this.file) {
+			menu.addItem((item) => item.setTitle(IMPORT_SETTINGS).setIcon("sliders-horizontal").setSection("action").onClick(() => this.openConfig()));
+			menu.addItem((item) =>
+				item.setTitle(OPEN_CSV_IMPORTS).setIcon("table-properties").setSection("action").onClick(() => void this.host.openImportIndex()),
+			);
+		}
+		super.onPaneMenu(menu, source);
 	}
 
 	override getDisplayText(): string {
@@ -309,7 +320,7 @@ export class CsvView extends TextFileView {
 			renderCallout(slot, "error", {
 				title: READ_ERROR_TITLE,
 				items: [`${error}. ${CHECK_DELIMITER}`],
-				action: { label: CONFIGURE_IMPORT, onClick: () => this.openConfig() },
+				action: { label: IMPORT_SETTINGS, onClick: () => this.openConfig() },
 			});
 			return;
 		}
@@ -321,8 +332,9 @@ export class CsvView extends TextFileView {
 		if (hasDrift || parsed.warnings.length > 0) {
 			const items = [...(drift && hasDrift ? [driftMessage(drift.added, drift.removed)] : []), ...parsed.warnings];
 			if (filterItem) items.push(filterItem);
+			// The title names the problem; unrelated problems together get "2 things to check" (UX review findings 2, 3).
 			renderCallout(slot, "warning", {
-				title: hasDrift ? COLUMNS_CHANGED_TITLE : undefined,
+				title: calloutTitle(items),
 				items,
 				action: hasDrift ? { label: REVIEW_COLUMNS, onClick: () => this.openConfig("columns") } : undefined,
 			});
@@ -372,11 +384,12 @@ export class CsvView extends TextFileView {
 
 		const configBtn = el.createEl("button", {
 			cls: "csv-importer-btn csv-importer-configure",
-			attr: { type: "button", "aria-label": "Configure import", "data-testid": "csv-configure" },
+			attr: { type: "button", "data-testid": "csv-configure" },
 		});
 		setIcon(configBtn.createSpan({ cls: "csv-importer-btn-icon" }), "sliders-horizontal");
-		configBtn.createSpan({ cls: "csv-importer-btn-label", text: CONFIGURE_IMPORT });
-		setTooltip(configBtn, "Configure import");
+		configBtn.createSpan({ cls: "csv-importer-btn-label", text: IMPORT_SETTINGS });
+		// On phone only the icon shows: the tooltip and aria-label carry the name.
+		setTooltip(configBtn, IMPORT_SETTINGS);
 		configBtn.addEventListener("click", () => this.openConfig());
 
 		const importCount = parsed ? countMatching(parsed, cfg) : 0;
@@ -401,17 +414,25 @@ export class CsvView extends TextFileView {
 		}
 		const text = el.createSpan({ text: parts.join(" \u00b7 ") });
 		text.setAttr("role", "status");
+		// Each later part keeps its separator in front of it, so a wrapped line never ends with a stray "·".
+		const part = (): HTMLElement => {
+			const p = el.createSpan({ cls: "csv-importer-status-part" });
+			p.createSpan({ cls: "csv-importer-status-sep", text: " \u00b7 ", attr: { "aria-hidden": "true" } });
+			return p;
+		};
+		// On phone, the import history (last import, Undo) starts its own line.
+		if (cfg.lastImport || (this.file && this.host.canUndo(this.file))) el.createSpan({ cls: "csv-importer-status-break" });
 		if (cfg.lastImport) {
-			el.createSpan({ cls: "csv-importer-status-sep", text: " \u00b7 ", attr: { "aria-hidden": "true" } });
-			el.createSpan({
+			part().createSpan({
 				text: importedAgo(relativeTime(cfg.lastImport)),
 				attr: { title: new Date(cfg.lastImport).toLocaleString() },
 			});
 		}
 		this.changedEl = el.createSpan({ cls: "csv-importer-status-changed" });
 		if (this.file && this.host.canUndo(this.file)) {
-			el.createSpan({ cls: "csv-importer-status-sep", text: " \u00b7 ", attr: { "aria-hidden": "true" } });
-			const undo = el.createEl("button", { cls: "csv-importer-link-btn", text: UNDO, attr: { type: "button", "aria-label": "Undo last import" } });
+			// Muted, not accent: undo is a way back, not the next step (UX review finding 5).
+			const undo = part().createEl("button", { cls: "csv-importer-link-btn mod-muted", text: UNDO, attr: { type: "button", "data-testid": "csv-undo" } });
+			setTooltip(undo, UNDO_LAST_IMPORT);
 			undo.disabled = this.importing;
 			undo.addEventListener("click", () => void this.runUndo());
 		}

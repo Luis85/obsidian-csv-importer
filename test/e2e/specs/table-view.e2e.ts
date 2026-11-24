@@ -98,4 +98,14 @@ describe("CSV table view", function () {
 		await browser.waitUntil(async () => (await browser.$$("[data-testid=csv-table] tbody tr").length) > shown, { timeoutMsg: "no more rows appended" });
 		expect(await listNotes(NOTES_DIR)).toEqual([]);
 	});
+
+	it("offers Import settings and Open CSV imports in the more-options menu and opens CSV imports", async function () {
+		await openCsv(CSV);
+		await expect(browser.$("[data-testid=csv-configure]")).toHaveAttribute("aria-label", "Import settings");
+		await browser.$('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
+		const items = await menuItems();
+		expect(items).toEqual(expect.arrayContaining(["Import settings", "Open CSV imports"]));
+		await clickMenuItem("Open CSV imports");
+		await browser.waitUntil(async () => (await activeViewType()) === "csv-importer-index", { timeoutMsg: "CSV imports did not open" });
+	});
 });

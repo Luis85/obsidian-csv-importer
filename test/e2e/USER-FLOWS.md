@@ -19,6 +19,7 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Table view: Link values / Unlink values | table-view | links values as wikilinks |
 | Table view: Exclude / Include | table-view | excludes a column from the import |
 | Table view: Show more (pages) | table-view | shows more rows in pages |
+| Table view: more-options menu (Import settings, Open CSV imports) | table-view | offers Import settings and Open CSV imports in the more-options menu |
 | Table view: select rows (checkboxes, shift-click, header checkbox, Clear selection) | table-selection | selecting rows changes the primary button ...; shift-click selects a range; the header checkbox selects every matching row |
 | Table view: import only the selected rows | table-selection | imports only the selected rows and clears the selection afterwards; keeps the selection when the dialog is cancelled |
 | Table view: follows file changes, settings and imports made elsewhere | table-refresh | shows a CSV that changed on disk; shows the settings saved with the Configure command; shows the import made with the import command |
@@ -57,10 +58,10 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Import dialog: preview groups, Cancel | import-dialog | shows a preview grouped by outcome |
 | Import dialog: preview of updates with change list | import-dialog | updates a changed note with a visible change list |
 | Import dialog: Stop import | import-dialog | stops a long import |
-| Import dialog: finished, Close, Open base | import-dialog | opens the generated base |
+| Import dialog: finished, headline, Open base (primary), Close | import-dialog | opens the generated base |
 | Import dialog: more menu, Open first note | import-dialog | opens the first note ... |
 | Import dialog: Save report as note | import-dialog | saves a report note |
-| Import dialog: Undo import from the menu | import-dialog | undoes the import from the more-actions menu |
+| Import dialog: Undo last import from the menu | import-dialog | undoes the import from the more-actions menu |
 | Undo command, confirm, notice | undo-index | undoes the last import after confirmation; moves created notes to the trash |
 | Undo restores modified notes | undo-restores | puts the earlier values back after undoing a re-import |
 | Re-import all (command) | import-dialog | re-import all opens the dialog |
