@@ -1,0 +1,43 @@
+// fallow (https://fallow.tools): dead code, duplication and complexity checks. Run with `npm run quality`.
+// The release workflow fails on findings that are not in the committed baselines under `.fallow-baselines/`.
+{
+	"$schema": "./node_modules/fallow/schema.json",
+	// Dev tooling that runs with node directly, not from the plugin bundle.
+	"supportEntry": [
+		"ui-preview/build.mjs",
+		"ui-preview/screenshot.mjs",
+		"ui-preview/readme-shots.mjs",
+		"ui-preview/scenarios.ts",
+		"ui-preview/obsidian-shim.ts",
+		"ui-preview/obsidian-theme.css",
+		"scripts/*.mjs",
+		"version-bump.mjs"
+	],
+	// Loaded by name from config files (wdio, esbuild) or provided by the environment (Electron in the
+	// end-to-end runner, the preinstalled Playwright used by the ui-preview scripts).
+	"ignoreDependencies": ["obsidian-launcher", "wdio-obsidian-reporter", "tslib", "electron", "playwright", "@wdio/local-runner", "@stryker-mutator/api"],
+	// Obsidian calls these lifecycle methods on its base classes, never the plugin's own code.
+	"usedClassMembers": [
+		"onload",
+		"onunload",
+		"onOpen",
+		"onClose",
+		"display",
+		"getViewType",
+		"getDisplayText",
+		"getIcon",
+		"getViewData",
+		"setViewData",
+		"clear",
+		"save",
+		"onLoadFile",
+		"onUnloadFile",
+		"onRename",
+		"onPaneMenu",
+		"canAcceptExtension",
+		"getSuggestions",
+		"renderSuggestion",
+		"selectSuggestion",
+		"onChooseSuggestion"
+	]
+}

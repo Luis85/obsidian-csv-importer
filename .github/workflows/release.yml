@@ -3,7 +3,7 @@ name: Release
 # Three ways to release:
 # 1. Fully automated: run this workflow manually (Actions tab, `gh workflow run release.yml -f version=minor`,
 #    or an agent via the GitHub API). It runs the mutation tests (job `mutation`), then bumps the version, commits, tags,
-#    builds, tests and publishes.
+#    checks code quality (fallow), builds, tests and publishes.
 # 2. Push a tag equal to the manifest.json version (e.g. `git push origin 1.2.3`).
 # 3. Publish a release in the GitHub UI with a new tag equal to the manifest.json version.
 on:
@@ -114,6 +114,8 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - run: npm run lint
+      # Code quality (fallow): fails on dead code, duplication or complexity not in .fallow-baselines/.
+      - run: npm run quality
       - run: npm test
       - run: npm run build
 

@@ -21,6 +21,8 @@ Copy (or symlink) `main.js`, `manifest.json` and `styles.css` into `<vault>/.obs
 | `npm test` | vitest, single run |
 | `npm run test:watch` | vitest in watch mode |
 | `npm run test:mutation` | Mutation testing with Stryker (see below) |
+| `npm run quality` | Code quality with fallow: dead code, duplication, complexity (see below) |
+| `npm run quality:baseline` | Re-saves the fallow baselines |
 | `npm run lint` | ESLint (with `eslint-plugin-obsidianmd`), Stylelint and the API version check |
 | `npm run lint:css` | Stylelint only |
 | `npm run lint:api` | API version check only |
@@ -72,6 +74,20 @@ Pure logic (`core/`, `csv/`, and most of `import/`) does not need Obsidian at ru
 ## Testing
 
 Tests are in `tests/` and run with vitest. `tests/mocks/obsidian.ts` is a mock of the parts of the `obsidian` module the code uses (vault, files, `Notice`, and so on); `tests/mocks/setup.ts` wires it in. Add a test with every behavior change. `acceptance.test.ts` and `reimport.test.ts` cover end-to-end imports and re-imports.
+
+## Code quality
+
+[fallow](https://fallow.tools) builds one module graph of the project and reports unused files, exports and dependencies, copy-paste duplication, and functions over its complexity thresholds.
+
+```sh
+npm run quality            # fails on findings that are not in the baselines
+npx fallow                 # the full report, baselines ignored
+npx fallow health --hotspots --targets   # where refactoring pays off most
+```
+
+`.fallowrc.jsonc` declares the dev tooling entry points (`ui-preview/`, `scripts/`), packages fallow cannot see being used, and the Obsidian lifecycle methods (`onOpen`, `getViewType`, ...) that Obsidian calls on the plugin's classes. The findings that existed when fallow was added are saved in `.fallow-baselines/` (`dead-code.json`, `dupes.json`, `health.json`), so `npm run quality` fails only on new ones. When you fix existing findings, run `npm run quality:baseline` and commit the smaller baselines. Do not re-save a baseline to get a new finding through: fix it, or add a `// fallow-ignore-next-line <rule>` comment with the reason. `.fallow/` is fallow's local cache and is gitignored by fallow itself.
+
+The release workflow runs `npm run quality` after lint, before tests and build.
 
 ## Mutation testing
 

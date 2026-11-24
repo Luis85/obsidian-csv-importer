@@ -13,6 +13,9 @@ export default defineConfig([
 		"version-bump.mjs",
 		"scripts/**",
 		"ui-preview/**",
+		".stryker-tmp/**",
+		"reports/**",
+		".claude/**",
 	]),
 	...obsidianmd.configs.recommended,
 	{
