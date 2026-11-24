@@ -25,23 +25,32 @@ function quote(s: string): string {
 
 function yamlString(s: string, dateLike: boolean): string {
 	if (dateLike && (ISO_DATE_RE.test(s) || ISO_DATETIME_RE.test(s))) return s;
-	if (
-		s === "" ||
-		s !== s.trim() ||
-		/^[-?:,[\]{}#&*!|>'"%@`]/.test(s) ||
-		s.includes(": ") ||
-		s.includes(" #") ||
-		s.endsWith(":") ||
-		CONTROL_RE.test(s) ||
-		AMBIGUOUS_RES.some((re) => re.test(s))
-	)
-		return quote(s);
-	return s;
+	return needsQuotes(s) ? quote(s) : s;
+}
+
+/** Whether YAML would misread `s` as a plain scalar (empty, padded, indicator first, `: `, ` #`, or a non-string). */
+function needsQuotes(s: string): boolean {
+	if (s === "" || s !== s.trim() || s.endsWith(":")) return true;
+	if (/^[-?:,[\]{}#&*!|>'"%@`]/.test(s) || s.includes(": ") || s.includes(" #")) return true;
+	return CONTROL_RE.test(s) || AMBIGUOUS_RES.some((re) => re.test(s));
 }
 
 function yamlKey(k: string): string {
 	if (PLAIN_KEY_RE.test(k) && k === k.trim() && !RESERVED_KEY_RE.test(k)) return k;
 	return quote(k);
+}
+
+/** Appends the YAML lines of one property (key `k` already quoted as needed) to `lines`. */
+function propertyLines(lines: string[], k: string, value: FrontmatterValue | undefined, dateLike: boolean): void {
+	if (value === null || value === undefined) lines.push(`${k}:`);
+	else if (typeof value === "number") lines.push(Number.isFinite(value) ? `${k}: ${formatNumber(value)}` : `${k}:`);
+	else if (typeof value === "boolean") lines.push(`${k}: ${value}`);
+	else if (!Array.isArray(value)) lines.push(`${k}: ${yamlString(value, dateLike)}`);
+	else if (value.length === 0) lines.push(`${k}: []`);
+	else {
+		lines.push(`${k}:`);
+		for (const item of value) lines.push(`  - ${yamlString(String(item), false)}`);
+	}
 }
 
 /**
@@ -56,19 +65,8 @@ export function serializeNote(
 ): string {
 	const lines: string[] = [];
 	for (const [key, value] of Object.entries(frontmatter)) {
-		const k = yamlKey(key);
 		const t = types?.[key];
-		const dateLike = t === "date" || t === "datetime";
-		if (value === null || value === undefined) lines.push(`${k}:`);
-		else if (typeof value === "number") lines.push(Number.isFinite(value) ? `${k}: ${formatNumber(value)}` : `${k}:`);
-		else if (typeof value === "boolean") lines.push(`${k}: ${value}`);
-		else if (Array.isArray(value)) {
-			if (value.length === 0) lines.push(`${k}: []`);
-			else {
-				lines.push(`${k}:`);
-				for (const item of value) lines.push(`  - ${yamlString(String(item), false)}`);
-			}
-		} else lines.push(`${k}: ${yamlString(value, dateLike)}`);
+		propertyLines(lines, yamlKey(key), value, t === "date" || t === "datetime");
 	}
 	const head = lines.length > 0 ? `---\n${lines.join("\n")}\n---\n` : "---\n---\n";
 	if (body === "") return head;
