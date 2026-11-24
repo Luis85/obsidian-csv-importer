@@ -5,7 +5,7 @@
 import type { ColumnConfig, FileImportConfig, FrontmatterValue, ParsedCsv, PlannedNote, PropertyType, RowFilter } from "../types";
 import { buildColumnConfigs, conversionOptionsOf, convertValue, inferenceOptionsOf, parseNumber, resolveDateOrder, type ConversionOptions } from "../csv/typeInference";
 import { compileTemplate, formatValue, headerIndexOf, renderCompiled, type CompiledTemplate, type TemplateContext } from "./templates";
-import { compileFolderSegments, hasFolderPlaceholders, renderFolderSegments, resolveTargetFolder, sanitizeFileName } from "./folders";
+import { compileFolderSegments, hasFolderPlaceholders, renderFolderSegments, resolveTargetFolder, sanitizeFileName, type FolderSegments } from "./folders";
 import { uuidV4 } from "../core/util";
 
 export { applyValueTemplate, formatValue, renderTemplate, type TemplateContext } from "./templates";
@@ -16,16 +16,17 @@ const LIST_PROPS = ["tags", "aliases", "cssclasses"];
 
 /** Display value of a cell for templates: file-name mode turns datetimes into `YYYY-MM-DD HH-mm[-ss]`. */
 function formatCell(value: FrontmatterValue, raw: string, type: PropertyType, forFileName: boolean): string {
-	const t = (raw ?? "").trim();
 	if (value === null) return "";
-	if (typeof value === "string") {
-		if (type === "datetime" && forFileName) {
-			const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(value);
-			if (m) return `${m[1]} ${m[2]}-${m[3]}${m[4] !== "00" ? "-" + m[4] : ""}`;
-		}
-		return type === "text" || type === "list" ? t : value;
-	}
-	return formatValue(value);
+	if (typeof value !== "string") return formatValue(value);
+	const asName = type === "datetime" && forFileName ? fileNameDateTime(value) : null;
+	if (asName !== null) return asName;
+	return type === "text" || type === "list" ? (raw ?? "").trim() : value;
+}
+
+/** `YYYY-MM-DDTHH:mm:ss` as `YYYY-MM-DD HH-mm[-ss]` (no colons, seconds only when not 00); null for other values. */
+function fileNameDateTime(value: string): string | null {
+	const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(value);
+	return m ? `${m[1]} ${m[2]}-${m[3]}${m[4] !== "00" ? "-" + m[4] : ""}` : null;
 }
 
 /** Normalize a tag: strip leading #, spaces -> "-". Returns "" when nothing is left. */
@@ -312,19 +313,106 @@ export function planNotes(
 	csv: { path: string; basename: string },
 	opts: { now?: Date; uuid?: () => string; rows?: number[] } = {},
 ): PlannedNote[] {
+	const run = compileRun(parsed, config, csv, opts);
+	const paths = new PathAllocator();
+	const notes: PlannedNote[] = [];
+	parsed.rows.forEach((row, i) => {
+		if (!rowMatches(config.rowFilter, parsed.headers, row, config.decimalSeparator)) return;
+		notes.push(planRow(run, row, parsed.rowNumbers[i] ?? i + 1, paths));
+	});
+	return opts.rows ? filterNotesByRows(notes, opts.rows) : notes;
+}
+
+/** An extra property that can be written: its name, type and compiled default value. */
+interface PlannedExtra {
+	name: string;
+	type: PropertyType;
+	tpl: CompiledTemplate;
+}
+
+/** How the note key is taken from a row: from 2+ key columns (composite), from one key column, or not at all. */
+interface KeyPlan {
+	compositeProp: string | null;
+	compositeCols: (ColumnConfig | undefined)[];
+	keyCol: ColumnConfig | undefined;
+}
+
+/** What planNotes works out once per run and uses for every row. */
+interface PlanRun {
+	parsed: ParsedCsv;
+	config: FileImportConfig;
+	csv: { path: string; basename: string };
+	byIndex: Map<number, ColumnConfig>;
+	convByIndex: Map<number, ConversionOptions>;
+	conv: ConversionOptions;
+	/** Columns written to the frontmatter. */
+	included: ColumnConfig[];
+	valueTpls: Map<ColumnConfig, CompiledTemplate>;
+	/** Compiled target folder when it has placeholders, else null and `staticFolder` is used. */
+	folderSegs: FolderSegments | null;
+	staticFolder: string;
+	configTags: string[];
+	extras: PlannedExtra[];
+	newUuid: () => string;
+	linkProp: string | null;
+	key: KeyPlan;
+	nameTpl: CompiledTemplate;
+	bodyTpl: CompiledTemplate;
+}
+
+function compileRun(
+	parsed: ParsedCsv,
+	config: FileImportConfig,
+	csv: { path: string; basename: string },
+	opts: { now?: Date; uuid?: () => string },
+): PlanRun {
 	const dynamicFolder = hasFolderPlaceholders(config);
 	const staticFolder = resolveTargetFolder(config, csv.path);
 	const columns =
 		config.columns.length > 0 ? config.columns : buildColumnConfigs(parsed, inferenceOptionsOf(config, true));
-	const keyCols = effectiveKeyColumns(config);
-	const keyCol = keyCols.length === 1 ? columns.find((c) => c.source === keyCols[0]) : undefined;
-	const compositeCols =
-		keyCols.length >= 2 ? keyCols.map((k) => columns.find((c) => c.source === k)) : [];
-	const compositeProp = keyCols.length >= 2 ? compositeKeyProperty(config, columns) : null;
+	const key = keyPlanOf(config, columns);
 	// The key column is always written: it has to be stored in the notes to match them on later imports.
-	const included = columns.filter((c) => c.include || c === keyCol);
+	const included = columns.filter((c) => c.include || c === key.keyCol);
 	const conv = conversionOptionsOf(config);
-	// Per column: unit stripping and the date order resolved over the whole column (ambiguous slash dates).
+	const headerIndex = headerIndexOf(parsed.headers);
+	return {
+		parsed,
+		config,
+		csv,
+		byIndex: new Map<number, ColumnConfig>(columns.map((c) => [c.index, c])),
+		convByIndex: conversionByColumn(parsed, columns, config, conv),
+		conv,
+		included,
+		valueTpls: compileValueTemplates(included, headerIndex),
+		folderSegs: dynamicFolder ? compileFolderSegments(config.targetFolder, headerIndex) : null,
+		staticFolder,
+		configTags: parseTags(config.tags),
+		extras: compileExtras(config, headerIndex, opts.now ?? new Date()),
+		newUuid: opts.uuid ?? uuidV4,
+		linkProp: sourceLinkFor(config, columns),
+		key,
+		nameTpl: compileTemplate(config.fileNameTemplate, headerIndex),
+		bodyTpl: compileTemplate(config.bodyTemplate, headerIndex),
+	};
+}
+
+function keyPlanOf(config: FileImportConfig, columns: ColumnConfig[]): KeyPlan {
+	const keyCols = effectiveKeyColumns(config);
+	const composite = keyCols.length >= 2;
+	return {
+		compositeProp: composite ? compositeKeyProperty(config, columns) : null,
+		compositeCols: composite ? keyCols.map((k) => columns.find((c) => c.source === k)) : [],
+		keyCol: keyCols.length === 1 ? columns.find((c) => c.source === keyCols[0]) : undefined,
+	};
+}
+
+/** Per column: unit stripping and the date order resolved over the whole column (ambiguous slash dates). */
+function conversionByColumn(
+	parsed: ParsedCsv,
+	columns: ColumnConfig[],
+	config: FileImportConfig,
+	conv: ConversionOptions,
+): Map<number, ConversionOptions> {
 	const convByIndex = new Map<number, ConversionOptions>();
 	for (const col of columns) {
 		const o: ConversionOptions = { ...conv };
@@ -338,26 +426,24 @@ export function planNotes(
 		}
 		convByIndex.set(col.index, o);
 	}
-	const now = opts.now ?? new Date();
-	const newUuid = opts.uuid ?? uuidV4;
-	const today = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-	const nowStr = `${today}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
-	const conflicts = reservedExtraNames(config);
-	const extras: { name: string; type: PropertyType; tpl: CompiledTemplate }[] = [];
-	const extraSeen = new Set<string>();
-	const configTags = parseTags(config.tags);
-	const linkProp = sourceLinkFor(config, columns);
-	const paths = new PathAllocator();
-	const notes: PlannedNote[] = [];
-	const byIndex = new Map<number, ColumnConfig>(columns.map((c) => [c.index, c]));
+	return convByIndex;
+}
 
-	const headerIndex = headerIndexOf(parsed.headers);
-	const nameTpl = compileTemplate(config.fileNameTemplate, headerIndex);
-	const bodyTpl = compileTemplate(config.bodyTemplate, headerIndex);
+function compileValueTemplates(included: ColumnConfig[], headerIndex: Map<string, number>): Map<ColumnConfig, CompiledTemplate> {
 	const valueTpls = new Map<ColumnConfig, CompiledTemplate>();
 	for (const col of included) {
 		if (col.valueTemplate) valueTpls.set(col, compileTemplate(col.valueTemplate, headerIndex, true));
 	}
+	return valueTpls;
+}
+
+/** The extra properties that can be written (see extraPropertyConflicts), with `{{today}}` / `{{now}}` filled in. */
+function compileExtras(config: FileImportConfig, headerIndex: Map<string, number>, now: Date): PlannedExtra[] {
+	const today = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+	const nowStr = `${today}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+	const conflicts = reservedExtraNames(config);
+	const extras: PlannedExtra[] = [];
+	const extraSeen = new Set<string>();
 	for (const e of config.extraProperties ?? []) {
 		const name = e.property.trim();
 		if (name === "" || conflicts.has(name.toLowerCase()) || extraSeen.has(name.toLowerCase())) continue;
@@ -368,66 +454,85 @@ export function planNotes(
 			.replace(/\{\{\s*uuid\s*\}\}/g, UUID_MARK);
 		extras.push({ name, type: e.type, tpl: compileTemplate(text, headerIndex) });
 	}
-	const folderSegs = dynamicFolder ? compileFolderSegments(config.targetFolder, headerIndex) : [];
+	return extras;
+}
 
-	parsed.rows.forEach((row, i) => {
-		if (!rowMatches(config.rowFilter, parsed.headers, row, config.decimalSeparator)) return;
-		const rowNumber = parsed.rowNumbers[i] ?? i + 1;
-		const { converted, nameCtx, bodyCtx } = buildRowContext(parsed, row, rowNumber, byIndex, convByIndex, csv.basename);
-		const folder = dynamicFolder ? renderFolderSegments(folderSegs, nameCtx) : staticFolder;
+type Frontmatter = Record<string, FrontmatterValue>;
+type PropertyTypes = Record<string, PropertyType>;
 
-		const { fm, types } = buildFrontmatter(included, converted, valueTpls, bodyCtx, config);
-		normalizeListProps(fm, types, config);
-		if (configTags.length > 0) {
-			const existing = fm["tags"];
-			const colTags = Array.isArray(existing) ? existing : [];
-			fm["tags"] = [...new Set([...colTags, ...configTags])];
-			types["tags"] = "list";
-		}
-		const fillOnly: string[] = [];
-		for (const ex of extras) {
-			const parts = renderCompiled(ex.tpl, bodyCtx).split(UUID_MARK);
-			const withIds = parts.reduce((acc, part, k) => (k === 0 ? part : acc + newUuid() + part), "");
-			const v = convertValue(withIds, ex.type, conv);
-			if (v === null && config.emptyValues === "omit") continue;
-			fm[ex.name] = v;
-			types[ex.name] = ex.type;
-			fillOnly.push(ex.name);
-		}
-		if (linkProp !== null) {
-			fm[linkProp] = `[[${csv.path}]]`;
-			types[linkProp] = "text";
-		}
+/** The planned note of one data row. */
+function planRow(run: PlanRun, row: string[], rowNumber: number, paths: PathAllocator): PlannedNote {
+	const { parsed, config, csv } = run;
+	const { converted, nameCtx, bodyCtx } = buildRowContext(parsed, row, rowNumber, run.byIndex, run.convByIndex, csv.basename);
+	const folder = run.folderSegs ? renderFolderSegments(run.folderSegs, nameCtx) : run.staticFolder;
 
-		let key: PlannedNote["key"] = null;
-		if (compositeProp !== null) {
-			const parts = compositeCols.map((c) => (c ? (bodyCtx.formatted?.[c.index] ?? "").trim() : ""));
-			if (parts.every((p) => p !== "")) {
-				const value = parts.join(" | ");
-				fm[compositeProp] = value;
-				types[compositeProp] = "text";
-				key = { property: compositeProp, value };
-			}
-		} else if (keyCol) {
-			// Must equal what was written for the property (after any value template).
-			const kv = fm[keyCol.property];
-			if (kv !== null && kv !== undefined && !Array.isArray(kv)) key = { property: keyCol.property, value: formatValue(kv) };
-		}
+	const { fm, types } = buildFrontmatter(run.included, converted, run.valueTpls, bodyCtx, config);
+	normalizeListProps(fm, types, config);
+	addConfigTags(fm, types, run.configTags);
+	const fillOnly = addExtras(fm, types, run, bodyCtx);
+	if (run.linkProp !== null) {
+		fm[run.linkProp] = `[[${csv.path}]]`;
+		types[run.linkProp] = "text";
+	}
+	const key = rowKey(fm, types, run.key, bodyCtx);
 
-		let name = sanitizeFileName(renderCompiled(nameTpl, nameCtx));
-		if (name === "") name = sanitizeFileName(`${csv.basename} ${rowNumber}`) || `Note ${rowNumber}`;
+	return {
+		path: paths.allocate(folder, noteName(run.nameTpl, nameCtx, csv.basename, rowNumber)),
+		frontmatter: fm,
+		body: renderCompiled(run.bodyTpl, bodyCtx),
+		row: rowNumber,
+		fillOnly,
+		types,
+		key,
+	};
+}
 
-		notes.push({
-			path: paths.allocate(folder, name),
-			frontmatter: fm,
-			body: renderCompiled(bodyTpl, bodyCtx),
-			row: rowNumber,
-			fillOnly,
-			types,
-			key,
-		});
-	});
-	return opts.rows ? filterNotesByRows(notes, opts.rows) : notes;
+/** Adds the config's tags to the row's `tags` (in place). */
+function addConfigTags(fm: Frontmatter, types: PropertyTypes, configTags: string[]): void {
+	if (configTags.length === 0) return;
+	const existing = fm["tags"];
+	const colTags = Array.isArray(existing) ? existing : [];
+	fm["tags"] = [...new Set([...colTags, ...configTags])];
+	types["tags"] = "list";
+}
+
+/** Adds the extra properties (in place), each `{{uuid}}` a fresh UUID. Returns their names, in order. */
+function addExtras(fm: Frontmatter, types: PropertyTypes, run: PlanRun, bodyCtx: TemplateContext): string[] {
+	const fillOnly: string[] = [];
+	for (const ex of run.extras) {
+		const parts = renderCompiled(ex.tpl, bodyCtx).split(UUID_MARK);
+		const withIds = parts.reduce((acc, part, k) => (k === 0 ? part : acc + run.newUuid() + part), "");
+		const v = convertValue(withIds, ex.type, run.conv);
+		if (v === null && run.config.emptyValues === "omit") continue;
+		fm[ex.name] = v;
+		types[ex.name] = ex.type;
+		fillOnly.push(ex.name);
+	}
+	return fillOnly;
+}
+
+/** The row's key; a composite key is also written to its property (in place). Null when the row has none. */
+function rowKey(fm: Frontmatter, types: PropertyTypes, plan: KeyPlan, bodyCtx: TemplateContext): PlannedNote["key"] {
+	if (plan.compositeProp !== null) {
+		const parts = plan.compositeCols.map((c) => (c ? (bodyCtx.formatted?.[c.index] ?? "").trim() : ""));
+		if (!parts.every((p) => p !== "")) return null;
+		const value = parts.join(" | ");
+		fm[plan.compositeProp] = value;
+		types[plan.compositeProp] = "text";
+		return { property: plan.compositeProp, value };
+	}
+	if (!plan.keyCol) return null;
+	// Must equal what was written for the property (after any value template).
+	const kv = fm[plan.keyCol.property];
+	if (kv === null || kv === undefined || Array.isArray(kv)) return null;
+	return { property: plan.keyCol.property, value: formatValue(kv) };
+}
+
+/** File name of a row's note; an empty one falls back to `<file> <row>`, then `Note <row>`. */
+function noteName(nameTpl: CompiledTemplate, nameCtx: TemplateContext, basename: string, rowNumber: number): string {
+	const name = sanitizeFileName(renderCompiled(nameTpl, nameCtx));
+	if (name !== "") return name;
+	return sanitizeFileName(`${basename} ${rowNumber}`) || `Note ${rowNumber}`;
 }
 
 /** Keeps only the planned notes of these original 1-based data row numbers (paths were allocated over all rows, so they stay stable). */
