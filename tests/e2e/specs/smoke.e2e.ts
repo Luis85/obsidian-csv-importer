@@ -1,7 +1,7 @@
 import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { menuItems, openCsv, shot } from "../flows";
-import { CSV, PLUGIN_ID, installConsoleSpy, pluginProblems, resetEverything, waitForViewType } from "../support";
+import { CSV, PLUGIN_ID, closeSettings, installConsoleSpy, openPluginSettings, pluginProblems, resetEverything, waitForViewType } from "../support";
 
 const SPEC = "smoke";
 
@@ -62,11 +62,7 @@ describe("plugin loads, commands, ribbon, file menu, settings tab", function () 
 	});
 
 	it("shows its sections in the settings tab", async function () {
-		await browser.executeObsidian(({ app }, id) => {
-			const setting = (app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting;
-			setting.open();
-			setting.openTabById(id);
-		}, PLUGIN_ID);
+		await openPluginSettings();
 		const read = () =>
 			browser.executeObsidian(({ app }) => (app as unknown as { setting: { activeTab?: { containerEl: HTMLElement } } }).setting.activeTab?.containerEl.textContent ?? "");
 		await browser.waitUntil(async () => (await read()).includes("Danger zone"), { timeoutMsg: "settings tab not rendered" });
@@ -84,7 +80,7 @@ describe("plugin loads, commands, ribbon, file menu, settings tab", function () 
 		expect(text).toContain("Open CSV imports");
 		expect(text).toContain("Reset all import settings");
 		await shot(SPEC, "settings-tab", true);
-		await browser.executeObsidian(({ app }) => (app as unknown as { setting: { close(): void } }).setting.close());
+		await closeSettings();
 	});
 
 	it("keeps the table view reachable from the explorer path", async function () {

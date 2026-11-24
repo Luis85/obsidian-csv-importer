@@ -1,6 +1,6 @@
 import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
-import { PLUGIN_ID, CSV, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything } from "../support";
+import { CSV, closeSettings, importViaDialog, installConsoleSpy, listNotes, openPluginSettings, pluginProblems, resetEverything } from "../support";
 
 // The file name is a leftover of a debugging spec that could not be deleted from the sandbox; rename it to settings-defaults.e2e.ts.
 describe("settings tab defaults", function () {
@@ -11,11 +11,7 @@ describe("settings tab defaults", function () {
 	});
 
 	it("applies a default target folder from the settings tab to a CSV that has no settings yet", async function () {
-		await browser.executeObsidian(({ app }, id) => {
-			const setting = (app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting;
-			setting.open();
-			setting.openTabById(id);
-		}, PLUGIN_ID);
+		await openPluginSettings();
 		await browser.waitUntil(
 			async () => (await browser.executeObsidian(({ app }) => (app as unknown as { setting: { activeTab?: { containerEl: HTMLElement } } }).setting.activeTab?.containerEl.querySelectorAll("input[type=text]").length ?? 0)) > 0,
 		);
@@ -28,7 +24,7 @@ describe("settings tab defaults", function () {
 			input.dispatchEvent(new Event("input", { bubbles: true }));
 			input.dispatchEvent(new Event("change", { bubbles: true }));
 		});
-		await browser.executeObsidian(({ app }) => (app as unknown as { setting: { close(): void } }).setting.close());
+		await closeSettings();
 		await importViaDialog(CSV);
 		await browser.waitUntil(async () => (await listNotes("Defaults/Out")).length === 6, { timeoutMsg: "default target folder was not used" });
 	});

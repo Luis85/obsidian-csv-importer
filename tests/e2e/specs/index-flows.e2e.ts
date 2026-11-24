@@ -1,40 +1,16 @@
 import { browser, expect } from "@wdio/globals";
 import { obsidianPage } from "wdio-obsidian-service";
 import { describe, it, before, beforeEach, after } from "mocha";
-import { clickMenuItem, menuItems, openConfigDialog, openCsv, shot, vaultExists } from "../flows";
+import { INDEX, clickMenuItem, indexRow, menuItems, openConfigDialog, openCsv, openIndex, shot, vaultExists } from "../flows";
 import {
-	CSV, CSV_DE, NOTES_DIR, PLUGIN_ID, activeViewType, clickButton, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything, runCommand,
-	waitForModal, waitForNoModal, waitForViewType,
+	CSV, CSV_DE, NOTES_DIR, PLUGIN_ID, activeViewType, clickButton, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything,
+	waitForModal, waitForNoModal,
 } from "../support";
 
 const SPEC = "index";
-const INDEX = "[data-testid=csv-index]";
-
-/** The index row of a CSV file name. */
-const rowFor = async (name: string): Promise<WebdriverIO.Element> => {
-	let found: WebdriverIO.Element | undefined;
-	await browser.waitUntil(
-		async () => {
-			for (const row of await browser.$$(`${INDEX} [data-testid=csv-index-row]`)) {
-				if ((await row.getText()).includes(name)) {
-					found = row;
-					return true;
-				}
-			}
-			return false;
-		},
-		{ timeoutMsg: `no index row for ${name}` },
-	);
-	return found as WebdriverIO.Element;
-};
-
-const openIndex = async () => {
-	await runCommand("open-import-index");
-	await waitForViewType("csv-importer-index");
-};
 
 const openRowMenu = async (name: string) => {
-	const row = await rowFor(name);
+	const row = await indexRow(name);
 	await row.$(".csv-importer-index-more").click();
 };
 
@@ -51,10 +27,10 @@ describe("CSV imports index", function () {
 		await clickButton("Save");
 		await waitForNoModal();
 		await openIndex();
-		const row = await rowFor("timesheet.csv");
+		const row = await indexRow("timesheet.csv");
 		await expect(row).toHaveText(expect.stringContaining("Never imported"));
 		// No notes yet: a muted dash, not "0".
-		await expect((await rowFor("timesheet.csv")).$("[data-testid=csv-index-count]")).toHaveElementClass("mod-none");
+		await expect((await indexRow("timesheet.csv")).$("[data-testid=csv-index-count]")).toHaveElementClass("mod-none");
 		await expect(row.$("[data-testid=csv-index-primary]")).toHaveText("Import");
 		await row.$("[data-testid=csv-index-primary]").click();
 		await waitForModal(/import preview/i);
@@ -65,11 +41,11 @@ describe("CSV imports index", function () {
 	it("shows last import and note count, and Re-import runs the dialog", async function () {
 		await importViaDialog(CSV);
 		await openIndex();
-		const row = await rowFor("timesheet.csv");
+		const row = await indexRow("timesheet.csv");
 		await expect(row.$(".csv-importer-index-count")).toHaveText(expect.stringContaining("6"));
 		await shot(SPEC, "index-with-import", true);
 		// The index re-renders (counts load lazily), so look the button up again instead of reusing the old row.
-		await (await rowFor("timesheet.csv")).$("[data-testid=csv-index-primary]").click();
+		await (await indexRow("timesheet.csv")).$("[data-testid=csv-index-primary]").click();
 		await waitForModal(/import preview/i);
 		await expect(browser.$("[data-testid=import-run-modal] .csv-importer-run-counts")).toHaveText(expect.stringContaining("unchanged"));
 		await clickButton("Cancel");
@@ -80,10 +56,10 @@ describe("CSV imports index", function () {
 		await importViaDialog(CSV);
 		await importViaDialog(CSV_DE);
 		await openIndex();
-		await rowFor("timesheet-de.csv");
+		await indexRow("timesheet-de.csv");
 		await browser.$(`${INDEX} input.csv-importer-index-search`).setValue("-de");
 		await browser.waitUntil(async () => (await browser.$$(`${INDEX} [data-testid=csv-index-row]`).length) === 1, { timeoutMsg: "filter did not narrow the list" });
-		await (await rowFor("timesheet-de.csv")).$(".csv-importer-index-name").click();
+		await (await indexRow("timesheet-de.csv")).$(".csv-importer-index-name").click();
 		await browser.waitUntil(async () => (await activeViewType()) === "csv-importer-view", { timeoutMsg: "CSV did not open" });
 	});
 
@@ -147,7 +123,7 @@ describe("CSV imports index", function () {
 		await browser.waitUntil(async () => !(await vaultExists("Data/timesheet.base")), { timeoutMsg: "base was not deleted" });
 		expect(await vaultExists(CSV)).toBe(true);
 		// The row stays, with its import history reset.
-		await expect(await rowFor("timesheet.csv")).toBeDisplayed();
+		await expect(await indexRow("timesheet.csv")).toBeDisplayed();
 	});
 
 	it("removes a CSV from CSV imports but keeps its notes", async function () {
@@ -169,7 +145,7 @@ describe("CSV imports index", function () {
 		await browser.executeObsidian(async ({ app }) => app.vault.adapter.remove("Data/timesheet.csv"));
 		await obsidianPage.enablePlugin(PLUGIN_ID);
 		await openIndex();
-		await browser.waitUntil(async () => (await (await rowFor("timesheet.csv")).getText()).includes("CSV missing"), { timeoutMsg: "no CSV missing marker" });
+		await browser.waitUntil(async () => (await (await indexRow("timesheet.csv")).getText()).includes("CSV missing"), { timeoutMsg: "no CSV missing marker" });
 		await shot(SPEC, "csv-missing", true);
 	});
 });

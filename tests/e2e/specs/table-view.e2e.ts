@@ -2,8 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { clickMenuItem, menuItems, openCsv, shot, writeVault } from "../flows";
 import {
-	CSV, NOTES_DIR, activeViewType, findNoteByFrontmatter, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything,
-	waitForFrontmatter,
+	CSV, NOTES_DIR, activeViewType, importAndReadFirstNote, installConsoleSpy, listNotes, pluginProblems, resetEverything,
 } from "../support";
 
 const SPEC = "table-view";
@@ -51,9 +50,7 @@ describe("CSV table view", function () {
 		await browser.waitUntil(async () => /text/i.test(await badge(3).getText()), { timeoutMsg: "badge did not change" });
 
 		// The changed type is what the import writes: Stunden becomes text.
-		await importViaDialog(CSV);
-		const note = await findNoteByFrontmatter(NOTES_DIR, "Datum", "2026-11-18");
-		const fm = await waitForFrontmatter(note, (f) => f["Stunden"] !== undefined);
+		const fm = await importAndReadFirstNote("Stunden");
 		expect(typeof fm["Stunden"]).toBe("string");
 		expect(typeof fm["Tage"]).toBe("number");
 	});
@@ -68,9 +65,7 @@ describe("CSV table view", function () {
 			await browser.keys("Escape");
 			return items.includes("Unlink values");
 		}, { timeoutMsg: "item never became Unlink values" });
-		await importViaDialog(CSV);
-		const note = await findNoteByFrontmatter(NOTES_DIR, "Datum", "2026-11-18");
-		const fm = await waitForFrontmatter(note, (f) => f["Rolle"] !== undefined);
+		const fm = await importAndReadFirstNote("Rolle");
 		expect(fm["Rolle"]).toBe("[[Softwareentwickler]]");
 	});
 
@@ -80,9 +75,7 @@ describe("CSV table view", function () {
 		await clickMenuItem("Exclude from import");
 		await browser.waitUntil(async () => (await browser.$$("[data-testid=csv-table] td.is-excluded").length) > 0, { timeoutMsg: "column not marked excluded" });
 		await shot(SPEC, "excluded");
-		await importViaDialog(CSV);
-		const note = await findNoteByFrontmatter(NOTES_DIR, "Datum", "2026-11-18");
-		const fm = await waitForFrontmatter(note, (f) => f["Stunden"] !== undefined);
+		const fm = await importAndReadFirstNote("Stunden");
 		expect(fm["Tage"]).toBeUndefined();
 		await browser.execute(() => (document.querySelector('[data-testid=csv-type-badge][data-col="4"]') as HTMLElement).click());
 		expect(await menuItems()).toContain("Include in import");

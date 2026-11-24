@@ -206,6 +206,17 @@ export async function closeAllModals(): Promise<void> {
 
 // --- views and dialogs ---
 
+/** Opens Obsidian's settings on the plugin's tab. */
+export const openPluginSettings = () =>
+	browser.executeObsidian(({ app }, id) => {
+		const setting = (app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting;
+		setting.open();
+		setting.openTabById(id);
+	}, PLUGIN_ID);
+
+/** Closes Obsidian's settings. */
+export const closeSettings = () => browser.executeObsidian(({ app }) => (app as unknown as { setting: { close(): void } }).setting.close());
+
 /** Opens a vault file in the active tab through the workspace (what a click in the file explorer does). */
 export const openFile = (path: string) => obsidianPage.openFile(path);
 
@@ -250,6 +261,14 @@ export async function clickButton(text: string | RegExp, scope = ".modal-contain
 
 export const waitForNoModal = () =>
 	browser.waitUntil(async () => (await browser.$$(".modal-container").length) === 0, { timeoutMsg: "a modal stayed open" });
+
+/** In the import preview: clicks the import button, waits for the report and closes it. */
+export async function runImportAndClose(): Promise<void> {
+	await browser.$("[data-testid=run-import]").click();
+	await waitForModal("Import finished");
+	await browser.$("[data-testid=run-close]").click();
+	await waitForNoModal();
+}
 
 /**
  * Drives the real import flow: opens the CSV, runs "import current CSV", waits for the preview, clicks the import
@@ -322,4 +341,11 @@ export async function findNoteByFrontmatter(folder: string, key: string, value: 
 		{ timeoutMsg: `no note in ${folder} with ${key}=${String(value)}` },
 	);
 	return found;
+}
+
+/** Imports `CSV` through the dialog and returns the frontmatter of the note of its first row once `property` is set. */
+export async function importAndReadFirstNote(property: string): Promise<Frontmatter> {
+	await importViaDialog(CSV);
+	const note = await findNoteByFrontmatter(NOTES_DIR, "Datum", "2026-11-18");
+	return waitForFrontmatter(note, (f) => f[property] !== undefined);
 }

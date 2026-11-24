@@ -2,7 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { openCsv } from "../flows";
 import {
-	CSV, NOTES_DIR, clickButton, importViaDialog, installConsoleSpy, listNotes, noticeTexts, pluginProblems, resetEverything, runCommand,
+	CSV, NOTES_DIR, clickButton, importViaDialog, installConsoleSpy, listNotes, noticeTexts, pluginProblems, resetEverything, runCommand, runImportAndClose,
 	waitForModal, waitForNoModal, waitForViewType,
 } from "../support";
 
@@ -42,10 +42,7 @@ describe("undo and imports index", function () {
 		await openCsv(CSV);
 		await browser.$("[data-testid=csv-import]").click();
 		await waitForModal(/import preview/i);
-		await browser.$("[data-testid=run-import]").click();
-		await waitForModal("Import finished");
-		await browser.$("[data-testid=run-close]").click();
-		await waitForNoModal();
+		await runImportAndClose();
 		await browser.$("[data-testid=csv-view] .csv-importer-link-btn").click();
 		await waitForModal("Undo last import");
 		await clickButton("Undo import");

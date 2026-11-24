@@ -2,7 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { INDEX, hasIndexRow, indexRow, openIndex, shot, writeVault } from "../flows";
 import {
-	CSV, PLUGIN_ID, importViaDialog, installConsoleSpy, pluginProblems, readVaultFile, resetEverything, waitForModal, waitForNoModal,
+	CSV, PLUGIN_ID, importViaDialog, installConsoleSpy, pluginProblems, readVaultFile, resetEverything, runImportAndClose, waitForModal,
 } from "../support";
 
 const SPEC = "index-changed";
@@ -51,10 +51,7 @@ describe("Index: CSV changed since the last import", function () {
 		await waitForModal(/import preview/i);
 		await expect(browser.$("[data-testid=import-run-modal] .csv-importer-run-counts")).toHaveText(expect.stringContaining("1 new"));
 		await browser.$("[data-testid=run-import]").waitForClickable();
-		await browser.$("[data-testid=run-import]").click();
-		await waitForModal("Import finished");
-		await browser.$("[data-testid=run-close]").click();
-		await waitForNoModal();
+		await runImportAndClose();
 		await browser.waitUntil(async () => !(await (await indexRow("timesheet.csv")).$(BADGE).isExisting()), { timeoutMsg: "Changed badge stayed after the re-import" });
 		await expect(browser.$(`${INDEX} [data-testid=csv-index-changed]`)).not.toExist();
 		expect((await status(CSV)).changed).toBe(false);

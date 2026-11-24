@@ -2,7 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { chooseOption, openConfigDialog, openConfigTab, openCsv, shot, writeVault } from "../flows";
 import {
-	CSV, clickButton, installConsoleSpy, pluginProblems, readVaultFile, resetEverything, runCommand, waitForModal, waitForNoModal,
+	CSV, clickButton, installConsoleSpy, pluginProblems, readVaultFile, resetEverything, runCommand, runImportAndClose, waitForModal, waitForNoModal,
 } from "../support";
 
 const SPEC = "table-refresh";
@@ -41,10 +41,7 @@ describe("table view: stays in step with the file and the plugin's state", funct
 		await openCsv(CSV);
 		await runCommand("import-current-csv");
 		await waitForModal(/import preview/i);
-		await browser.$("[data-testid=run-import]").click();
-		await waitForModal("Import finished");
-		await browser.$("[data-testid=run-close]").click();
-		await waitForNoModal();
+		await runImportAndClose();
 		await expect(status()).toHaveText(expect.stringContaining("Imported"));
 		await expect(browser.$(`${view} .csv-importer-status .csv-importer-link-btn`)).toHaveText("Undo");
 		await expect(browser.$("[data-testid=csv-undo]")).toHaveAttribute("aria-label", "Undo last import");
@@ -60,10 +57,7 @@ describe("table view: stays in step with the file and the plugin's state", funct
 		await expect(browser.$("[data-testid=csv-changed]")).not.toExist();
 		await runCommand("import-current-csv");
 		await waitForModal(/import preview/i);
-		await browser.$("[data-testid=run-import]").click();
-		await waitForModal("Import finished");
-		await browser.$("[data-testid=run-close]").click();
-		await waitForNoModal();
+		await runImportAndClose();
 		await expect(browser.$("[data-testid=csv-changed]")).not.toExist();
 
 		const text = await readVaultFile(CSV);
@@ -75,10 +69,7 @@ describe("table view: stays in step with the file and the plugin's state", funct
 		await browser.$("[data-testid=csv-reimport]").click();
 		await waitForModal(/import preview/i);
 		await browser.$(`[data-testid=import-run-modal] .csv-importer-run-counts`).waitForExist();
-		await browser.$("[data-testid=run-import]").click();
-		await waitForModal("Import finished");
-		await browser.$("[data-testid=run-close]").click();
-		await waitForNoModal();
+		await runImportAndClose();
 		await browser.waitUntil(async () => !(await browser.$("[data-testid=csv-changed]").isExisting()), { timeoutMsg: "still marked as changed after the re-import" });
 	});
 });

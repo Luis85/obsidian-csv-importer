@@ -2,19 +2,11 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { shot } from "../flows";
 import {
-	CSV, PLUGIN_ID, importViaDialog, installConsoleSpy, noticeTexts, pluginProblems, resetEverything, waitForViewType,
+	CSV, PLUGIN_ID, closeSettings, importViaDialog, installConsoleSpy, noticeTexts, openPluginSettings, pluginProblems, resetEverything, waitForViewType,
 } from "../support";
 
 const SPEC = "settings-tab";
 
-const openSettings = () =>
-	browser.executeObsidian(({ app }, id) => {
-		const setting = (app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting;
-		setting.open();
-		setting.openTabById(id);
-	}, PLUGIN_ID);
-
-const closeSettings = () => browser.executeObsidian(({ app }) => (app as unknown as { setting: { close(): void } }).setting.close());
 
 /** Clicks a button of the plugin's settings tab by its text. */
 const clickSettingsButton = (text: string) =>
@@ -34,7 +26,7 @@ describe("settings tab", function () {
 	});
 
 	it("opens CSV imports from the row under the intro", async function () {
-		await openSettings();
+		await openPluginSettings();
 		await browser.waitUntil(async () => (await browser.executeObsidian(({ app }) => (app as unknown as { setting: { activeTab?: unknown } }).setting.activeTab !== undefined)));
 		await clickSettingsButton("CSV imports");
 		await closeSettings();
@@ -43,7 +35,7 @@ describe("settings tab", function () {
 
 	it("resets all import settings after a confirmation, emptying the index", async function () {
 		await importViaDialog(CSV);
-		await openSettings();
+		await openPluginSettings();
 		await browser.waitUntil(async () => (await browser.executeObsidian(({ app }) => (app as unknown as { setting: { activeTab?: { containerEl: HTMLElement } } }).setting.activeTab?.containerEl.textContent ?? "")).includes("Danger zone"));
 		await shot(SPEC, "danger-zone");
 		// Obsidian 1.15 shows the settings in a window of their own; the confirmation opens there, not in the main window.

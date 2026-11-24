@@ -2,8 +2,8 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { chooseOption, clickMenuItem, openConfigDialog, openConfigTab, openCsv, setting, shot } from "../flows";
 import {
-	CSV, NOTES_DIR, PLUGIN_ID, clickButton, findNoteByFrontmatter, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything,
-	waitForFrontmatter, waitForModal, waitForNoModal, readVaultFile,
+	CSV, NOTES_DIR, PLUGIN_ID, clickButton, findNoteByFrontmatter, importAndReadFirstNote, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything,
+	runImportAndClose, waitForFrontmatter, waitForModal, waitForNoModal, readVaultFile,
 } from "../support";
 
 const SPEC = "import-settings";
@@ -74,10 +74,7 @@ describe("import settings dialog", function () {
 		await clickButton("Import now");
 		await waitForModal(/import preview/i);
 		await shot(SPEC, "preview-from-settings", true);
-		await browser.$("[data-testid=run-import]").click();
-		await waitForModal("Import finished");
-		await browser.$("[data-testid=run-close]").click();
-		await waitForNoModal();
+		await runImportAndClose();
 		const notes = await listNotes("Work/Hours");
 		expect(notes).toHaveLength(6);
 		expect(notes[0]).toMatch(/^Work\/Hours\/2026-11-18 /);
@@ -151,9 +148,7 @@ describe("import settings dialog", function () {
 		await shot(SPEC, "column-options", true);
 		await clickButton("Save");
 		await waitForNoModal();
-		await importViaDialog(CSV);
-		const note = await findNoteByFrontmatter(NOTES_DIR, "Datum", "2026-11-18");
-		const fm = await waitForFrontmatter(note, (f) => f["Stunden"] !== undefined);
+		const fm = await importAndReadFirstNote("Stunden");
 		expect(fm["Stunden"]).toBe("0.625 h");
 	});
 
