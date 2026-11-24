@@ -814,6 +814,13 @@ button.csv-importer-hidden:not(.clickable-icon) {
 	height: 24px;
 }
 
+/* Section headings inside a tab (Extra properties, Values): flush with the rows above, with room between sections.
+   Obsidian indents heading rows in some versions; the dialog's rows are not indented. */
+.csv-importer-config .setting-item.setting-item-heading {
+	padding-inline: 0;
+	margin-top: var(--size-4-4);
+}
+
 /* === end owner:config === */
 
 /* === owner:table-run === */

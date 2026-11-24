@@ -89,6 +89,8 @@ describe("README screenshots", function () {
 		await runCommand("open-import-index");
 		await waitForViewType("csv-importer-index");
 		await browser.$("[data-testid=csv-index-row]").waitForDisplayed();
+		// The imports above leave "Created ….base" notices on screen; remove them so they don't cover the toolbar.
+		await browser.execute(() => document.querySelectorAll(".notice-container .notice").forEach((n) => n.remove()));
 		await browser.pause(800);
 		await capture("[data-testid=csv-index]", "imports-index");
 	});
