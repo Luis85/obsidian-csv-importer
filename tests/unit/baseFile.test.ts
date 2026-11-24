@@ -25,4 +25,9 @@ describe("buildBaseFile", () => {
 		expect(t).toContain('name: "V\\"w"');
 		expect(t).toContain('- "a: b"');
 	});
+	it("normalizes the folder and skips blank property names", () => {
+		const t = buildBaseFile("//Data\\sub//", ["x", " ", ""], "V");
+		expect(t).toContain('- "file.inFolder(\\"Data/sub\\")"');
+		expect(t.split("\n").filter((l) => l.startsWith("      - "))).toEqual(['      - "file.name"', '      - "x"']);
+	});
 });
