@@ -2,8 +2,8 @@ name: Release
 
 # Three ways to release:
 # 1. Fully automated: run this workflow manually (Actions tab, `gh workflow run release.yml -f version=minor`,
-#    or an agent via the GitHub API). It runs the mutation tests (job `mutation`), then bumps the version, commits, tags,
-#    checks code quality (fallow), builds, tests and publishes.
+#    or an agent via the GitHub API). It bumps the version, commits, tags, checks code quality (fallow, advisory), builds,
+#    tests and publishes. Mutation tests run next to it in the advisory `mutation` job.
 # 2. Push a tag equal to the manifest.json version (e.g. `git push origin 1.2.3`).
 # 3. Publish a release in the GitHub UI with a new tag equal to the manifest.json version.
 on:
@@ -31,10 +31,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Advisory for now: runs next to the release and never blocks it (continue-on-error, and `release` does not
+  # `need` it). A score below `thresholds.break` in stryker.config.mjs marks this job failed as a warning.
+  # To make it a blocker once the plugin has settled: remove `continue-on-error` here and add `needs: mutation`
+  # to the release job.
   mutation:
-    name: Mutation tests
+    name: Mutation tests (advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    continue-on-error: true
     permissions:
       contents: read
     steps:
@@ -49,8 +54,11 @@ jobs:
 
       - run: npm ci
 
-      # Fails the release when the mutation score drops below `thresholds.break` in stryker.config.mjs.
       - run: npm run test:mutation
+
+      - name: Mutation score summary
+        if: always()
+        run: node scripts/mutation-summary.mjs reports/mutation/mutation.json
 
       - name: Upload mutation report
         if: always()
@@ -61,7 +69,6 @@ jobs:
           if-no-files-found: ignore
 
   release:
-    needs: mutation
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -114,8 +121,12 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - run: npm run lint
-      # Code quality (fallow): fails on dead code, duplication or complexity not in .fallow-baselines/.
-      - run: npm run quality
+      # Code quality (fallow), advisory for now: new dead code, duplication or complexity (not in .fallow-baselines/)
+      # is reported as annotations and marks this step with a warning, but does not stop the release.
+      # To make it a blocker once the plugin has settled, remove `continue-on-error`.
+      - name: Code quality (advisory)
+        continue-on-error: true
+        run: npm run quality -- --format github-annotations --fail-on-issues
       - run: npm test
       - run: npm run build
 

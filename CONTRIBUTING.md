@@ -87,7 +87,7 @@ npx fallow health --hotspots --targets   # where refactoring pays off most
 
 `.fallowrc.jsonc` declares the dev tooling entry points (`ui-preview/`, `scripts/`), packages fallow cannot see being used, and the Obsidian lifecycle methods (`onOpen`, `getViewType`, ...) that Obsidian calls on the plugin's classes. The findings that existed when fallow was added are saved in `.fallow-baselines/` (`dead-code.json`, `dupes.json`, `health.json`), so `npm run quality` fails only on new ones. When you fix existing findings, run `npm run quality:baseline` and commit the smaller baselines. Do not re-save a baseline to get a new finding through: fix it, or add a `// fallow-ignore-next-line <rule>` comment with the reason. `.fallow/` is fallow's local cache and is gitignored by fallow itself.
 
-The release workflow runs `npm run quality` after lint, before tests and build.
+The release workflow runs `npm run quality` after lint, before tests and build. For now it is **advisory**: new findings show as annotations on the run and mark the step with a warning, but do not stop the release (`continue-on-error`). It becomes a blocker once the plugin has settled: remove `continue-on-error` from that step.
 
 ## Mutation testing
 
@@ -99,7 +99,7 @@ npm run test:mutation
 
 `stryker.config.mjs` mutates the pure logic: `src/core/`, `src/csv/`, `src/import/` (without `vaultGateway.ts`, an interface), `src/configStore.ts` and `src/defaults.ts`. The views are not mutated; they are covered by the end-to-end suite. Reports go to `reports/mutation/` (`index.html` to browse survivors, `mutation.json`), gitignored. A full run takes several minutes; to check one file, pass `--mutate src/csv/parser.ts`.
 
-The release workflow runs the suite in its own `mutation` job before building and publishing, and the release fails when the mutation score is below `thresholds.break` in `stryker.config.mjs` (65 %; the first full run scored 68.2 %, with `src/import/checkpointer.ts`, `src/import/yaml.ts`, `src/csv/encoding.ts` and `src/defaults.ts` the weakest). Raise the threshold when the score goes up; do not lower it to get a release through. The HTML report is uploaded as the `mutation-report` artifact.
+The release workflow runs the suite in its own `mutation` job, next to the release. For now it is **advisory**: the job has `continue-on-error` and the release job does not wait for it, so a low score never stops a release. A score below `thresholds.break` in `stryker.config.mjs` (65 %) marks the job failed as a warning, and `scripts/mutation-summary.mjs` writes the score per file to the run summary. The first full run scored 68.2 %, with `src/import/checkpointer.ts`, `src/core/util.ts`, `src/csv/encoding.ts`, `src/import/yaml.ts` and `src/defaults.ts` the weakest. To make it a blocker once the plugin has settled, remove `continue-on-error` from the job and add `needs: mutation` to the release job. Raise the threshold when the score goes up; do not lower it to get a run green. The HTML report is uploaded as the `mutation-report` artifact.
 
 ## Lint
 

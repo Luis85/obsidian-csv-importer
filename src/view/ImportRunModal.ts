@@ -403,6 +403,8 @@ export class ImportRunModal extends Modal {
 	}
 
 	private rowCheckbox(item: HTMLElement, r: RowOutcome): void {
+		// A class instead of `:has(.csv-importer-check)` in CSS, which the review flags for selector invalidation cost.
+		item.addClass("mod-selectable");
 		const box = item.createEl("input", {
 			cls: "csv-importer-check",
 			type: "checkbox",

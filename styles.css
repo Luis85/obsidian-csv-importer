@@ -1139,7 +1139,7 @@ button.csv-importer-hidden:not(.clickable-icon) {
 	inset: calc(-1 * var(--size-4-2)) calc(-1 * var(--size-2-2));
 }
 
-.is-phone .csv-importer-run-item:has(.csv-importer-check) {
+.is-phone .csv-importer-run-item.mod-selectable {
 	min-height: 44px;
 	align-items: center;
 }
@@ -1342,7 +1342,7 @@ button.csv-importer-hidden:not(.clickable-icon) {
 	border-bottom: none;
 }
 
-.csv-importer-run-item:has(.csv-importer-check) {
+.csv-importer-run-item.mod-selectable {
 	display: flex;
 	align-items: flex-start;
 	gap: var(--size-4-2);

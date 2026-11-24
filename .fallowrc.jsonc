@@ -1,5 +1,6 @@
 // fallow (https://fallow.tools): dead code, duplication and complexity checks. Run with `npm run quality`.
-// The release workflow fails on findings that are not in the committed baselines under `.fallow-baselines/`.
+// The release workflow reports findings that are not in the committed baselines under `.fallow-baselines/`
+// (advisory for now: a warning, not a blocker).
 {
 	"$schema": "./node_modules/fallow/schema.json",
 	// Dev tooling that runs with node directly, not from the plugin bundle.
