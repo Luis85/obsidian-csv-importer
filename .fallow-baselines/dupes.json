@@ -1,51 +1,6 @@
 {
   "kind": "dupes",
-  "clone_groups": [
-    "src/view/config/ColumnRow.ts:121-134|src/view/config/ExtraPropertiesSection.ts:130-141",
-    "ui-preview/obsidian-shim.ts:547-562|ui-preview/obsidian-shim.ts:577-592",
-    "src/view/config/ColumnRow.ts:155-167|src/view/config/ExtraPropertiesSection.ts:160-171",
-    "tests/e2e/specs/settings-defaults.e2e.ts:14-18|tests/e2e/specs/settings-tab.e2e.ts:11-15|tests/e2e/specs/smoke.e2e.ts:65-69",
-    "tests/e2e/flows.ts:185-199|tests/e2e/specs/index-flows.e2e.ts:14-28",
-    "ui-preview/scenarios.ts:256-260|ui-preview/scenarios.ts:346-350",
-    "ui-preview/scenarios.ts:346-352|ui-preview/scenarios.ts:497-503",
-    "tests/e2e/specs/settings-defaults.e2e.ts:13-18|tests/e2e/specs/smoke.e2e.ts:64-69",
-    "tests/e2e/specs/table-refresh.e2e.ts:41-48|tests/e2e/specs/table-refresh.e2e.ts:60-67",
-    "ui-preview/scenarios.ts:312-316|ui-preview/scenarios.ts:340-344",
-    "tests/e2e/specs/import-dialog.e2e.ts:31-37|tests/e2e/specs/undo-index.e2e.ts:41-47",
-    "tests/e2e/specs/table-view.e2e.ts:51-57|tests/e2e/specs/table-view.e2e.ts:82-86",
-    "tests/e2e/specs/index-changed.e2e.ts:53-58|tests/e2e/specs/table-refresh.e2e.ts:77-82",
-    "tests/e2e/specs/import-settings.e2e.ts:153-157|tests/e2e/specs/table-view.e2e.ts:82-86"
-  ],
-  "clone_fingerprints": [
-    "dup:52445815:2",
-    "dup:17025b68:2",
-    "dup:557fc79a:2",
-    "dup:ae481bfb:3",
-    "dup:b1797b93:2",
-    "dup:825ce98a:2",
-    "dup:eac9c57e:2",
-    "dup:1f815c50:2",
-    "dup:0baa82db:2",
-    "dup:1a7df6e6:2",
-    "dup:54cae130:2",
-    "dup:0e3d2ea1:2",
-    "dup:83f5d2b6:2",
-    "dup:f37c9f68:2"
-  ],
-  "normalized_clone_fingerprints": [
-    "dup:550c3276:2",
-    "dup:88756112:2",
-    "dup:3c2e37c3:2",
-    "dup:702fd46a:3",
-    "dup:704ee9c5:2",
-    "dup:ff04ae17:2",
-    "dup:5f77a872:2",
-    "dup:d0af1a55:2",
-    "dup:ca8b6245:2",
-    "dup:dc61e33d:2",
-    "dup:932b9e47:2",
-    "dup:d766b008:2",
-    "dup:917f9413:2",
-    "dup:f6381542:2"
-  ]
+  "clone_groups": [],
+  "clone_fingerprints": [],
+  "normalized_clone_fingerprints": []
 }

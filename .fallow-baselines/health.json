@@ -15,85 +15,6 @@
         "count": 3
       }
     },
-    "src/csv/parser.ts": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "complexity_high": {
-        "count": 1
-      },
-      "complexity_moderate": {
-        "count": 1
-      },
-      "crap_critical": {
-        "count": 1
-      }
-    },
-    "src/csv/typeInference.ts": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "complexity_high": {
-        "count": 2
-      },
-      "complexity_moderate": {
-        "count": 4
-      },
-      "crap_critical": {
-        "count": 1
-      },
-      "crap_high": {
-        "count": 2
-      }
-    },
-    "src/defaults.ts": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
-    "src/import/importer.ts": {
-      "complexity_high": {
-        "count": 2
-      },
-      "crap_high": {
-        "count": 2
-      },
-      "crap_moderate": {
-        "count": 2
-      }
-    },
-    "src/import/merge.ts": {
-      "complexity_high": {
-        "count": 1
-      }
-    },
-    "src/import/noteBuilder.ts": {
-      "complexity_high": {
-        "count": 2
-      },
-      "complexity_moderate": {
-        "count": 1
-      },
-      "crap_high": {
-        "count": 1
-      },
-      "crap_moderate": {
-        "count": 1
-      }
-    },
-    "src/import/pathIndex.ts": {
-      "complexity_moderate": {
-        "count": 1
-      }
-    },
-    "src/import/yaml.ts": {
-      "complexity_moderate": {
-        "count": 1
-      },
-      "crap_moderate": {
-        "count": 1
-      }
-    },
     "src/main.ts": {
       "crap_critical": {
         "count": 1
@@ -103,25 +24,8 @@
       }
     },
     "src/obsidian/importService.ts": {
-      "complexity_high": {
-        "count": 2
-      },
-      "crap_high": {
-        "count": 2
-      },
       "crap_moderate": {
         "count": 2
-      }
-    },
-    "src/storage.ts": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "crap_critical": {
-        "count": 1
-      },
-      "crap_moderate": {
-        "count": 1
       }
     },
     "src/view/AddCsvModal.ts": {
@@ -162,14 +66,6 @@
         "count": 2
       },
       "crap_moderate": {
-        "count": 1
-      }
-    },
-    "src/view/ImportRunModal.ts": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "crap_critical": {
         "count": 1
       }
     },
@@ -295,26 +191,28 @@
   "runtime_coverage_findings": [],
   "target_keys": [
     "src/import/importer.ts:high impact",
-    "src/storage.ts:high impact",
-    "src/import/noteBuilder.ts:high impact",
-    "src/main.ts:hidden coupling",
-    "src/settings.ts:dead code",
-    "src/view/ImportConfigModal.ts:hidden coupling",
     "src/view/ImportRunModal.ts:high impact",
+    "src/main.ts:hidden coupling",
+    "src/view/ImportConfigModal.ts:hidden coupling",
+    "src/import/noteBuilder.ts:high impact",
     "src/view/CsvView.ts:high impact",
     "src/csv/typeInference.ts:high impact",
+    "src/defaults.ts:hidden coupling",
     "src/view/ImportIndexView.ts:untested risk",
     "src/csv/parser.ts:high impact",
     "src/core/util.ts:high impact",
+    "src/view/config/ColumnRow.ts:untested risk",
+    "src/storage.ts:hidden coupling",
+    "src/import/merge.ts:high impact",
     "src/view/TableRenderer.ts:untested risk",
+    "src/settings.ts:hidden coupling",
     "src/obsidian/importService.ts:high impact",
+    "src/view/config/Tabs.ts:untested risk",
     "scripts/check-api-versions.mjs:untested risk",
     "tests/e2e/support.ts:high impact",
     "src/import/fingerprint.ts:high impact",
-    "src/import/merge.ts:high impact",
     "src/import/templates.ts:high impact",
     "src/import/folders.ts:high impact",
-    "src/view/config/Tabs.ts:untested risk",
     "ui-preview/obsidian-shim.ts:untested risk"
   ]
 }
