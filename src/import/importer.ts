@@ -18,9 +18,9 @@ export { applyUndo, applyUndoToSnapshot, UNDO_TRUNCATED_WARNING } from "./undo";
 const SLICE_MS = 12;
 
 export const KEY_WARNING =
-	"No key column: notes are matched by file name. If rows are inserted or re-sorted, the wrong notes are updated. Choose a key column in the import settings.";
+	"No key column: notes are matched by file name. If rows are inserted or re-sorted, the wrong notes are updated. Choose columns under \"Match notes by\" on the Re-import tab of the import settings.";
 const NOT_OWNED_WARNING =
-	'Some notes were skipped because this import did not create them. If you created them with an earlier version or another tool, turn on "Update existing notes not created by this import" in the import settings.';
+	'Some notes were skipped because this import did not create them. If you created them with an earlier version or another tool, turn on "Update notes not created by this import" on the Re-import tab of the import settings.';
 
 const LARGE_IMPORT_THRESHOLD = 5000;
 const DUPLICATE_KEYS_IN_CSV_WARNING = (n: number, example: string): string =>

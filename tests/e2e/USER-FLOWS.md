@@ -49,7 +49,7 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Existing notes: Skip | import-options | skips existing notes with the Skip strategy |
 | Existing notes: Create a copy | import-options | creates copies with the Create a copy strategy |
 | Existing notes: Replace whole note | import-settings | asks for confirmation ..., and replaces notes on re-import |
-| Notes not created by this import, Update existing notes setting | import-options | skips notes this import did not create |
+| Notes not created by this import, Update notes not created by this import setting | import-options | skips notes this import did not create |
 | Matching notes: key column, renamed notes | import-options | matches by a key column |
 | Matching notes: composite key | import-options, import-settings | matches by a composite key; saves a composite key |
 | Matching notes: no key warning | encoding-drift-warnings | warns on re-import when no key column is set |

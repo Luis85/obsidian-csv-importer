@@ -290,7 +290,7 @@ describe("shared key property across CSVs", () => {
 		await app.vault.create("People/B 1.md", "---\nid: 1\n---\nold\n");
 		const { result } = await writeNotes(app as unknown as App, plan("id,role\n1,Dev\n", b, "b.csv"), b);
 		expect(result.skipped).toBe(1);
-		expect(result.warnings.some((w) => w.includes("Update existing notes not created by this import"))).toBe(true);
+		expect(result.warnings.some((w) => w.includes("Update notes not created by this import"))).toBe(true);
 	});
 
 	it("recognises the legacy `source` link as owned", async () => {
