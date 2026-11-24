@@ -19,6 +19,7 @@ Second UI/UX pass with a clearer information architecture; see `docs/archive/UX-
 - Mutation testing with Stryker (`npm run test:mutation`). The release workflow runs it in an advisory `mutation` job next to the release: a score below 90 % shows as a warning and does not block the release yet. The score went from 68.2 % to 93.8 % with 236 new behavior tests (607 unit tests in total).
 - Code-quality checks with fallow (`npm run quality`): dead code, duplication and complexity. The release workflow reports findings that are not in `.fallow-baselines/` as warnings; it does not block the release yet.
 
+## 0.3.0
 ### Fixes
 - CSS: replaced `column-gap` (flagged as partially supported multi-column CSS in the 0.2.0 review) with `gap`, and removed other partially supported features; Stylelint now checks browser support.
 
