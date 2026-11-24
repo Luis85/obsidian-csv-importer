@@ -10,12 +10,11 @@ import {
 	EXTRA_PROPERTIES_DESC,
 	EXTRA_DEFAULT_HELP,
 	NEW_PROPERTY,
-	OPTIONS_CLOSE,
-	OPTIONS_OPEN,
 	RESULT,
 } from "./copy";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
+import { buildPropertyRowParts, syncPropertyInputs } from "./propertyRow";
 
 const EXTRA_TOKENS = ["{{today}}", "{{now}}", "{{uuid}}"];
 const SAMPLE_NAME = "__csv_importer_extra_sample__";
@@ -120,26 +119,12 @@ export class ExtraPropertiesSection {
 		for (const [value, label] of Object.entries(TYPE_LABELS)) sel.createEl("option", { value, text: label });
 		sel.value = prop.type;
 
-		const optBtn = main.createEl("button", {
-			cls: "clickable-icon csv-importer-col-options-btn",
-			attr: { type: "button", "aria-expanded": "false", "aria-controls": id, "aria-label": `${COLUMN_OPTIONS} for extra property`, title: OPTIONS_OPEN },
+		const { optDot, sampleEl, sampleAfter, summaryText, opts, narrowProp } = buildPropertyRowParts(row, main, {
+			id,
+			optionsLabel: `${COLUMN_OPTIONS} for extra property`,
+			propertyAttr: { placeholder: "Property name", "aria-label": "Extra property name" },
+			property: prop.property,
 		});
-		setIcon(optBtn, "sliders-horizontal");
-		const optDot = optBtn.createSpan({ cls: "csv-importer-options-dot" });
-
-		const sampleEl = main.createDiv({ cls: "csv-importer-col-sample" });
-		const sampleAfter = sampleEl.createSpan({ cls: "csv-importer-col-after" });
-
-		const summary = row.createEl("button", { cls: "csv-importer-col-summary", attr: { type: "button", "aria-expanded": "false", "aria-controls": id } });
-		const summaryText = summary.createSpan({ cls: "csv-importer-col-summary-text" });
-		setIcon(summary.createSpan({ cls: "csv-importer-col-summary-icon" }), "chevron-right");
-
-		const opts = row.createDiv({ cls: "csv-importer-col-options csv-importer-hidden", attr: { id } });
-
-		const narrowProp = opts.createDiv({ cls: "csv-importer-opt csv-importer-opt-prop" });
-		narrowProp.createEl("label", { text: "Property name" });
-		const name2 = narrowProp.createEl("input", { type: "text", cls: "csv-importer-prop-input", attr: { placeholder: "Property name", "aria-label": "Extra property name" } });
-		name2.value = prop.property;
 
 		const defField = opts.createDiv({ cls: "csv-importer-opt" });
 		const defId = `${id}-def`;
@@ -159,15 +144,6 @@ export class ExtraPropertiesSection {
 		const result = defField.createDiv({ cls: "csv-importer-opt-result" });
 		defField.createDiv({ cls: "csv-importer-opt-help", text: EXTRA_DEFAULT_HELP });
 
-		let open = false;
-		const setOpen = (v: boolean): void => {
-			open = v;
-			opts.toggleClass("csv-importer-hidden", !open);
-			row.toggleClass("is-open", open);
-			for (const b of [optBtn, summary]) b.setAttr("aria-expanded", String(open));
-			optBtn.setAttr("title", open ? OPTIONS_CLOSE : OPTIONS_OPEN);
-		};
-
 		const refresh = (): void => {
 			const out = this.sampleOf(prop);
 			sampleAfter.setText(out);
@@ -177,17 +153,13 @@ export class ExtraPropertiesSection {
 			optDot.toggleClass("csv-importer-hidden", prop.defaultValue === "");
 		};
 		refresh();
-		setOpen(false);
 
-		const onName = (src: HTMLInputElement, other: HTMLInputElement): void => {
-			prop.property = src.value;
-			other.value = src.value;
+		syncPropertyInputs(name, narrowProp, (value) => {
+			prop.property = value;
 			this.updateWarnings();
 			refresh();
 			draft.emitPreviewDebounced();
-		};
-		name.addEventListener("input", () => onName(name, name2));
-		name2.addEventListener("input", () => onName(name2, name));
+		});
 		sel.addEventListener("change", () => {
 			prop.type = sel.value as PropertyType;
 			refresh();
@@ -198,8 +170,6 @@ export class ExtraPropertiesSection {
 			refresh();
 			draft.emitPreviewDebounced();
 		});
-		optBtn.addEventListener("click", () => setOpen(!open));
-		summary.addEventListener("click", () => setOpen(!open));
 
 		this.warnings.set(prop, row.createDiv({ cls: "csv-importer-field-error csv-importer-extra-warning", attr: { role: "status" } }));
 	}
