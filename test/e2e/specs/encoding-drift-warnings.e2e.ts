@@ -33,7 +33,7 @@ describe("encodings, changed columns and parser warnings", function () {
 		expect((await waitForFrontmatter(path, (f) => f["Ort"] !== undefined))["Ort"]).toBe("Köln");
 	});
 
-	it("lets the encoding be set by hand on the File & rows tab", async function () {
+	it("lets the encoding be set by hand on the File format tab", async function () {
 		await openCsv("Data/windows-1252.csv");
 		await browser.$("[data-testid=csv-configure]").click();
 		await browser.$("[data-testid=import-config-modal]").waitForDisplayed();

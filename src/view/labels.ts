@@ -83,7 +83,7 @@ export const NAME = {
  * Descriptions used where the same setting appears in both the settings tab and the import settings dialog
  * (UX review finding 25: one string per setting). SETTINGS_DESC and CONFIG_DESC point here for those keys.
  */
-export const SHARED_DESC = {
+const SHARED_DESC = {
 	encoding: "Text encoding of the file. Auto detects UTF-8, UTF-16 and Windows-1252. Change it if special characters look wrong.",
 	delimiter: "Column separator. Auto detects it from the file content.",
 	hasHeader: "Turn off if the first row already contains data.",
@@ -165,9 +165,6 @@ export function delimiterLabel(d: string): string {
 	}
 }
 
-export const EXTRA_PROPERTIES_HELP =
-	"Written to the notes only, the CSV is not changed. Defaults fill new notes and empty properties; values you set in Obsidian are kept.";
-
 export const ROW_FILTER_OPS: Record<RowFilterOp, string> = {
 	equals: "equals",
 	notEquals: "does not equal",
@@ -213,8 +210,6 @@ export const SAVE = "Save";
 export const CANCEL = "Cancel";
 /** The per-CSV configuration and its dialog (UX review §2 vocabulary). */
 export const IMPORT_SETTINGS = "Import settings";
-/** @deprecated Kept for existing imports; the vocabulary is "Import settings". */
-export const CONFIGURE = IMPORT_SETTINGS;
 export const UNDO_LAST_IMPORT = "Undo last import";
 export const CLOSE = "Close";
 
@@ -264,13 +259,6 @@ export const SETTINGS_HEADINGS = {
 	/** Unused since the "Open CSV imports" row moved to the top of the tab (kept for a stable export). */
 	imports: "CSV imports",
 	danger: "Danger zone",
-} as const;
-/** Tab names of the import settings dialog (spec section 2). */
-export const CONFIG_TABS = {
-	columns: "Columns",
-	notes: "Notes",
-	reimport: "Re-import",
-	file: "File & rows",
 } as const;
 
 /** CSV imports view: scan, add from outside, changed CSV files, note counts. */

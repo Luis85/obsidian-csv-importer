@@ -15,7 +15,7 @@ describe("no network at runtime", function () {
 		await openFile(CSV);
 		await waitForViewType("csv-importer-view");
 		await runCommand("configure-current-csv");
-		await waitForModal("Columns");
+		await waitForModal("Properties");
 		await browser.$("[data-testid=import-config-modal] .csv-importer-cancel").click();
 		await importViaDialog(CSV);
 		await expect(browser.$("[data-testid=csv-table]")).toExist();

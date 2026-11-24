@@ -1,8 +1,8 @@
 import type { ImportResult, NoteOutcome, RowFilter } from "../types";
-import { IMPORT_SETTINGS, ROW_FILTER_OPS, UNDO_LAST_IMPORT } from "./labels";
+import { IMPORT_SETTINGS, OPEN_BASE, ROW_FILTER_OPS, UNDO_LAST_IMPORT } from "./labels";
 
 /** Shared names (UX review, vocabulary), re-exported for the table view and the run dialog. */
-export { IMPORT_SETTINGS, UNDO_LAST_IMPORT };
+export { IMPORT_SETTINGS, OPEN_BASE, UNDO_LAST_IMPORT };
 
 /** Copy owned by the table view and the import run dialog (UI-SPEC sections 3 and 4). */
 
@@ -35,7 +35,7 @@ export function selectRowLabel(n: number): string {
 }
 
 export const FIRST_IMPORT_TITLE = "Ready to import";
-export const COLUMNS_CHANGED_TITLE = "Columns changed";
+const COLUMNS_CHANGED_TITLE = "Columns changed";
 
 /** Callout title for several unrelated issues: "2 things to check". */
 export function thingsToCheck(n: number): string {
@@ -107,7 +107,6 @@ export const IMPORTING_TITLE = "Importing";
 export const CHECKING_ROWS = "Checking rows…";
 export const STOP_IMPORT = "Stop import";
 export const CANCEL = "Cancel";
-export const OPEN_BASE = "Open base";
 export const OPEN_FIRST_NOTE = "Open first note";
 export const SAVE_REPORT = "Save report as note";
 export const UNDO_IMPORT = UNDO_LAST_IMPORT;

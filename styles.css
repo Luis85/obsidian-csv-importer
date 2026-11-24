@@ -363,7 +363,8 @@ button.csv-importer-hidden:not(.clickable-icon) {
 		display: flex;
 	}
 
-	.csv-importer-preview-toggle {
+	/* The pane is already visible: no toggle. One class more than Obsidian's `button:not(.clickable-icon)`. */
+	.csv-importer-modal .csv-importer-footer button.csv-importer-preview-toggle {
 		display: none;
 	}
 }
@@ -529,21 +530,12 @@ button.csv-importer-hidden:not(.clickable-icon) {
 	font-size: var(--font-ui-smaller);
 }
 
-.csv-importer-col-before,
 .csv-importer-col-after {
 	flex: 0 1 auto;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.csv-importer-col-after {
-	color: var(--text-normal);
-}
-
-.csv-importer-col-arrow {
-	flex: none;
 }
 
 .csv-importer-modal button.csv-importer-col-summary {
@@ -718,8 +710,15 @@ button.csv-importer-hidden:not(.clickable-icon) {
 	display: inline-flex;
 }
 
-.csv-importer-extra-help {
-	margin-bottom: var(--size-4-3);
+.csv-importer-opt-help {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+/* The intro row above the column table has a description and a button, but no name. */
+.csv-importer-columns-intro {
+	padding-top: 0;
+	border-top: 0;
 }
 
 /* Key choice: checkbox list of columns */
@@ -748,6 +747,26 @@ button.csv-importer-hidden:not(.clickable-icon) {
 	flex: none;
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+.csv-importer-key-meta.mod-warning {
+	color: var(--text-warning);
+}
+
+/* "Use X" next to the key suggestion: a real button, one size smaller than the default. */
+.csv-importer-modal button.csv-importer-use-key {
+	height: auto;
+	padding: var(--size-2-1) var(--size-4-2);
+	font-size: var(--font-ui-smaller);
+}
+
+.csv-importer-key-setting {
+	padding-bottom: var(--size-4-2);
+}
+
+.csv-importer-key-setting + .csv-importer-key-hint {
+	padding-bottom: var(--size-4-2);
+	font-size: var(--font-ui-small);
 }
 
 .csv-importer-chip-remove {
@@ -779,6 +798,7 @@ button.csv-importer-hidden:not(.clickable-icon) {
 .is-phone .csv-importer-modal .csv-importer-col-summary,
 .is-phone .csv-importer-modal .csv-importer-key-option,
 .is-phone .csv-importer-modal .csv-importer-chip,
+.is-phone .csv-importer-modal .csv-importer-use-key,
 .is-phone .csv-importer-modal .csv-importer-prop-input,
 .is-phone .csv-importer-modal select.dropdown,
 .is-phone .csv-importer-modal .clickable-icon {

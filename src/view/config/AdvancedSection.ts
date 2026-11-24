@@ -16,13 +16,13 @@ import {
 	PRECISION_ERROR,
 	ROW_FILTER_OPS,
 } from "../labels";
-import { filterCount } from "./copy";
+import { ADOPT_NAME, ROWS_FILTER_DESC, VALUES, VALUES_DESC, filterCount } from "./copy";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
 
-/** Parsing options, row filter, body template, tags and flags, spread over the dialog tabs. */
+/** Parsing options, values, row filter, body template, tags and flags, spread over the dialog tabs. */
 export class AdvancedSection {
-		private bodyChipsEl!: HTMLElement;
+	private bodyChipsEl!: HTMLElement;
 	private bodyInput: HTMLTextAreaElement | null = null;
 	private sourceHintEl: HTMLElement | null = null;
 	private encodingSetting: Setting | null = null;
@@ -30,12 +30,35 @@ export class AdvancedSection {
 
 	constructor(private readonly draft: ConfigDraft) {}
 
-	/** Parsing options and the row filter: the "File & rows" tab. */
+	/** How to read the file: the "File format" tab. */
 	buildFile(el: HTMLElement): void {
-		this.buildRowFilter(el);
 		this.buildParsingOptions(el);
+	}
+
+	/** The row filter with its live match count: the "Rows" tab. */
+	buildRows(el: HTMLElement): void {
+		this.buildRowFilter(el);
 		this.draft.on("parsing", () => this.renderRowFilter());
 		this.draft.on("preview", () => this.updateFilterCount());
+	}
+
+	/** Empty cells and number precision: the "Values" section at the end of the "Properties" tab. */
+	buildValues(el: HTMLElement): void {
+		const { cfg } = this.draft;
+		new Setting(el).setHeading().setName(VALUES).setDesc(VALUES_DESC);
+		new Setting(el)
+			.setName(NAME.emptyCells)
+			.setDesc(CONFIG_DESC.emptyCells)
+			.addDropdown((d) =>
+				d
+					.addOptions(EMPTY_VALUE_OPTIONS)
+					.setValue(cfg.emptyValues)
+					.onChange((v) => {
+						cfg.emptyValues = v as EmptyValueMode;
+						this.draft.emit("preview");
+					}),
+			);
+		this.buildPrecision(el);
 	}
 
 	/** Body, tags, source link and base: the lower part of the "Notes" tab. */
@@ -49,7 +72,7 @@ export class AdvancedSection {
 	/** "Adopt existing notes" toggle, shown on the "Re-import" tab. */
 	buildAdopt(el: HTMLElement): void {
 		new Setting(el)
-			.setName("Update existing notes not created by this import")
+			.setName(ADOPT_NAME)
 			.setDesc(CONFIG_DESC.adopt)
 			.addToggle((t) =>
 				t.setValue(this.draft.cfg.adoptExistingNotes).onChange((v) => {
@@ -159,19 +182,6 @@ export class AdvancedSection {
 					this.draft.emit("columns");
 				}),
 			);
-		new Setting(el)
-			.setName(NAME.emptyCells)
-			.setDesc(CONFIG_DESC.emptyCells)
-			.addDropdown((d) =>
-				d
-					.addOptions(EMPTY_VALUE_OPTIONS)
-					.setValue(cfg.emptyValues)
-					.onChange((v) => {
-						cfg.emptyValues = v as EmptyValueMode;
-						this.draft.emit("preview");
-					}),
-			);
-		this.buildPrecision(el);
 	}
 
 	private buildPrecision(el: HTMLElement): void {
@@ -205,7 +215,7 @@ export class AdvancedSection {
 		const { cfg } = this.draft;
 		new Setting(el)
 			.setName(FILTER_ROWS)
-			.setDesc("Rows that do not match are left out of the preview and the import.")
+			.setDesc(ROWS_FILTER_DESC)
 			.addToggle((t) =>
 				t.setValue(cfg.rowFilter !== null).onChange((on) => {
 					cfg.rowFilter = on ? { column: cfg.columns[0]?.source ?? "", op: "equals", value: "" } : null;

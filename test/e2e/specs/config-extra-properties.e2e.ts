@@ -9,7 +9,7 @@ const SPEC = "config-extra-properties";
 const MODAL = "[data-testid=import-config-modal]";
 const ROWS = `${MODAL} [data-testid=config-extra-row]`;
 
-/** Extra properties are rows of the Columns table: add, type and default, preview, import, remove. */
+/** Extra properties, a section of the Properties tab: add, type and default, preview, import, remove. */
 describe("import settings: extra properties as table rows", function () {
 	before(installConsoleSpy);
 	beforeEach(async function () {
@@ -26,9 +26,9 @@ describe("import settings: extra properties as table rows", function () {
 		await clickMenuItem("Empty property");
 	};
 
-	it("has no separate Extra properties section, only a short help line under the table", async function () {
-		await expect(browser.$(MODAL)).not.toHaveText(expect.stringContaining("Extra properties"));
-		await expect(browser.$(`${MODAL} .csv-importer-extra-help`)).toHaveText(expect.stringContaining("CSV is not changed"));
+	it("has its own Extra properties section with a heading and a description", async function () {
+		await expect(browser.$(`${MODAL} [data-testid=config-extras-heading]`)).toHaveText(expect.stringContaining("Extra properties"));
+		await expect(browser.$(`${MODAL} [data-testid=config-extras-heading]`)).toHaveText(expect.stringContaining("CSV is not changed"));
 		await expect(browser.$(`${MODAL} .csv-importer-extra-add button`)).toHaveText("Add property");
 		await expect(browser.$$(ROWS)).toBeElementsArrayOfSize(0);
 	});

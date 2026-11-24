@@ -1,8 +1,19 @@
-import { Menu, setIcon } from "obsidian";
+import { Menu, Setting, setIcon } from "obsidian";
 import type { ExtraProperty, FrontmatterValue, PropertyType } from "../../types";
 import { extraPropertyConflicts, formatValue, planNotes } from "../../import/noteBuilder";
-import { COLUMN_OPTIONS, EXTRA_PROPERTIES_HELP, TYPE_LABELS } from "../labels";
-import { ADD_EMPTY_PROPERTY, ADD_ID_PROPERTY, ADD_PROPERTY, NEW_PROPERTY, OPTIONS_CLOSE, OPTIONS_OPEN, RESULT } from "./copy";
+import { COLUMN_OPTIONS, TYPE_LABELS } from "../labels";
+import {
+	ADD_EMPTY_PROPERTY,
+	ADD_ID_PROPERTY,
+	ADD_PROPERTY,
+	EXTRA_PROPERTIES,
+	EXTRA_PROPERTIES_DESC,
+	EXTRA_DEFAULT_HELP,
+	NEW_PROPERTY,
+	OPTIONS_CLOSE,
+	OPTIONS_OPEN,
+	RESULT,
+} from "./copy";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
 
@@ -12,8 +23,8 @@ const SAMPLE_NAME = "__csv_importer_extra_sample__";
 let rowCounter = 0;
 
 /**
- * Extra properties: properties that are not in the CSV but added to every note. They are rows of the Columns table
- * (same grid as the column rows), followed by an "Add property" button and one line of help.
+ * Extra properties: properties that are not in the CSV but added to every note. Its own section of the Properties
+ * tab (heading and description), with rows on the same grid as the column rows and an "Add property" button.
  */
 export class ExtraPropertiesSection {
 	private listEl!: HTMLElement;
@@ -22,6 +33,8 @@ export class ExtraPropertiesSection {
 	constructor(private readonly draft: ConfigDraft) {}
 
 	build(parent: HTMLElement): void {
+		const heading = new Setting(parent).setHeading().setName(EXTRA_PROPERTIES).setDesc(EXTRA_PROPERTIES_DESC);
+		heading.settingEl.setAttr("data-testid", "config-extras-heading");
 		this.listEl = parent.createDiv({ cls: "csv-importer-col-list csv-importer-extra-list" });
 		const addRow = parent.createDiv({ cls: "csv-importer-extra-add" });
 		const add = addRow.createEl("button", { cls: "csv-importer-add-prop", attr: { type: "button", "aria-haspopup": "menu" } });
@@ -33,7 +46,6 @@ export class ExtraPropertiesSection {
 			menu.addItem((item) => item.setTitle(ADD_ID_PROPERTY).setIcon("key-round").onClick(() => this.addId()));
 			menu.showAtMouseEvent(evt);
 		});
-		parent.createDiv({ cls: "setting-item-description csv-importer-section-help csv-importer-extra-help", text: EXTRA_PROPERTIES_HELP });
 		this.renderList();
 		this.draft.on("parsing", () => this.renderList());
 		this.draft.on("columns", () => this.updateWarnings());
@@ -145,6 +157,7 @@ export class ExtraPropertiesSection {
 			draft.emit("preview");
 		});
 		const result = defField.createDiv({ cls: "csv-importer-opt-result" });
+		defField.createDiv({ cls: "csv-importer-opt-help", text: EXTRA_DEFAULT_HELP });
 
 		let open = false;
 		const setOpen = (v: boolean): void => {

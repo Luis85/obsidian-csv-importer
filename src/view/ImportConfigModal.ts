@@ -8,8 +8,9 @@ import { confirmDialog } from "./ConfirmModal";
 import { countMatching } from "../import/noteBuilder";
 import { createDefaultFileConfig } from "../defaults";
 import { renderCallout, safeTargetFolder } from "./dom";
-import { CANCEL, CONFIG_TABS, IMPORT_NOW, OVERWRITE_CONFIRM, SAVE, delimiterLabel } from "./labels";
-import { KEY_NONE, PREVIEW, PREVIEW_TOGGLE_TITLE, REVIEW_FILE_SETTINGS, SUMMARY_LABEL, filteredSummary } from "./config/copy";
+import { CANCEL, IMPORT_NOW, OVERWRITE_CONFIRM, SAVE, delimiterLabel } from "./labels";
+import { KEY_NONE, PREVIEW, PREVIEW_TOGGLE_TITLE, REVIEW_FILE_SETTINGS, SUMMARY_LABEL, TAB_LABELS, filteredSummary, keySummary } from "./config/copy";
+import type { ConfigTabId } from "./config/copy";
 import { Tabs } from "./config/Tabs";
 import { AdvancedSection } from "./config/AdvancedSection";
 import { ColumnsSection } from "./config/ColumnsSection";
@@ -17,12 +18,17 @@ import { ConfigDraft } from "./config/ConfigDraft";
 import { OutputSection } from "./config/OutputSection";
 import { PreviewPane } from "./config/PreviewPane";
 
-const TAB_DEFS = [
-	{ id: "columns", label: CONFIG_TABS.columns },
-	{ id: "notes", label: CONFIG_TABS.notes },
-	{ id: "reimport", label: CONFIG_TABS.reimport },
-	{ id: "file", label: CONFIG_TABS.file },
+/** Ordered as the user thinks: what the properties hold, the note file, which rows, re-imports, then how to read the file. */
+const TAB_DEFS: { id: ConfigTabId; label: string }[] = [
+	{ id: "columns", label: TAB_LABELS.columns },
+	{ id: "notes", label: TAB_LABELS.notes },
+	{ id: "rows", label: TAB_LABELS.rows },
+	{ id: "reimport", label: TAB_LABELS.reimport },
+	{ id: "file", label: TAB_LABELS.file },
 ];
+
+/** Older names of tabs, still accepted as `initialTab`. */
+const TAB_ALIASES: Record<string, ConfigTabId> = { properties: "columns", format: "file", filter: "rows" };
 
 /** Per-file import settings dialog. Composes the section modules around a shared `ConfigDraft`. */
 export class ImportConfigModal extends Modal {
@@ -45,7 +51,7 @@ export class ImportConfigModal extends Modal {
 		private file: TFile,
 		text: string,
 		private onSaved?: (cfg: FileImportConfig) => void,
-		/** Tab to open first ("columns", "notes", "reimport" or "file"); overrides the default choice. */
+		/** Tab to open first ("columns" for Properties, "notes", "rows", "reimport" or "file" for File format). */
 		private readonly initialTab?: string,
 	) {
 		super(app);
@@ -84,21 +90,19 @@ export class ImportConfigModal extends Modal {
 		const d = createDefaultFileConfig(this.host.settings);
 		const differs = (keys: (keyof FileImportConfig)[]): boolean => keys.some((k) => JSON.stringify(cfg[k]) !== JSON.stringify(d[k]));
 		const columnsChanged = cfg.extraProperties.length > 0 || cfg.columns.some((c) => !c.include || !!c.valueTemplate || !!c.stripUnits);
-		this.tabs.setChanged("columns", columnsChanged);
+		this.tabs.setChanged("columns", columnsChanged || differs(["emptyValues", "numberPrecision"]));
 		this.tabs.setChanged("notes", differs(["targetFolder", "fileNameTemplate", "bodyTemplate", "tags", "addSourceLink", "createBase"]));
+		this.tabs.setChanged("rows", cfg.rowFilter !== null);
 		this.tabs.setChanged("reimport", differs(["conflict", "protectEdits", "keepValuesOnEmpty", "adoptExistingNotes", "keyColumn", "keyColumns"]));
-		this.tabs.setChanged(
-			"file",
-			differs(["encoding", "delimiter", "hasHeader", "decimalSeparator", "dateOrder", "listSeparator", "emptyValues", "numberPrecision", "rowFilter"]),
-		);
+		this.tabs.setChanged("file", differs(["encoding", "delimiter", "hasHeader", "decimalSeparator", "dateOrder", "listSeparator"]));
 	}
 
-	/** `6 rows · comma · → Data/timesheet/ · key: Datum + Rolle · filter: 4 of 6 rows`, each part linking to its tab. */
+	/** `6 rows · comma · → Data/timesheet/ · matched by Datum + Rolle · filter: 4 of 6 rows`, each part linking to its tab. */
 	private renderSummary(): void {
 		const el = this.summaryEl;
 		el.empty();
 		const { parsed, cfg, file } = this.draft;
-		const parts: { text: string; tab: string; muted?: boolean }[] = [];
+		const parts: { text: string; tab: ConfigTabId; muted?: boolean }[] = [];
 		if (parsed) {
 			parts.push({ text: plural(parsed.rows.length, "row", "rows"), tab: "file" });
 			parts.push({ text: delimiterLabel(parsed.delimiter), tab: "file" });
@@ -108,7 +112,7 @@ export class ImportConfigModal extends Modal {
 		const folder = safeTargetFolder(cfg, file.path);
 		if (folder) parts.push({ text: `\u2192 ${folder}/`, tab: "notes" });
 		const keys = cfg.keyColumns.length > 0 ? cfg.keyColumns : cfg.keyColumn ? [cfg.keyColumn] : [];
-		parts.push(keys.length > 0 ? { text: `key: ${keys.join(" + ")}`, tab: "reimport" } : { text: KEY_NONE, tab: "reimport", muted: true });
+		parts.push(keys.length > 0 ? { text: keySummary(keys), tab: "reimport" } : { text: KEY_NONE, tab: "reimport", muted: true });
 		if (cfg.rowFilter && parsed) {
 			let matching = 0;
 			try {
@@ -116,7 +120,7 @@ export class ImportConfigModal extends Modal {
 			} catch {
 				matching = 0;
 			}
-			parts.push({ text: filteredSummary(matching, parsed.rows.length), tab: "file" });
+			parts.push({ text: filteredSummary(matching, parsed.rows.length), tab: "rows" });
 		}
 		parts.forEach((part, i) => {
 			if (i > 0) el.createSpan({ cls: "csv-importer-summary-sep", text: "\u00b7", attr: { "aria-hidden": "true" } });
@@ -149,10 +153,12 @@ export class ImportConfigModal extends Modal {
 		const pane = main.createDiv({ cls: "csv-importer-preview-pane" });
 		this.preview.build(pane);
 
-		const panel = (id: string): HTMLElement => this.tabs.panels.get(id) as HTMLElement;
+		const panel = (id: ConfigTabId): HTMLElement => this.tabs.panels.get(id) as HTMLElement;
 		this.columns.build(panel("columns"));
+		this.advanced.buildValues(panel("columns"));
 		this.output.buildNotes(panel("notes"));
 		this.advanced.buildNotesContent(panel("notes"));
+		this.advanced.buildRows(panel("rows"));
 		this.output.buildReimport(panel("reimport"));
 		this.advanced.buildAdopt(panel("reimport"));
 		this.advanced.buildFile(panel("file"));
@@ -166,7 +172,7 @@ export class ImportConfigModal extends Modal {
 		// Settings that do not refresh the preview (toggles, dropdowns) still change the dots.
 		scroll.addEventListener("change", () => this.updateDots());
 		scroll.addEventListener("input", () => this.updateDots());
-		if (this.initialTab) this.tabs.select(this.initialTab);
+		if (this.initialTab) this.tabs.select(TAB_ALIASES[this.initialTab] ?? this.initialTab);
 		else if (this.draft.looksWrong()) this.tabs.select("file");
 		this.renderSummary();
 		this.updateDots();
@@ -176,8 +182,8 @@ export class ImportConfigModal extends Modal {
 		const toggle = footer.createEl("button", { cls: "csv-importer-preview-toggle", text: PREVIEW, attr: { type: "button", "aria-pressed": "false", title: PREVIEW_TOGGLE_TITLE } });
 		toggle.addEventListener("click", () => this.setPreviewOpen(!root.hasClass("is-preview-open")));
 		this.previewToggle = toggle;
-		footer.createEl("button", { cls: "mod-cta", text: IMPORT_NOW }).addEventListener("click", () => void this.save(true));
-		footer.createEl("button", { text: SAVE }).addEventListener("click", () => void this.save(false));
+		footer.createEl("button", { cls: "mod-cta", text: IMPORT_NOW, attr: { "data-testid": "config-import-now" } }).addEventListener("click", () => void this.save(true));
+		footer.createEl("button", { text: SAVE, attr: { "data-testid": "config-save" } }).addEventListener("click", () => void this.save(false));
 		footer.createEl("button", { cls: "csv-importer-cancel", text: CANCEL }).addEventListener("click", () => this.close());
 	}
 

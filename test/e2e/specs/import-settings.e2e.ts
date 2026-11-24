@@ -32,14 +32,14 @@ describe("import settings dialog", function () {
 		expect(await pluginProblems()).toEqual([]);
 	});
 
-	it("opens from the Configure button with a summary line and four tabs", async function () {
+	it("opens from the Configure button with a summary line and five tabs", async function () {
 		await browser.$("[data-testid=csv-configure]").click();
-		await waitForModal("Columns");
+		await waitForModal("Properties");
 		const summary = await browser.$(`${MODAL} [data-testid=config-summary]`).getText();
 		expect(summary).toContain("6 rows");
 		expect(summary).toContain("comma");
 		await shot(SPEC, "columns-tab", true);
-		for (const id of ["notes", "reimport", "file"] as const) {
+		for (const id of ["notes", "rows", "reimport", "file"] as const) {
 			await openConfigTab(id);
 			await expect(browser.$(`[data-testid=config-tab-${id}]`)).toHaveAttribute("aria-selected", "true");
 			await shot(SPEC, `${id}-tab`);
@@ -50,7 +50,7 @@ describe("import settings dialog", function () {
 		await openConfigDialog();
 		const parts = await browser.$$(`${MODAL} [data-testid=config-summary-link]`);
 		let keyPart: WebdriverIO.Element | undefined;
-		for (const p of parts) if (/key/.test(await p.getText())) keyPart = p;
+		for (const p of parts) if (/matched by/.test(await p.getText())) keyPart = p;
 		await keyPart?.click();
 		await expect(browser.$("[data-testid=config-tab-reimport]")).toHaveAttribute("aria-selected", "true");
 	});
@@ -172,10 +172,10 @@ describe("import settings dialog", function () {
 		await expect(browser.$("[data-testid=csv-view] .csv-importer-status")).toHaveText(expect.stringContaining("extra propert"));
 	});
 
-	it("filters rows from the File & rows tab", async function () {
+	it("filters rows from the Rows tab", async function () {
 		await browser.$("[data-testid=csv-configure]").click();
 		await browser.$(MODAL).waitForDisplayed();
-		await openConfigTab("file");
+		await openConfigTab("rows");
 		await (await setting(MODAL, "Filter rows")).$("input[type=checkbox], .checkbox-container").click();
 		await (await setting(MODAL, "Import rows where")).$$("select")[0]?.selectByVisibleText("Rolle");
 		await (await setting(MODAL, "Import rows where")).$("input").setValue("Projektleiter");
