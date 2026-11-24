@@ -75,14 +75,43 @@ function rekeyUndo(manifest: UndoManifest, oldPath: string, newPath: string): bo
 			hit = true;
 		}
 	}
-	for (const map of [manifest.writtenHashes, manifest.snapshotBefore]) {
-		if (map && Object.prototype.hasOwnProperty.call(map, oldPath)) {
-			const v = map[oldPath];
-			if (v !== undefined) map[newPath] = v;
-			delete map[oldPath];
-		}
-	}
+	if (manifest.writtenHashes) rekeyEntry(manifest.writtenHashes, oldPath, newPath);
+	if (manifest.snapshotBefore) rekeyEntry(manifest.snapshotBefore, oldPath, newPath);
 	return hit;
+}
+
+/** Moves the entry of `oldKey` to `newKey` (in place). Returns true when there was one. */
+function rekeyEntry<T>(map: Record<string, T>, oldKey: string, newKey: string): boolean {
+	if (!Object.prototype.hasOwnProperty.call(map, oldKey)) return false;
+	const v = map[oldKey];
+	if (v !== undefined) map[newKey] = v;
+	delete map[oldKey];
+	return true;
+}
+
+/** A note rename: old and new path, and their folders. */
+interface NoteMove {
+	from: string;
+	to: string;
+	fromDir: string;
+	toDir: string;
+}
+
+/** Whether a folder list of the index (null: not tracked, anything may be listed) may hold notes in `dir`. */
+function mayList(dirs: string[] | null, dir: string): boolean {
+	return dirs === null || dirs.includes(dir);
+}
+
+/** Adds `dir` to a folder list of the index (null: not tracked). Returns true when the list changed. */
+function addDir(dirs: string[] | null, dir: string): boolean {
+	if (!dirs || dirs.includes(dir)) return false;
+	dirs.push(dir);
+	return true;
+}
+
+/** Legacy `<hash>.json` files: not undo files and not the index. */
+function isStateFile(path: string): boolean {
+	return path.endsWith(".json") && !path.endsWith(".undo.json") && !path.endsWith(`/${INDEX_FILE}`);
 }
 
 /**
@@ -167,8 +196,7 @@ export class ImportStorage {
 	private async scanStateFiles(): Promise<void> {
 		const adapter = this.app.vault.adapter;
 		const listing = await adapter.list(this.dir);
-		for (const path of listing.files) {
-			if (!path.endsWith(".json") || path.endsWith(".undo.json") || path.endsWith(`/${INDEX_FILE}`)) continue;
+		for (const path of listing.files.filter(isStateFile)) {
 			try {
 				const data = JSON.parse(await adapter.read(path)) as {
 					csvPath?: string;
@@ -177,10 +205,7 @@ export class ImportStorage {
 				};
 				if (typeof data.csvPath !== "string") continue;
 				let undo = data.undo ?? null;
-				if (!undo) {
-					const f = this.undoFile(hashPath(data.csvPath));
-					if (await adapter.exists(f)) undo = JSON.parse(await adapter.read(f)) as UndoManifest;
-				}
+				if (!undo) undo = (await this.readUndoFile(data.csvPath)) ?? undo;
 				const snapshot = data.snapshot ?? {};
 				this.index.set(data.csvPath, {
 					file: hashPath(data.csvPath),
@@ -193,6 +218,13 @@ export class ImportStorage {
 				// Unreadable state of one CSV: that CSV starts fresh.
 			}
 		}
+	}
+
+	/** The separate `<hash>.undo.json` of a CSV, or null when there is none. */
+	private async readUndoFile(csvPath: string): Promise<UndoManifest | null> {
+		const adapter = this.app.vault.adapter;
+		const f = this.undoFile(hashPath(csvPath));
+		return (await adapter.exists(f)) ? (JSON.parse(await adapter.read(f)) as UndoManifest) : null;
 	}
 
 	/** Writes the scanned state files and the index in the new layout. */
@@ -405,45 +437,42 @@ export class ImportStorage {
 	/** Re-keys snapshot entries and undo references after a note was renamed or moved. */
 	async renameNote(oldNotePath: string, newNotePath: string): Promise<void> {
 		await this.init();
-		const oldDir = parentOf(oldNotePath);
-		const newDir = parentOf(newNotePath);
+		const move: NoteMove = { from: oldNotePath, to: newNotePath, fromDir: parentOf(oldNotePath), toDir: parentOf(newNotePath) };
 		const pending: Promise<void>[] = [];
 		let indexChanged = false;
 		for (const [csvPath, idx] of [...this.index]) {
-			const snapMaybe = idx.snapDirs === null || idx.snapDirs.includes(oldDir);
-			const undoMaybe = idx.hasUndo && (idx.undoDirs === null || idx.undoDirs.includes(oldDir));
-			if (!snapMaybe && !undoMaybe) continue;
-			const l = this.slot(csvPath);
-			if (snapMaybe) {
-				const snap = await this.loadSnapshot(csvPath);
-				if (Object.prototype.hasOwnProperty.call(snap, oldNotePath)) {
-					const prev = snap[oldNotePath];
-					if (prev !== undefined) snap[newNotePath] = prev;
-					delete snap[oldNotePath];
-					l.snapDirty = true;
-					if (idx.snapDirs && !idx.snapDirs.includes(newDir)) {
-						idx.snapDirs.push(newDir);
-						indexChanged = true;
-					}
-				}
-			}
-			if (undoMaybe) {
-				const undo = await this.loadUndo(csvPath);
-				if (undo) {
-					const hit = rekeyUndo(undo, oldNotePath, newNotePath);
-					if (hit) {
-						l.undoDirty = true;
-						if (idx.undoDirs && !idx.undoDirs.includes(newDir)) {
-							idx.undoDirs.push(newDir);
-							indexChanged = true;
-						}
-					}
-				}
-			}
-			if (l.snapDirty || l.undoDirty) pending.push(this.persist(csvPath));
+			if (await this.rekeyNoteOf(csvPath, idx, move, pending)) indexChanged = true;
 		}
 		if (indexChanged) pending.push(this.persistIndex());
 		await Promise.all(pending);
+	}
+
+	/**
+	 * Re-keys a renamed note in the snapshot and undo manifest of one CSV, when its folder lists say they may hold it,
+	 * and adds the save of a changed state to `pending`. Returns true when the index's folder lists changed.
+	 */
+	private async rekeyNoteOf(csvPath: string, idx: IndexEntry, move: NoteMove, pending: Promise<void>[]): Promise<boolean> {
+		const snapMaybe = mayList(idx.snapDirs, move.fromDir);
+		const undoMaybe = idx.hasUndo && mayList(idx.undoDirs, move.fromDir);
+		if (!snapMaybe && !undoMaybe) return false;
+		let indexChanged = false;
+		const l = this.slot(csvPath);
+		if (snapMaybe && rekeyEntry(await this.loadSnapshot(csvPath), move.from, move.to)) {
+			l.snapDirty = true;
+			if (addDir(idx.snapDirs, move.toDir)) indexChanged = true;
+		}
+		if (undoMaybe && (await this.rekeyUndoOf(csvPath, move.from, move.to))) {
+			l.undoDirty = true;
+			if (addDir(idx.undoDirs, move.toDir)) indexChanged = true;
+		}
+		if (l.snapDirty || l.undoDirty) pending.push(this.persist(csvPath));
+		return indexChanged;
+	}
+
+	/** Re-keys a renamed note in the undo manifest of `csvPath`. Returns true when the manifest listed it. */
+	private async rekeyUndoOf(csvPath: string, oldNotePath: string, newNotePath: string): Promise<boolean> {
+		const undo = await this.loadUndo(csvPath);
+		return undo !== null && rekeyUndo(undo, oldNotePath, newNotePath);
 	}
 
 	/** Drops a deleted note from every snapshot that lists it. */
