@@ -91,7 +91,12 @@ describe("CSV imports index", function () {
 		await importViaDialog(CSV);
 		await importViaDialog(CSV_DE);
 		await openIndex();
-		await browser.$(`${INDEX} .csv-importer-index-all`).click();
+		// The button is disabled and hidden until the list has loaded; clicking earlier does nothing.
+		await rowFor("timesheet-de.csv");
+		const all = browser.$(`${INDEX} .csv-importer-index-all`);
+		await all.waitForEnabled();
+		await all.waitForDisplayed();
+		await all.click();
 		await waitForModal(/import preview/i);
 		await clickButton("Cancel");
 		await waitForModal(/import preview/i);
