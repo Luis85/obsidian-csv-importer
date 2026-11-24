@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
-import { ConfigStore } from "../src/configStore";
-import { ImportService } from "../src/obsidian/importService";
-import { ImportStorage } from "../src/storage";
-import { DEFAULT_SETTINGS } from "../src/defaults";
-import { relativeTime } from "../src/view/relativeTime";
-import type { FileImportConfig } from "../src/types";
+import { ConfigStore } from "../../src/configStore";
+import { ImportService } from "../../src/obsidian/importService";
+import { ImportStorage } from "../../src/storage";
+import { DEFAULT_SETTINGS } from "../../src/defaults";
+import { relativeTime } from "../../src/view/relativeTime";
+import type { FileImportConfig } from "../../src/types";
 import { cfg } from "./helpers/harness";
 import { MockApp, Notice } from "./mocks/obsidian";
 
-vi.mock("../src/view/CsvView", () => ({ CsvView: class {} }));
-vi.mock("../src/view/ImportRunModal", () => ({ ImportRunModal: class {} }));
+vi.mock("../../src/view/CsvView", () => ({ CsvView: class {} }));
+vi.mock("../../src/view/ImportRunModal", () => ({ ImportRunModal: class {} }));
 
 const confirms = vi.hoisted(() => ({ answer: true, checked: false, calls: [] as string[] }));
-vi.mock("../src/view/ConfirmModal", () => ({
+vi.mock("../../src/view/ConfirmModal", () => ({
 	confirmDialog: async (_a: unknown, title: string, message: string) => {
 		confirms.calls.push(`${title}|${message}`);
 		return confirms.answer;

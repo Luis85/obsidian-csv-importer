@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectDelimiter, parseCsv } from "../src/csv/parser";
+import { detectDelimiter, parseCsv } from "../../src/csv/parser";
 
 const auto = { delimiter: "auto" as const, hasHeader: true };
 

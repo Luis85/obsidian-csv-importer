@@ -18,7 +18,7 @@ export const NOTES_DIR = "Data/timesheet";
 export const NOTES_DIR_DE = "Data/timesheet-de";
 /** Screenshots, JSON measurement reports and logs of a run (gitignored; CI uploads the folder). */
 export const ARTIFACTS = "reports/e2e";
-const VAULT = "test/e2e/vaults/base";
+const VAULT = "tests/e2e/vaults/base";
 
 /** Every file of the fixture vault outside .obsidian, as base64 (some CSV fixtures are not UTF-8). */
 const fixtureFiles = (): Record<string, string> => {

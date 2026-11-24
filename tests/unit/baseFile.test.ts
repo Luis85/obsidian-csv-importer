@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBaseFile } from "../src/import/baseFile";
+import { buildBaseFile } from "../../src/import/baseFile";
 
 describe("buildBaseFile", () => {
 	it("builds a table view filtered by folder", () => {

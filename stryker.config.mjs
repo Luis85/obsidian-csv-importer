@@ -1,5 +1,5 @@
 // Mutation testing with Stryker (https://stryker-mutator.io). Run with `npm run test:mutation`.
-// Mutates the pure logic (no Obsidian at runtime) that the vitest suite in `tests/` covers.
+// Mutates the pure logic (no Obsidian at runtime) that the vitest suite in `tests/unit/` covers.
 // The release workflow runs this in an advisory job: below `thresholds.break` the job fails as a warning, the release goes on.
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {

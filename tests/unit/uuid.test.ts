@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { uuidV4 } from "../src/core/util";
-import { parseCsv } from "../src/csv/parser";
-import { prepareConfig } from "../src/csv/typeInference";
-import { planNotes, serializeNote } from "../src/import/noteBuilder";
+import { uuidV4 } from "../../src/core/util";
+import { parseCsv } from "../../src/csv/parser";
+import { prepareConfig } from "../../src/csv/typeInference";
+import { planNotes, serializeNote } from "../../src/import/noteBuilder";
 import { cfg, setup } from "./helpers/harness";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;

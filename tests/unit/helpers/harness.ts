@@ -1,12 +1,12 @@
 /** Shared test helpers: a plain file config and an in-memory import harness. */
 import { parse } from "yaml";
 import type { App } from "obsidian";
-import { parseCsv } from "../../src/csv/parser";
-import { prepareConfig } from "../../src/csv/typeInference";
-import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../../src/defaults";
-import { writeNotes } from "../../src/import/importer";
-import { planNotes } from "../../src/import/noteBuilder";
-import type { FileImportConfig, ImportSnapshot } from "../../src/types";
+import { parseCsv } from "../../../src/csv/parser";
+import { prepareConfig } from "../../../src/csv/typeInference";
+import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../../../src/defaults";
+import { writeNotes } from "../../../src/import/importer";
+import { planNotes } from "../../../src/import/noteBuilder";
+import type { FileImportConfig, ImportSnapshot } from "../../../src/types";
 import { MockApp, TFile } from "../mocks/obsidian";
 
 /** A fully spelled-out file config (independent of DEFAULT_SETTINGS), with overrides. */

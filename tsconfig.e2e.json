@@ -11,5 +11,5 @@
     "inlineSources": false,
     "importHelpers": false
   },
-  "include": ["wdio.conf.mts", "test/e2e/**/*.ts"]
+  "include": ["wdio.conf.mts", "tests/e2e/**/*.ts"]
 }

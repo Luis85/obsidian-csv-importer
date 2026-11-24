@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv } from "../src/csv/parser";
-import { prepareConfig } from "../src/csv/typeInference";
-import { planNotes, serializeNote } from "../src/import/noteBuilder";
-import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../src/defaults";
-import type { ColumnConfig, FileImportConfig } from "../src/types";
+import { parseCsv } from "../../src/csv/parser";
+import { prepareConfig } from "../../src/csv/typeInference";
+import { planNotes, serializeNote } from "../../src/import/noteBuilder";
+import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../../src/defaults";
+import type { ColumnConfig, FileImportConfig } from "../../src/types";
 
 interface Opts {
 	over?: Partial<FileImportConfig>;

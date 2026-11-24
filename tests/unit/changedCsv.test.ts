@@ -1,22 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
-import { ConfigStore } from "../src/configStore";
-import { DEFAULT_SETTINGS } from "../src/defaults";
-import { checkChanged, hashBytes, lastRunOf, lastRunText, makeFingerprint, sanitizeFingerprint } from "../src/import/fingerprint";
-import { filterNotesByRows, planNotes } from "../src/import/noteBuilder";
-import { parseCsv } from "../src/csv/parser";
-import { valueHash } from "../src/import/merge";
-import { CSV_CHANGED_EVENT } from "../src/obsidian/events";
-import { ImportService } from "../src/obsidian/importService";
-import { ImportStorage } from "../src/storage";
-import type { FileImportConfig } from "../src/types";
-import { emptyResult } from "../src/core/result";
+import { ConfigStore } from "../../src/configStore";
+import { DEFAULT_SETTINGS } from "../../src/defaults";
+import { checkChanged, hashBytes, lastRunOf, lastRunText, makeFingerprint, sanitizeFingerprint } from "../../src/import/fingerprint";
+import { filterNotesByRows, planNotes } from "../../src/import/noteBuilder";
+import { parseCsv } from "../../src/csv/parser";
+import { valueHash } from "../../src/import/merge";
+import { CSV_CHANGED_EVENT } from "../../src/obsidian/events";
+import { ImportService } from "../../src/obsidian/importService";
+import { ImportStorage } from "../../src/storage";
+import type { FileImportConfig } from "../../src/types";
+import { emptyResult } from "../../src/core/result";
 import { cfg } from "./helpers/harness";
 import { MockApp, Notice } from "./mocks/obsidian";
 
-vi.mock("../src/view/CsvView", () => ({ CsvView: class {} }));
+vi.mock("../../src/view/CsvView", () => ({ CsvView: class {} }));
 const run = vi.hoisted(() => ({ ctl: null as null | { preview(): Promise<{ rows: unknown[] }>; execute(o: Record<string, unknown>): Promise<{ result: { created: number } }> } }));
-vi.mock("../src/view/ImportRunModal", () => ({
+vi.mock("../../src/view/ImportRunModal", () => ({
 	ImportRunModal: class {
 		closed = Promise.resolve({});
 		constructor(_app: unknown, ctl: typeof run.ctl) {
@@ -25,7 +25,7 @@ vi.mock("../src/view/ImportRunModal", () => ({
 		open(): void {}
 	},
 }));
-vi.mock("../src/view/ConfirmModal", () => ({ confirmDialog: async () => true, confirmDialogWithOption: async () => ({ ok: true, checked: false }) }));
+vi.mock("../../src/view/ConfirmModal", () => ({ confirmDialog: async () => true, confirmDialogWithOption: async () => ({ ok: true, checked: false }) }));
 
 const bytes = (s: string): ArrayBuffer => new TextEncoder().encode(s).buffer;
 

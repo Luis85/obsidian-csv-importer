@@ -7,9 +7,9 @@ import {
 	sourceLinkProperty,
 	sanitizeFileName,
 	serializeNote,
-} from "../src/import/noteBuilder";
-import { parseCsv } from "../src/csv/parser";
-import { buildColumnConfigs, suggestKeyColumn } from "../src/csv/typeInference";
+} from "../../src/import/noteBuilder";
+import { parseCsv } from "../../src/csv/parser";
+import { buildColumnConfigs, suggestKeyColumn } from "../../src/csv/typeInference";
 import { cfg } from "./helpers/harness";
 
 describe("renderTemplate", () => {

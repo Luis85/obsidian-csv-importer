@@ -1,6 +1,6 @@
 # User flows covered by the end-to-end suite
 
-Every flow of the README, mapped to the spec and test that runs it in real Obsidian. Specs are in `test/e2e/specs/`. Flows marked "set-up" configure a CSV through the plugin's settings store (`patchConfig`) so the test can focus on the result; the matching dialog control has its own test in `import-settings`.
+Every flow of the README, mapped to the spec and test that runs it in real Obsidian. Specs are in `tests/e2e/specs/`. Flows marked "set-up" configure a CSV through the plugin's settings store (`patchConfig`) so the test can focus on the result; the matching dialog control has its own test in `import-settings`.
 
 Screenshots of the key steps (light and dark where the step is UI heavy) are written to `reports/e2e/screenshots/<spec>/<step>.png`.
 

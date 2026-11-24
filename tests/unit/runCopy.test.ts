@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { KEY_WARNING, ROW_FILTER_WARNING } from "../src/import/importer";
-import { driftMessage } from "../src/view/labels";
-import { calloutTitle, runHeadline, thingsToCheck, warningTitle } from "../src/view/runCopy";
+import { KEY_WARNING, ROW_FILTER_WARNING } from "../../src/import/importer";
+import { driftMessage } from "../../src/view/labels";
+import { calloutTitle, runHeadline, thingsToCheck, warningTitle } from "../../src/view/runCopy";
 
 describe("callout titles", () => {
 	it("names the one problem", () => {

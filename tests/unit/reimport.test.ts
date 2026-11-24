@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv } from "../src/csv/parser";
-import { prepareConfig } from "../src/csv/typeInference";
-import { applyUndoToSnapshot } from "../src/import/importer";
+import { parseCsv } from "../../src/csv/parser";
+import { prepareConfig } from "../../src/csv/typeInference";
+import { applyUndoToSnapshot } from "../../src/import/importer";
 import { setup } from "./helpers/harness";
 
 const CSV_V1 = "id,date,role,hours\n1,2026-10-20,Dev,4\n2,2026-10-21,Tester,2,5\n";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ImportStorage } from "../src/storage";
+import { ImportStorage } from "../../src/storage";
 import { MockApp } from "./mocks/obsidian";
 import type { App } from "obsidian";
 
@@ -83,7 +83,7 @@ describe("ImportStorage robustness", () => {
 
 describe("data versioning", () => {
 	it("exports the history warning text", async () => {
-		const { HISTORY_NOT_SAVED_WARNING } = await import("../src/import/importer");
+		const { HISTORY_NOT_SAVED_WARNING } = await import("../../src/import/importer");
 		expect(HISTORY_NOT_SAVED_WARNING).toContain("import history could not be saved");
 	});
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeCsv } from "../src/csv/encoding";
+import { decodeCsv } from "../../src/csv/encoding";
 
 const buf = (b: number[]) => new Uint8Array(b).buffer;
 const cp1252 = [0x4d, 0xfc, 0x6c, 0x6c, 0x65, 0x72, 0x3b, 0x47, 0x72, 0xf6, 0xdf, 0x65];

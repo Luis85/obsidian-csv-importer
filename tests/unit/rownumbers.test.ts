@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv } from "../src/csv/parser";
-import { planNotes } from "../src/import/noteBuilder";
+import { parseCsv } from "../../src/csv/parser";
+import { planNotes } from "../../src/import/noteBuilder";
 import { cfg } from "./helpers/harness";
 
 describe("row numbers with skipped blank rows", () => {

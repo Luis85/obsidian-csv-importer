@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv } from "../src/csv/parser";
-import { buildColumnConfigs } from "../src/csv/typeInference";
-import { keyColumnStatus, suggestShortKey } from "../src/view/config/keys";
+import { parseCsv } from "../../src/csv/parser";
+import { buildColumnConfigs } from "../../src/csv/typeInference";
+import { keyColumnStatus, suggestShortKey } from "../../src/view/config/keys";
 
 const setup = (text: string, delimiter: "," | ";" = ",", decimalSeparator: "." | "," = ".") => {
 	const parsed = parseCsv(text, { delimiter, hasHeader: true });

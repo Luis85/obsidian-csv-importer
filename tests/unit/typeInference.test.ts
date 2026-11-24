@@ -10,9 +10,9 @@ import {
 	parseNumber,
 	reconcileColumns,
 	toPropertyName,
-} from "../src/csv/typeInference";
-import { parseCsv } from "../src/csv/parser";
-import type { ColumnConfig } from "../src/types";
+} from "../../src/csv/typeInference";
+import { parseCsv } from "../../src/csv/parser";
+import type { ColumnConfig } from "../../src/types";
 
 const dot = { decimalSeparator: "." as const, midnightAsDate: false, listSeparator: "," };
 const comma = { ...dot, decimalSeparator: "," as const };

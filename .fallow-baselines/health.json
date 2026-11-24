@@ -253,7 +253,7 @@
         "count": 2
       }
     },
-    "test/e2e/support.ts": {
+    "tests/e2e/support.ts": {
       "crap_moderate": {
         "count": 1
       }
@@ -300,8 +300,8 @@
     "src/main.ts:hidden coupling",
     "src/settings.ts:dead code",
     "src/view/ImportConfigModal.ts:hidden coupling",
-    "src/view/CsvView.ts:high impact",
     "src/view/ImportRunModal.ts:high impact",
+    "src/view/CsvView.ts:high impact",
     "src/csv/typeInference.ts:high impact",
     "src/view/ImportIndexView.ts:untested risk",
     "src/csv/parser.ts:high impact",
@@ -309,7 +309,7 @@
     "src/view/TableRenderer.ts:untested risk",
     "src/obsidian/importService.ts:high impact",
     "scripts/check-api-versions.mjs:untested risk",
-    "test/e2e/support.ts:high impact",
+    "tests/e2e/support.ts:high impact",
     "src/import/fingerprint.ts:high impact",
     "src/import/merge.ts:high impact",
     "src/import/templates.ts:high impact",

@@ -37,7 +37,7 @@ export default defineConfig([
 	},
 	{
 		// Tests and the vitest config use tsconfig.test.json (Node types).
-		files: ["tests/**/*.ts", "vitest.config.ts"],
+		files: ["tests/unit/**/*.ts", "vitest.config.ts"],
 		languageOptions: {
 			parserOptions: {
 				projectService: false,
@@ -49,7 +49,7 @@ export default defineConfig([
 	{
 		// End-to-end tests (WebdriverIO + Mocha, Node) use tsconfig.e2e.json. Code passed to executeObsidian runs inside
 		// Obsidian and works with loosely typed internals, so the type-aware "unsafe" and Obsidian authoring rules are off.
-		files: ["test/e2e/**/*.ts", "wdio.conf.mts"],
+		files: ["tests/e2e/**/*.ts", "wdio.conf.mts"],
 		languageOptions: {
 			globals: { ...globals.node, ...globals.mocha },
 			parserOptions: {
@@ -79,7 +79,7 @@ export default defineConfig([
 	},
 	{
 		// Tests run in Node under vitest and may be less strict.
-		files: ["tests/**/*.ts"],
+		files: ["tests/unit/**/*.ts"],
 		languageOptions: { globals: { ...globals.node } },
 		rules: {
 			"@typescript-eslint/no-explicit-any": "off",

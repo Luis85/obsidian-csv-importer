@@ -73,7 +73,7 @@ Pure logic (`core/`, `csv/`, and most of `import/`) does not need Obsidian at ru
 
 ## Testing
 
-Tests are in `tests/` and run with vitest. `tests/mocks/obsidian.ts` is a mock of the parts of the `obsidian` module the code uses (vault, files, `Notice`, and so on); `tests/mocks/setup.ts` wires it in. Add a test with every behavior change. `acceptance.test.ts` and `reimport.test.ts` cover end-to-end imports and re-imports.
+All tests live under `tests/`: unit tests in `tests/unit/` (vitest, `npm test`) and end-to-end tests in `tests/e2e/` (WebdriverIO in real Obsidian, see below). `tests/unit/mocks/obsidian.ts` is a mock of the parts of the `obsidian` module the code uses (vault, files, `Notice`, and so on); `tests/unit/mocks/setup.ts` wires it in. Add a test with every behavior change. `acceptance.test.ts` and `reimport.test.ts` cover end-to-end imports and re-imports.
 
 ## Code quality
 
@@ -123,9 +123,9 @@ Screenshots go to `ui-preview/screenshots/`; `filter` is a substring of a scenar
 
 ## End-to-end tests
 
-`test/e2e/` runs the plugin in real Obsidian with [WebdriverIO](https://webdriver.io) and [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service). The service downloads Obsidian, installs the built plugin (`main.js`, `manifest.json`, `styles.css` from the repository root) into a copy of the fixture vault `test/e2e/vaults/base/`, and drives the app. Every user flow of the README has a spec; `test/e2e/USER-FLOWS.md` maps flows to specs and lists the flows still pending. Unit tests (`npm test`, vitest) are separate and unchanged.
+`tests/e2e/` runs the plugin in real Obsidian with [WebdriverIO](https://webdriver.io) and [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service). The service downloads Obsidian, installs the built plugin (`main.js`, `manifest.json`, `styles.css` from the repository root) into a copy of the fixture vault `tests/e2e/vaults/base/`, and drives the app. Every user flow of the README has a spec; `tests/e2e/USER-FLOWS.md` maps flows to specs and lists the flows still pending. Unit tests (`npm test`, vitest) are separate and unchanged.
 
-How the specs work: functional specs use the plugin's commands, its real dialogs and `app` APIs through `browser.executeObsidian`. UI clicks are used where the UI is under test (badge menus, dialogs, index rows). Elements the specs assert have `data-testid` attributes. Each spec ends by asserting that the plugin logged no errors or warnings. State is reset before every test (`resetEverything` in `test/e2e/support.ts`: fixture files, the plugin's saved data, plugin restart).
+How the specs work: functional specs use the plugin's commands, its real dialogs and `app` APIs through `browser.executeObsidian`. UI clicks are used where the UI is under test (badge menus, dialogs, index rows). Elements the specs assert have `data-testid` attributes. Each spec ends by asserting that the plugin logged no errors or warnings. State is reset before every test (`resetEverything` in `tests/e2e/support.ts`: fixture files, the plugin's saved data, plugin restart).
 
 ```sh
 npm run test:e2e                    # builds first (pretest:e2e), then runs earliest and latest Obsidian

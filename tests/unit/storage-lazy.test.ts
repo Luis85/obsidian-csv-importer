@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ImportStorage } from "../src/storage";
-import type { UndoManifest } from "../src/types";
+import { ImportStorage } from "../../src/storage";
+import type { UndoManifest } from "../../src/types";
 import { MockApp } from "./mocks/obsidian";
 import type { App } from "obsidian";
 

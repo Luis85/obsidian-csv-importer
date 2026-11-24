@@ -20,7 +20,7 @@ const desktop: WebdriverIO.Capabilities[] = versions.map(([appVersion, installer
 	"wdio:obsidianOptions": {
 		installerVersion,
 		plugins: ["."],
-		vault: "test/e2e/vaults/base",
+		vault: "tests/e2e/vaults/base",
 	},
 }));
 
@@ -32,11 +32,11 @@ const mobile: WebdriverIO.Capabilities[] = [
 		"wdio:obsidianOptions": {
 			installerVersion: "latest",
 			plugins: ["."],
-			vault: "test/e2e/vaults/base",
+			vault: "tests/e2e/vaults/base",
 			emulateMobile: true,
 		},
 		// The functional import/undo specs drive desktop dialogs; on mobile emulation only the UI specs run.
-		"wdio:specs": ["./test/e2e/specs/{smoke,csv-view,appearance,mobile}.e2e.ts"],
+		"wdio:specs": ["./tests/e2e/specs/{smoke,csv-view,appearance,mobile}.e2e.ts"],
 		"goog:chromeOptions": {
 			mobileEmulation: { deviceMetrics: { width: 390, height: 844 } },
 		},
@@ -56,7 +56,7 @@ const capabilities = readmeRun ? screenshots : mobileMode === "only" ? mobile : 
 export const config: WebdriverIO.Config = {
 	runner: "local",
 	framework: "mocha",
-	specs: [readmeRun ? "./test/e2e/specs/readme-screenshots.e2e.ts" : "./test/e2e/specs/**/*.e2e.ts"],
+	specs: [readmeRun ? "./tests/e2e/specs/readme-screenshots.e2e.ts" : "./tests/e2e/specs/**/*.e2e.ts"],
 	maxInstances: Number(process.env.WDIO_MAX_INSTANCES ?? 1),
 	capabilities,
 	services: ["obsidian"],

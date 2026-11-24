@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ConfigStore } from "../src/configStore";
-import type { FileImportConfig } from "../src/types";
+import { ConfigStore } from "../../src/configStore";
+import type { FileImportConfig } from "../../src/types";
 import { cfg } from "./helpers/harness";
 
 function make(initial?: Record<string, FileImportConfig>) {

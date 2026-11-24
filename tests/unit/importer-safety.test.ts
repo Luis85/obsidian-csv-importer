@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseCsv } from "../src/csv/parser";
-import { prepareConfig } from "../src/csv/typeInference";
-import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../src/defaults";
-import { applyUndo, applyUndoToSnapshot, KEY_WARNING, UNDO_TRUNCATED_WARNING, writeNotes } from "../src/import/importer";
-import { planNotes } from "../src/import/noteBuilder";
-import type { FileImportConfig, UndoManifest } from "../src/types";
+import { parseCsv } from "../../src/csv/parser";
+import { prepareConfig } from "../../src/csv/typeInference";
+import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../../src/defaults";
+import { applyUndo, applyUndoToSnapshot, KEY_WARNING, UNDO_TRUNCATED_WARNING, writeNotes } from "../../src/import/importer";
+import { planNotes } from "../../src/import/noteBuilder";
+import type { FileImportConfig, UndoManifest } from "../../src/types";
 import { setup } from "./helpers/harness";
 import { MockApp } from "./mocks/obsidian";
 import type { App } from "obsidian";

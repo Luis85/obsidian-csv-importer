@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeFrontmatter, valueHash } from "../src/import/merge";
+import { mergeFrontmatter, valueHash } from "../../src/import/merge";
 
 type In = Parameters<typeof mergeFrontmatter>[0];
 function run(over: Partial<In>) {

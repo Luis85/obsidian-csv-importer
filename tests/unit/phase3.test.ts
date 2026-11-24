@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv, detectDelimiter } from "../src/csv/parser";
+import { parseCsv, detectDelimiter } from "../../src/csv/parser";
 import {
 	buildColumnConfigs,
 	convertValue,
@@ -8,7 +8,7 @@ import {
 	prepareConfig,
 	reconcileColumns,
 	resolveDateOrder,
-} from "../src/csv/typeInference";
+} from "../../src/csv/typeInference";
 import {
 	countMatching,
 	effectiveKeyColumns,
@@ -16,10 +16,10 @@ import {
 	findDuplicateKeys,
 	planNotes,
 	rowMatches,
-} from "../src/import/noteBuilder";
-import { mergeFrontmatter } from "../src/import/merge";
-import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig } from "../src/defaults";
-import type { RowFilter } from "../src/types";
+} from "../../src/import/noteBuilder";
+import { mergeFrontmatter } from "../../src/import/merge";
+import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig } from "../../src/defaults";
+import type { RowFilter } from "../../src/types";
 import { cfg } from "./helpers/harness";
 
 const inf = { decimalSeparator: "." as const, midnightAsDate: false, listSeparator: "," };

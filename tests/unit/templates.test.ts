@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv } from "../src/csv/parser";
-import { applyValueTemplate, planNotes, renderTemplate, staticPrefix, type TemplateContext } from "../src/import/noteBuilder";
-import { compileTemplate, headerIndexOf, renderCompiled } from "../src/import/templates";
-import { buildColumnConfigs, inferenceOptionsOf } from "../src/csv/typeInference";
+import { parseCsv } from "../../src/csv/parser";
+import { applyValueTemplate, planNotes, renderTemplate, staticPrefix, type TemplateContext } from "../../src/import/noteBuilder";
+import { compileTemplate, headerIndexOf, renderCompiled } from "../../src/import/templates";
+import { buildColumnConfigs, inferenceOptionsOf } from "../../src/csv/typeInference";
 import { cfg } from "./helpers/harness";
 
 /** Independent reference: the original regex-per-render implementation of renderTemplate. */
