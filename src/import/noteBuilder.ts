@@ -9,7 +9,7 @@ import { compileFolderSegments, hasFolderPlaceholders, renderFolderSegments, res
 import { uuidV4 } from "../core/util";
 
 export { applyValueTemplate, formatValue, renderTemplate, type TemplateContext } from "./templates";
-export { hasFolderPlaceholders, resolveRowFolder, resolveTargetFolder, sanitizeFileName, staticPrefix } from "./folders";
+export { resolveRowFolder, resolveTargetFolder, sanitizeFileName, staticPrefix } from "./folders";
 export { serializeNote } from "./yaml";
 
 const LIST_PROPS = ["tags", "aliases", "cssclasses"];
@@ -60,7 +60,7 @@ export function sourceLinkProperty(config: FileImportConfig): string | null {
 }
 
 /** Older versions always wrote the source link to this property. */
-export const legacySourceLinkProperty = "source";
+const legacySourceLinkProperty = "source";
 
 /** Property names that may hold this CSV's source link: the current one (if any) plus the legacy "source". */
 export function ownedLinkProperties(config: FileImportConfig): string[] {
@@ -190,7 +190,7 @@ export function effectiveKeyColumns(config: FileImportConfig): string[] {
 }
 
 /** Property that stores a composite key (2+ key columns): `config.keyProperty`, suffixed " 2".. when a column uses it. Null otherwise. */
-export function compositeKeyProperty(config: FileImportConfig, columns: ColumnConfig[] = config.columns): string | null {
+function compositeKeyProperty(config: FileImportConfig, columns: ColumnConfig[] = config.columns): string | null {
 	if (effectiveKeyColumns(config).length < 2) return null;
 	const taken = new Set(columns.map((c) => c.property.toLowerCase()));
 	const base = (config.keyProperty ?? "").trim() || "import_key";

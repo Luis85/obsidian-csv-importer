@@ -9,7 +9,7 @@ function normalizeVaultPath(path: string): string {
 }
 
 /** "[[Data/x.csv|alias]]" / "Data/X" -> "data/x" for comparing links to the CSV. Null for non-strings. */
-export function normalizeLink(v: unknown): string | null {
+function normalizeLink(v: unknown): string | null {
 	if (typeof v !== "string") return null;
 	let s = v.trim();
 	if (s.startsWith("[[") && s.endsWith("]]")) s = s.slice(2, -2);

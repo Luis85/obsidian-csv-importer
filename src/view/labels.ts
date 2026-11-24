@@ -223,15 +223,8 @@ export function suggestedKey(column: string): string {
 export const FILTER_ROWS = "Filter rows";
 export const FILTER_ROWS_WHERE = "Import rows where";
 
-/** Run list row: "timesheet 3.md \u00b7 row 3". Pass the file name only (see relPath() for folder-relative paths). */
-export function runRowLabel(name: string, row: number): string {
-	return `${name} \u00b7 row ${row}`;
-}
-
-/** Index empty state. The hint is the full sentence; the title is the heading above it. */
+/** Index empty state: the heading above the hint. */
 export const NO_IMPORTS_TITLE = "No imports yet";
-export const NO_IMPORTS_HINT = "Open a CSV file and choose Import to set one up.";
-export const NO_IMPORTS_YET = `${NO_IMPORTS_TITLE}. ${NO_IMPORTS_HINT}`;
 
 /** Source link toggle (was "Add link to the CSV file" / "Add source link"). */
 export const LINK_NOTES_TO_CSV = "Link notes to the CSV";

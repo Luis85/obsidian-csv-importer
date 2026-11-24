@@ -66,7 +66,7 @@ function undoPaths(u: UndoManifest | null): string[] {
 }
 
 /** Moves every reference to a note in an undo manifest to its new path (in place). Returns true when the note was listed. */
-export function rekeyUndo(manifest: UndoManifest, oldPath: string, newPath: string): boolean {
+function rekeyUndo(manifest: UndoManifest, oldPath: string, newPath: string): boolean {
 	let hit = manifest.created.includes(oldPath);
 	manifest.created = manifest.created.map((p) => (p === oldPath ? newPath : p));
 	for (const m of manifest.modified) {

@@ -12,28 +12,25 @@ import { UNDO_CAP_CHARS, UNDO_TRUNCATED_WARNING, UndoRecorder } from "./undo";
 import { isFile, ObsidianVaultGateway } from "./vaultGateway";
 import type { VaultGateway } from "./vaultGateway";
 
-export { applyUndo, applyUndoToSnapshot, applyUndoWith, UNDO_CAP_CHARS, UNDO_TRUNCATED_WARNING } from "./undo";
-export type { UndoOutcome } from "./undo";
-export { ObsidianVaultGateway } from "./vaultGateway";
-export type { VaultGateway } from "./vaultGateway";
+export { applyUndo, applyUndoToSnapshot, UNDO_TRUNCATED_WARNING } from "./undo";
 
 /** Time budget between two yields to the UI. */
 const SLICE_MS = 12;
 
 export const KEY_WARNING =
 	"No key column: notes are matched by file name. If rows are inserted or re-sorted, the wrong notes are updated. Choose a key column in the import settings.";
-export const NOT_OWNED_WARNING =
+const NOT_OWNED_WARNING =
 	'Some notes were skipped because this import did not create them. If you created them with an earlier version or another tool, turn on "Update existing notes not created by this import" in the import settings.';
 
-export const LARGE_IMPORT_THRESHOLD = 5000;
-export const DUPLICATE_KEYS_IN_CSV_WARNING = (n: number, example: string): string =>
+const LARGE_IMPORT_THRESHOLD = 5000;
+const DUPLICATE_KEYS_IN_CSV_WARNING = (n: number, example: string): string =>
 	`${plural(n, "row shares", "rows share")} a key with another row (e.g. "${example}"). Only the first is imported.`;
-export const DUPLICATE_NOTES_IN_VAULT_WARNING = (n: number, example: string): string =>
+const DUPLICATE_NOTES_IN_VAULT_WARNING = (n: number, example: string): string =>
 	`${plural(n, "note in the target folder shares", "notes in the target folder share")} a key with another note (e.g. "${example}"), for example sync conflict copies. Check them before importing.`;
-export const LARGE_IMPORT_WARNING = (n: number): string =>
+const LARGE_IMPORT_WARNING = (n: number): string =>
 	`This import creates or updates ${n} notes. Very large numbers of notes can slow down the vault and Bases.`;
 export const ROW_FILTER_WARNING = (matching: number, total: number): string => `Row filter: ${matching} of ${total} rows are imported.`;
-export const EXTRA_PROPERTY_CONFLICT_WARNING = (name: string): string =>
+const EXTRA_PROPERTY_CONFLICT_WARNING = (name: string): string =>
 	`Extra property "${name}" has the same name as a CSV column and is ignored.`;
 export const HISTORY_NOT_SAVED_WARNING =
 	"The notes were written, but the import history could not be saved. Undo and edit protection may not work for this import.";
@@ -392,6 +389,7 @@ export function writeNotes(app: App, notes: PlannedNote[], config: FileImportCon
 }
 
 /** `writeNotes` over any vault gateway. */
+// fallow-ignore-next-line unused-export -- test seam: runs the importer against a fake VaultGateway
 export async function writeNotesWith(
 	vault: VaultGateway,
 	notes: PlannedNote[],

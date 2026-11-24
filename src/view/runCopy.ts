@@ -106,7 +106,6 @@ export const PREVIEW_TITLE = "Import preview";
 export const IMPORTING_TITLE = "Importing";
 export const CHECKING_ROWS = "Checking rows…";
 export const STOP_IMPORT = "Stop import";
-export const CANCEL = "Cancel";
 export const OPEN_FIRST_NOTE = "Open first note";
 export const SAVE_REPORT = "Save report as note";
 export const UNDO_IMPORT = UNDO_LAST_IMPORT;

@@ -19,8 +19,6 @@ import {
 	SETTINGS_HEADINGS,
 } from "./view/labels";
 
-export { DEFAULT_SETTINGS, createDefaultFileConfig } from "./defaults";
-
 /** What the setting tab needs from the plugin. */
 export interface SettingsHost {
 	settings: PluginSettings;

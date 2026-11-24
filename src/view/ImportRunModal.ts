@@ -4,9 +4,9 @@ import type { HeaderDrift, ImportResult, NoteOutcome, RowOutcome } from "../type
 import { ROW_REASON, emptyResult } from "../core/result";
 import { errorMessage } from "../core/util";
 import { iconButton, relPath, renderCallout } from "./dom";
-import { CLOSE, IMPORT_FINISHED, driftMessage } from "./labels";
+import { CANCEL, CLOSE, IMPORT_FINISHED, driftMessage } from "./labels";
 import {
-	CANCEL, CHECKING_ROWS, IMPORTING_TITLE, MORE_ACTIONS, NOTHING_TO_CHANGE, NO_DATA_ROWS, OPEN_BASE, OPEN_FIRST_NOTE, OUTCOME_LABEL,
+	CHECKING_ROWS, IMPORTING_TITLE, MORE_ACTIONS, NOTHING_TO_CHANGE, NO_DATA_ROWS, OPEN_BASE, OPEN_FIRST_NOTE, OUTCOME_LABEL,
 	OUTCOME_ORDER, PREVIEW_TITLE, SAVE_REPORT, STARTING, STOPPING, STOP_IMPORT, UNDO_IMPORT, calloutTitle, countsLine, moreRows,
 	previewImportLabel, rowsProgress, runHeadline, selectGroupLabel, selectNoteLabel, targetLine,
 } from "./runCopy";

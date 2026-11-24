@@ -7,7 +7,7 @@ import { FolderSuggest } from "./config/FolderSuggest";
 import { formatBytes } from "./dom";
 import { ADD_CSV_FILE, CANCEL } from "./labels";
 
-export const ADD_CSV_NOTE =
+const ADD_CSV_NOTE =
 	"The file is copied into your vault as it is. The plugin cannot follow the original file: to update the copy later, add the file again with the same folder and name and choose Replace.";
 
 /**

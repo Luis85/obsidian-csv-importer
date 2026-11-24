@@ -15,7 +15,7 @@ import { inferenceOptions } from "../shared";
  */
 export type DraftEvent = "preview" | "columns" | "parsing";
 
-export function cloneConfig(cfg: FileImportConfig): FileImportConfig {
+function cloneConfig(cfg: FileImportConfig): FileImportConfig {
 	return {
 		...cfg,
 		columns: cfg.columns.map((c) => ({ ...c })),

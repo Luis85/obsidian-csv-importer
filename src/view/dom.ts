@@ -1,4 +1,4 @@
-import { Setting, setIcon, setTooltip } from "obsidian";
+import { setIcon, setTooltip } from "obsidian";
 import type { FileImportConfig } from "../types";
 import { resolveTargetFolder } from "../import/noteBuilder";
 
@@ -89,11 +89,6 @@ export function safeTargetFolder(cfg: FileImportConfig, csvPath: string): string
 	} catch {
 		return "";
 	}
-}
-
-/** Section heading in the Obsidian settings style. */
-export function sectionHeading(el: HTMLElement, name: string): Setting {
-	return new Setting(el).setName(name).setHeading();
 }
 
 /** "512 B", "2.1 KB", "3.4 MB". */

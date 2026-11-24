@@ -9,8 +9,6 @@ export const ROW_REASON = {
 	wouldCreate: "would create",
 } as const;
 
-export type RowReason = (typeof ROW_REASON)[keyof typeof ROW_REASON];
-
 /** A fresh, empty import result. */
 export function emptyResult(dryRun = false): ImportResult {
 	return {
