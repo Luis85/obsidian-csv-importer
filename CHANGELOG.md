@@ -13,9 +13,10 @@ Second UI/UX pass with a clearer information architecture; see `docs/archive/UX-
 - **Settings tab** is ordered as the journey (CSV imports, New notes, Re-import, Reading files, Table view, Danger zone), shares descriptions with the import settings, and marks the reset button as destructive.
 
 ### Development
+- Code quality: fallow dead-code and duplication findings fixed (30 and 14 to 0), complex functions split into named helpers (94 to 67 above the threshold).
 - All tests are under `tests/`: unit tests in `tests/unit/`, end-to-end tests in `tests/e2e/` (was `test/e2e/`).
 - CSS: `:has()` replaced by a class (flagged by the community directory review) and forbidden by Stylelint.
-- Mutation testing with Stryker (`npm run test:mutation`). The release workflow runs it in an advisory `mutation` job next to the release: a score below 65 % (first run: 68.2 %) shows as a warning and does not block the release yet.
+- Mutation testing with Stryker (`npm run test:mutation`). The release workflow runs it in an advisory `mutation` job next to the release: a score below 90 % shows as a warning and does not block the release yet. The score went from 68.2 % to 93.8 % with 236 new behavior tests (607 unit tests in total).
 - Code-quality checks with fallow (`npm run quality`): dead code, duplication and complexity. The release workflow reports findings that are not in `.fallow-baselines/` as warnings; it does not block the release yet.
 
 ### Fixes

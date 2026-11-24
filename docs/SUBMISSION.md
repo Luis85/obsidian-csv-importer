@@ -94,7 +94,7 @@ Styles (`styles.css`, checked by `npm run lint` through Stylelint, `.stylelintrc
 The Release workflow runs two code-quality checks that are **advisory** for now: they report, but never stop a release. The community directory does not run them, so they do not affect the scorecard. Look at them before a release anyway, because they catch dead code and untested behavior.
 
 - [ ] **Code quality (fallow).** The **Code quality (advisory)** step of the `release` job runs `npm run quality` with `continue-on-error`. Findings that are not in `.fallow-baselines/` appear as annotations and mark the step with a warning. Run `npm run quality` locally before releasing.
-- [ ] **Mutation tests (Stryker).** The `mutation` job runs `npm run test:mutation` with `continue-on-error`, and the `release` job does not wait for it. A score below `thresholds.break` in `stryker.config.mjs` (65 %) marks the job failed as a warning. The score per file is in the run summary, and the HTML report is the `mutation-report` artifact.
+- [ ] **Mutation tests (Stryker).** The `mutation` job runs `npm run test:mutation` with `continue-on-error`, and the `release` job does not wait for it. A score below `thresholds.break` in `stryker.config.mjs` (90 %; the last full run scored 93.8 %) marks the job failed as a warning. The score per file is in the run summary, and the HTML report is the `mutation-report` artifact.
 
 To make either one blocking later, follow the steps in [CONTRIBUTING.md](../CONTRIBUTING.md#code-quality) and [Mutation testing](../CONTRIBUTING.md#mutation-testing), then update this section.
 

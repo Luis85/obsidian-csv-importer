@@ -17,6 +17,7 @@ export default {
 	tempDirName: ".stryker-tmp",
 	incremental: false,
 	timeoutMS: 10000,
-	// First full run (2026-11): 68.2 %. `break` sits a few points below so a release fails on a real drop; raise it as the score improves.
-	thresholds: { high: 80, low: 60, break: 65 },
+	// Full run 2026-11 with static mutants: 93.8 % (first run, before the test pass: 68.2 %). `break` sits a few points below,
+	// so a real drop shows as a warning in the advisory release job; raise it as the score improves.
+	thresholds: { high: 95, low: 85, break: 90 },
 };
