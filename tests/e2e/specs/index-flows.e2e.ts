@@ -68,7 +68,7 @@ describe("CSV imports index", function () {
 		await importViaDialog(CSV_DE);
 		await openIndex();
 		// The button is disabled and hidden until the list has loaded; clicking earlier does nothing.
-		await rowFor("timesheet-de.csv");
+		await indexRow("timesheet-de.csv");
 		const all = browser.$(`${INDEX} .csv-importer-index-all`);
 		await all.waitForEnabled();
 		await all.waitForDisplayed();
