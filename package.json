@@ -25,7 +25,7 @@
     "lint:api": "node scripts/check-api-versions.mjs",
     "test:mutation": "stryker run",
     "quality": "fallow --baseline .fallow-baselines/dead-code.json --dupes-baseline .fallow-baselines/dupes.json --health-baseline .fallow-baselines/health.json",
-    "quality:baseline": "fallow --save-baseline .fallow-baselines/dead-code.json && fallow dupes --save-baseline .fallow-baselines/dupes.json && fallow health --save-baseline .fallow-baselines/health.json"
+    "quality:baseline": "node scripts/fallow-baseline.mjs"
   },
   "keywords": [
     "obsidian",
