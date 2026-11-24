@@ -91,7 +91,7 @@ The Developer policies forbid client-side telemetry, ads in the plugin UI, obfus
   - settings in `data.json`;
   - import state in `.obsidian/plugins/csv-importer/imports/`: `index.json` and `<hash>.json`, which hold hashes of the last imported values;
   - undo data in `<hash>.undo.json`, which holds the previous note content and may contain row data.
-- [ ] **Files written:** notes, an optional `.base` file and an optional import report note. The CSV is never modified. Nothing outside the vault is accessed.
+- [ ] **Files written:** notes, an optional `.base` file and an optional import report note. The CSV is never modified. Nothing outside the vault is accessed, with one user-initiated exception: **Add CSV file...** shows the system file picker (`<input type="file">`, no Node or Electron APIs) and reads only the file the user selects, copying it into the vault. The README discloses it under "Privacy and data".
 - [ ] **Account requirement, paid features and ads:** none.
 
 ## Lessons from the review of 0.1.0
@@ -101,6 +101,7 @@ The automated review checks more than the locally installed `eslint-plugin-obsid
 - **API version.** The local `no-unsupported-api` rule checks methods such as `setDestructive()`, but not plain properties with `@since`, such as `Plugin.settings`. The review checks both. `scripts/check-api-versions.mjs` uses the TypeScript compiler to report every unguarded Obsidian method or property that is newer than `minAppVersion`.
 - **Settings.** "`PluginSettingTab` does not implement `getSettingDefinitions()`" was a warning. The plugin now uses the declarative settings API.
 - **CSS.** The review reported duplicate properties in `styles.css`. Stylelint now runs in `npm run lint`, so CI and releases catch them.
+- **CSS browser features (0.2.0 review).** The review warned "multicolumn is only partially supported" for `column-gap`, which is fine in grid but is grouped under multi-column. Stylelint now runs `stylelint-no-unsupported-browser-features` with Chrome 120+, which reproduces that warning on the 0.2.0 stylesheet. Use the `gap` shorthand, and avoid partially supported features such as `display: contents` and `scrollbar-width`.
 - **Attestations.** Missing attestations were a recommendation. The Release workflow now attests `main.js` and `styles.css`.
 
 To check a change before releasing, run `npm run lint`, then use **Review branch** in the portal.

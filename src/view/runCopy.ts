@@ -9,6 +9,27 @@ export const MORE_ACTIONS = "More actions";
 export const FILTER_PLACEHOLDER = "Filter rows…";
 export const FILTER_LABEL = "Filter rows in all columns";
 export const SHOW_MORE = "Show more";
+export const CLEAR_SELECTION = "Clear selection";
+export const CHANGED_SINCE_IMPORT = "Changed since last import";
+export const RE_IMPORT = "Re-import";
+
+/** Primary button while rows are selected: "Import 3 selected rows". */
+export function importSelectedLabel(n: number): string {
+	return `Import ${n} selected ${n === 1 ? "row" : "rows"}`;
+}
+
+/** Status line while rows are selected: "3 rows selected". */
+export function selectedCount(n: number): string {
+	return `${n} ${n === 1 ? "row" : "rows"} selected`;
+}
+
+export function selectRowLabel(n: number): string {
+	return `Select row ${n}`;
+}
+
+export function selectAllLabel(filtered: boolean, count: number): string {
+	return filtered ? `Select all ${count} matching rows` : `Select all ${count} rows`;
+}
 
 export const FIRST_IMPORT_TITLE = "Ready to import";
 export const COLUMNS_CHANGED_TITLE = "Columns changed";
@@ -82,8 +103,19 @@ export function moreRows(n: number): string {
 	return `…and ${n} more rows.`;
 }
 
-export function previewImportLabel(n: number): string {
-	return n > 0 ? `Import ${n} ${n === 1 ? "note" : "notes"}` : "Import";
+/** Preview button: "Import 6 notes", or "Import 4 of 6 notes" when some are unchecked; plain "Import" with none. */
+export function previewImportLabel(n: number, total: number = n): string {
+	if (n <= 0) return "Import";
+	if (n < total) return `Import ${n} of ${total} ${total === 1 ? "note" : "notes"}`;
+	return `Import ${n} ${n === 1 ? "note" : "notes"}`;
+}
+
+export function selectGroupLabel(name: string, count: number): string {
+	return `Include all ${count} ${name.toLowerCase()} notes in the import`;
+}
+
+export function selectNoteLabel(row: number): string {
+	return `Include row ${row} in the import`;
 }
 
 export function rowsProgress(done: number, total: number): string {

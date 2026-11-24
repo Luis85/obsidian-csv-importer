@@ -28,6 +28,11 @@ export class ConfigStore {
 		await this.persist();
 	}
 
+	async setMany(entries: Record<string, FileImportConfig>): Promise<void> {
+		for (const [path, cfg] of Object.entries(entries)) this.files[path] = clone(cfg);
+		await this.persist();
+	}
+
 	/** Moves a config to a new path. Returns true when something changed. */
 	async rename(oldPath: string, newPath: string): Promise<boolean> {
 		if (oldPath === newPath || !this.has(oldPath)) return false;

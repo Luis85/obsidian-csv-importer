@@ -144,7 +144,7 @@ export function delimiterLabel(d: string): string {
 }
 
 export const EXTRA_PROPERTIES_HELP =
-	"Add properties to the imported notes that are not in the CSV. They are only written to the notes, the CSV file is not changed. The default value fills in new notes and empty properties on re-import; values you set in Obsidian are kept. Use {{uuid}} for a unique ID per note.";
+	"Written to the notes only, the CSV is not changed. Defaults fill new notes and empty properties; values you set in Obsidian are kept.";
 
 export const ROW_FILTER_OPS: Record<RowFilterOp, string> = {
 	equals: "equals",
@@ -243,3 +243,13 @@ export const CONFIG_TABS = {
 	reimport: "Re-import",
 	file: "File & rows",
 } as const;
+
+/** Imports index: scan, add from outside, changed CSV files, note counts. */
+export const SCAN_VAULT = "Scan vault";
+export const ADD_CSV_FILE = "Add CSV file...";
+export const REIMPORT_CHANGED = "Re-import changed";
+export const CHANGED_BADGE = "Changed";
+export const changedLine = (n: number): string => `${n} CSV ${n === 1 ? "file" : "files"} changed since ${n === 1 ? "its" : "their"} last import`;
+export const editedLine = (n: number): string => `${n} edited since import`;
+export const NO_NEW_CSV_TITLE = "No new CSV files found";
+export const NO_NEW_CSV_HINT = "Every CSV file in the vault is already in the index.";

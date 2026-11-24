@@ -70,6 +70,7 @@ export class Tabs {
 			btn?.setAttr("aria-selected", String(on));
 			btn?.setAttr("tabindex", on ? "0" : "-1");
 			btn?.toggleClass("is-active", on);
+			if (on) btn?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
 			this.panels.get(t.id)?.toggleClass("csv-importer-hidden", !on);
 		}
 	}

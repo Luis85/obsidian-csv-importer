@@ -189,7 +189,15 @@ Each row shows the CSV (click to open it in the table view), its folder, when it
 - **Configure** (icon button): opens the import settings.
 - **...** menu: **Configure**, **Open base** (if a base exists), **Undo last import** (when an undo is available), then **Delete imported notes...** and **Remove from index...**.
 
-At the top: a filter box, **Re-import all**, and a refresh button. **Re-import all** runs the import dialog for every listed CSV that still exists. With no entries, the view shows "No imports yet" and how to set one up.
+Under the name, the row also shows the result of the last import ("12 new · 5 updated · 120 unchanged · 2 skipped"; imports from before this was recorded show only the note count) and, when you edited some notes in Obsidian since, "N edited since import". Hover it to see which properties differ. A note counts as edited when a property the import manages no longer has the value the import wrote.
+
+**Changed CSV files.** After each import the plugin remembers the CSV's size, modification time and a hash of its content. When the file differs (it is compared by size and modification time first, and read only when those differ), the row gets a **Changed** badge with how long ago it changed, **Re-import** becomes the highlighted button, and a line at the top says "N CSV files changed since their last import" with a **Re-import changed** button that runs the import dialog for each one after the other. The list updates by itself when a CSV is modified, renamed or deleted. A file that was only saved again with the same content is not marked. An import from before this was recorded counts as changed until you import it once more. The table view's status line shows the same state.
+
+**Scan vault** lists every CSV file in the vault that is not in the index yet, with its folder, size and number of rows. All are checked; uncheck what you do not want and choose **Add to index**. The files get default import settings and nothing is imported. Scan again later and only new files are listed.
+
+**Add CSV file...** copies a CSV from anywhere on your device into the vault. Choose the file with the system file picker (it works on desktop and mobile), the folder in the vault and the file name. If a file of that name already exists you choose **Replace the existing file** or **Keep both** (the new file gets a free name such as `name 1.csv`). The bytes are copied unchanged. The file is then added to the index and opened in the table view. The plugin cannot follow the original file: to update the copy, add the file again with the same folder and name and choose Replace; the index then shows it as changed.
+
+At the top: a filter box, **Scan vault**, **Add CSV file...**, **Re-import all**, and a refresh button. **Re-import all** runs the import dialog for every listed CSV that still exists. With no entries, the view shows "No imports yet" and how to set one up.
 
 **Delete imported notes...** moves the notes this import owns to the trash (using your Obsidian trash setting) after a confirmation that states the count. A note counts as owned when the import history lists it and it still exists as a Markdown note, even if you renamed or moved it. Notes you created yourself, even in the same folder, are never touched. A checkbox, **Also delete the base file**, also trashes the base. Afterwards the import history and undo data are cleared and "last import" is reset, but the CSV's settings stay, so you can import again. This works even when the CSV file is missing. It does not use the undo data, so it cannot be undone from the plugin; restore from Obsidian's trash instead.
 
@@ -249,6 +257,8 @@ Per file only (import settings, not in the settings tab): column types, property
 
   `<hash>` is derived from the CSV's path. The undo files can contain row data. If you sync your vault's configuration folder, these files are synced too.
 - The CSV file is never modified.
+- **Add CSV file...** opens the system file picker. Only a file you choose there is read, only when you choose it, and it is copied into the vault (the folder and name you set). The plugin does not follow, watch or read the original again, and accesses no other files outside the vault.
+- Per CSV, `imports/index.json` also holds the CSV's size, modification time, a content hash (to show that the file changed since the last import) and the counts of the last import. No row content is stored there.
 - Files the plugin creates: the notes, an optional `.base` file, and an optional import report note.
 - It uses only Obsidian's documented plugin API. It does not write `.obsidian/types.json`: because values are written as typed YAML, Obsidian picks up the property types from the notes.
 

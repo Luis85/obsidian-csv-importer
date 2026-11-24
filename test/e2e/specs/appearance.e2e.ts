@@ -2,7 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { TEXT_CONTRAST } from "../contrast";
-import { measureTexts, overflow, parkPointer, stylesOf, useScheme, type Measured } from "../appearance";
+import { measureTexts, overflow, parkPointer, settleColours, stylesOf, useScheme, type Measured } from "../appearance";
 import {
 	CSV, closeAllModals, importViaDialog, installConsoleSpy, openFile, pluginProblems, resetEverything, runCommand, waitForModal,
 	waitForViewType,
@@ -44,14 +44,11 @@ const textsInBothSchemes = async (state: string, scope: string) => {
 const KNOWN_LOW_CONTRAST: readonly ((m: Measured) => boolean)[] = [
 	// Obsidian's own accent button (white on --interactive-accent, 3.4:1 light and 4.2:1 dark in the default theme).
 	(m) => m.testid === "csv-import" || m.testid === "run-import" || /: Import now$/.test(m.text),
-	// The muted "no key" summary part uses the faint text colour (2.3:1 light, 2.2:1 dark).
-	(m) => m.testid === "config-summary-link" && /: no key$/.test(m.text),
-	// Row numbers and the "#" header use a faint text colour (about 2.3:1 light, 3.0:1 dark).
-	(m) => m.testid === "csv-table" && /^(light|dark): (#|\d+)$/.test(m.text),
-	// The muted status line under the toolbar (4.3:1 light, 3.8:1 dark).
-	(m) => m.testid === "csv-view" && /Ready to import/.test(m.text),
 ];
 const STRICT_CONTRAST = process.env["E2E_STRICT_CONTRAST"] === "1";
+
+/** The dialog focuses its first control when it opens; the focus ring is wanted, so the chrome checks measure unfocused elements. */
+const blurFocus = () => browser.execute(() => (document.activeElement as HTMLElement | null)?.blur());
 
 const failing = (texts: readonly Measured[]) =>
 	texts.filter((text) => text.ratio < TEXT_CONTRAST && (STRICT_CONTRAST || !KNOWN_LOW_CONTRAST.some((known) => known(text))));
@@ -63,14 +60,6 @@ const kindsIn = (texts: readonly Measured[], kinds: Readonly<Record<string, (m: 
 		.map(([kind]) => kind);
 
 const testid = (id: string) => (text: Measured) => text.testid === id;
-
-/**
- * Ghost elements render with Obsidian's boxed button chrome today (background-color and box-shadow from
- * `button:not(.clickable-icon)` outrank the plugin's single-class rules). The two checks that capture it run
- * when E2E_STRICT_CHROME=1 and are skipped otherwise.
- * TODO: enable them (drop the switch) once the upcoming UI pass fixes the summary parts and the tabs.
- */
-const strictChrome = process.env["E2E_STRICT_CHROME"] === "1" ? it : it.skip;
 
 describe("appearance in Obsidian's default theme", function () {
 	before(async function () {
@@ -127,21 +116,35 @@ describe("appearance in Obsidian's default theme", function () {
 			expect(past).toEqual([]);
 		});
 
-		strictChrome("gives the summary parts only what their style says, not Obsidian's button chrome", async function () {
+		it("gives the summary parts only what their style says, not Obsidian's button chrome", async function () {
+			await blurFocus();
 			await parkPointer();
-			const parts = await stylesOf(MODAL, "[data-testid=config-summary-link]", ["background-color", "box-shadow"]);
+			const parts = await stylesOf(MODAL, "[data-testid=config-summary-link]", ["background-color", "box-shadow", "border-top-width"]);
 			expect(parts.length).toBeGreaterThanOrEqual(3);
 			for (const part of parts) {
-				expect(part).toMatchObject({ "background-color": "rgba(0, 0, 0, 0)", "box-shadow": "none" });
+				expect(part).toMatchObject({ "background-color": "rgba(0, 0, 0, 0)", "box-shadow": "none", "border-top-width": "0px" });
 			}
 		});
 
-		strictChrome("gives the tabs only what their style says, not Obsidian's button chrome", async function () {
+		it("keeps the summary parts and tabs flat while hovered", async function () {
+			if (await browser.executeObsidian(({ obsidian }) => obsidian.Platform.isMobile)) this.skip();
+			await blurFocus();
+			for (const selector of ["[data-testid=config-summary-link]", "[data-testid^=config-tab-]"]) {
+				await browser.$(`${MODAL} ${selector}`).moveTo();
+				await settleColours();
+				const [hovered] = await stylesOf(MODAL, `${selector}:hover`, ["background-color", "box-shadow"]);
+				expect(hovered).toMatchObject({ "background-color": "rgba(0, 0, 0, 0)", "box-shadow": "none" });
+			}
 			await parkPointer();
-			const tabs = await stylesOf(MODAL, "[data-testid^=config-tab-]", ["background-color", "box-shadow"]);
+		});
+
+		it("gives the tabs only what their style says, not Obsidian's button chrome", async function () {
+			await blurFocus();
+			await parkPointer();
+			const tabs = await stylesOf(MODAL, "[data-testid^=config-tab-]", ["background-color", "box-shadow", "border-top-width"]);
 			expect(tabs.length).toBe(4);
 			for (const tab of tabs) {
-				expect(tab).toMatchObject({ "background-color": "rgba(0, 0, 0, 0)", "box-shadow": "none" });
+				expect(tab).toMatchObject({ "background-color": "rgba(0, 0, 0, 0)", "box-shadow": "none", "border-top-width": "0px" });
 			}
 		});
 	});

@@ -1,43 +1,41 @@
 import { Menu, setIcon } from "obsidian";
-import type { ExtraProperty, PropertyType } from "../../types";
-import { extraPropertyConflicts } from "../../import/noteBuilder";
-import { sectionHeading } from "../dom";
-import { EXTRA_PROPERTIES_HELP, TYPE_LABELS } from "../labels";
-import { ADD_EMPTY_PROPERTY, ADD_ID_PROPERTY, ADD_PROPERTY, EXTRA_PROPERTIES } from "./copy";
+import type { ExtraProperty, FrontmatterValue, PropertyType } from "../../types";
+import { extraPropertyConflicts, formatValue, planNotes } from "../../import/noteBuilder";
+import { COLUMN_OPTIONS, EXTRA_PROPERTIES_HELP, TYPE_LABELS } from "../labels";
+import { ADD_EMPTY_PROPERTY, ADD_ID_PROPERTY, ADD_PROPERTY, NEW_PROPERTY, OPTIONS_CLOSE, OPTIONS_OPEN, RESULT } from "./copy";
 import { insertAtCursor, placeholderTokens, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
 
 const EXTRA_TOKENS = ["{{today}}", "{{now}}", "{{uuid}}"];
+const SAMPLE_NAME = "__csv_importer_extra_sample__";
 
-/** The "Extra properties" section: properties that are not in the CSV but added to every note. */
+let rowCounter = 0;
+
+/**
+ * Extra properties: properties that are not in the CSV but added to every note. They are rows of the Columns table
+ * (same grid as the column rows), followed by an "Add property" button and one line of help.
+ */
 export class ExtraPropertiesSection {
 	private listEl!: HTMLElement;
-	private chipsEl!: HTMLElement;
-	/** Default-value input that was focused last; chips insert into it. */
-	private activeInput: { input: HTMLInputElement; prop: ExtraProperty } | null = null;
 	private readonly warnings = new Map<ExtraProperty, HTMLElement>();
 
 	constructor(private readonly draft: ConfigDraft) {}
 
 	build(parent: HTMLElement): void {
-		sectionHeading(parent, EXTRA_PROPERTIES);
-		parent.createDiv({ cls: "setting-item-description csv-importer-section-help", text: EXTRA_PROPERTIES_HELP });
-		this.listEl = parent.createDiv({ cls: "csv-importer-extra-list" });
+		this.listEl = parent.createDiv({ cls: "csv-importer-col-list csv-importer-extra-list" });
 		const addRow = parent.createDiv({ cls: "csv-importer-extra-add" });
-		const add = addRow.createEl("button", { text: ADD_PROPERTY, attr: { type: "button", "aria-haspopup": "menu" } });
+		const add = addRow.createEl("button", { cls: "csv-importer-add-prop", attr: { type: "button", "aria-haspopup": "menu" } });
+		setIcon(add.createSpan({ cls: "csv-importer-add-prop-icon", attr: { "aria-hidden": "true" } }), "plus");
+		add.createSpan({ text: ADD_PROPERTY });
 		add.addEventListener("click", (evt) => {
 			const menu = new Menu();
 			menu.addItem((item) => item.setTitle(ADD_EMPTY_PROPERTY).setIcon("plus").onClick(() => this.addProperty("", "")));
 			menu.addItem((item) => item.setTitle(ADD_ID_PROPERTY).setIcon("key-round").onClick(() => this.addId()));
 			menu.showAtMouseEvent(evt);
 		});
-		this.chipsEl = parent.createDiv({ cls: "csv-importer-chips" });
+		parent.createDiv({ cls: "setting-item-description csv-importer-section-help csv-importer-extra-help", text: EXTRA_PROPERTIES_HELP });
 		this.renderList();
-		this.renderChips();
-		this.draft.on("parsing", () => {
-			this.renderList();
-			this.renderChips();
-		});
+		this.draft.on("parsing", () => this.renderList());
 		this.draft.on("columns", () => this.updateWarnings());
 	}
 
@@ -45,6 +43,8 @@ export class ExtraPropertiesSection {
 		this.draft.cfg.extraProperties.push({ property: name, type: "text", defaultValue });
 		this.renderList();
 		this.draft.emit("preview");
+		const rows = this.listEl.querySelectorAll<HTMLInputElement>(".csv-importer-col-main .csv-importer-col-prop");
+		rows[rows.length - 1]?.focus();
 	}
 
 	/** Gives every new note a unique ID (UUID); the ID is kept on re-import. */
@@ -55,63 +55,37 @@ export class ExtraPropertiesSection {
 		this.addProperty(name, "{{uuid}}");
 	}
 
-	private renderChips(): void {
-		const tokens = [...EXTRA_TOKENS, ...placeholderTokens(this.draft.parsed?.headers)];
-		renderChipRow(this.chipsEl, "Insert into default value:", tokens, (token) => {
-			const active = this.activeInput;
-			if (!active) return;
-			active.prop.defaultValue = insertAtCursor(active.input, token);
-			this.draft.emit("preview");
-		});
-		this.chipsEl.toggleClass("csv-importer-hidden", this.draft.cfg.extraProperties.length === 0);
-	}
-
 	private renderList(): void {
-		const { extraProperties } = this.draft.cfg;
 		this.listEl.empty();
 		this.warnings.clear();
-		this.activeInput = null;
-		for (const prop of extraProperties) this.renderRow(prop);
-		this.chipsEl?.toggleClass("csv-importer-hidden", extraProperties.length === 0);
+		for (const prop of this.draft.cfg.extraProperties) this.renderRow(prop);
 		this.updateWarnings();
+	}
+
+	/** The default of `prop` as the first CSV row would get it. */
+	private sampleOf(prop: ExtraProperty): string {
+		const { parsed, cfg, file } = this.draft;
+		if (!parsed || parsed.rows.length === 0) return "";
+		try {
+			const one = { ...parsed, rows: parsed.rows.slice(0, 1), rowNumbers: parsed.rowNumbers.slice(0, 1) };
+			const probe = { ...cfg, rowFilter: null, extraProperties: [{ ...prop, property: SAMPLE_NAME }] };
+			const note = planNotes(one, probe, { path: file.path, basename: file.basename })[0];
+			if (!note) return "";
+			const v: FrontmatterValue | undefined = note.frontmatter[SAMPLE_NAME];
+			if (v === undefined || v === null) return "";
+			return Array.isArray(v) ? JSON.stringify(v) : formatValue(v);
+		} catch {
+			return "";
+		}
 	}
 
 	private renderRow(prop: ExtraProperty): void {
 		const draft = this.draft;
-		const row = this.listEl.createDiv({ cls: "csv-importer-extra-row" });
-		const fields = row.createDiv({ cls: "csv-importer-extra-fields" });
+		const id = `csv-importer-extra-opts-${++rowCounter}`;
+		const row = this.listEl.createDiv({ cls: "csv-importer-col-row csv-importer-extra-row", attr: { "data-testid": "config-extra-row" } });
+		const main = row.createDiv({ cls: "csv-importer-col-main" });
 
-		const name = fields.createEl("input", { type: "text", cls: "csv-importer-prop-input", attr: { placeholder: "Property name", "aria-label": "Extra property name" } });
-		name.value = prop.property;
-		name.addEventListener("input", () => {
-			prop.property = name.value;
-			this.updateWarnings();
-			draft.emitPreviewDebounced();
-		});
-
-		const sel = fields.createEl("select", { cls: "dropdown", attr: { "aria-label": "Extra property type" } });
-		for (const [value, label] of Object.entries(TYPE_LABELS)) sel.createEl("option", { value, text: label });
-		sel.value = prop.type;
-		sel.addEventListener("change", () => {
-			prop.type = sel.value as PropertyType;
-			draft.emit("preview");
-		});
-
-		const def = fields.createEl("input", {
-			type: "text",
-			cls: "csv-importer-prop-input csv-importer-extra-default",
-			attr: { placeholder: "Default, e.g. open or {{today}}", "aria-label": "Default value" },
-		});
-		def.value = prop.defaultValue;
-		def.addEventListener("focus", () => {
-			this.activeInput = { input: def, prop };
-		});
-		def.addEventListener("input", () => {
-			prop.defaultValue = def.value;
-			draft.emitPreviewDebounced();
-		});
-
-		const remove = fields.createEl("button", { cls: "clickable-icon csv-importer-extra-remove", attr: { type: "button", "aria-label": "Remove property" } });
+		const remove = main.createEl("button", { cls: "clickable-icon csv-importer-extra-remove", attr: { type: "button", "aria-label": "Remove property", title: "Remove property" } });
 		setIcon(remove, "trash-2");
 		remove.addEventListener("click", () => {
 			const list = draft.cfg.extraProperties;
@@ -121,7 +95,100 @@ export class ExtraPropertiesSection {
 			draft.emit("preview");
 		});
 
-		this.warnings.set(prop, row.createDiv({ cls: "csv-importer-field-error", attr: { role: "status" } }));
+		main.createSpan({ cls: "csv-importer-col-source csv-importer-new-prop", text: NEW_PROPERTY });
+
+		const name = main.createEl("input", {
+			type: "text",
+			cls: "csv-importer-prop-input csv-importer-col-prop",
+			attr: { placeholder: "Property name", "aria-label": "Extra property name" },
+		});
+		name.value = prop.property;
+
+		const sel = main.createEl("select", { cls: "dropdown csv-importer-col-type", attr: { "aria-label": "Extra property type" } });
+		for (const [value, label] of Object.entries(TYPE_LABELS)) sel.createEl("option", { value, text: label });
+		sel.value = prop.type;
+
+		const optBtn = main.createEl("button", {
+			cls: "clickable-icon csv-importer-col-options-btn",
+			attr: { type: "button", "aria-expanded": "false", "aria-controls": id, "aria-label": `${COLUMN_OPTIONS} for extra property`, title: OPTIONS_OPEN },
+		});
+		setIcon(optBtn, "sliders-horizontal");
+		const optDot = optBtn.createSpan({ cls: "csv-importer-options-dot" });
+
+		const sampleEl = main.createDiv({ cls: "csv-importer-col-sample" });
+		const sampleAfter = sampleEl.createSpan({ cls: "csv-importer-col-after" });
+
+		const summary = row.createEl("button", { cls: "csv-importer-col-summary", attr: { type: "button", "aria-expanded": "false", "aria-controls": id } });
+		const summaryText = summary.createSpan({ cls: "csv-importer-col-summary-text" });
+		setIcon(summary.createSpan({ cls: "csv-importer-col-summary-icon" }), "chevron-right");
+
+		const opts = row.createDiv({ cls: "csv-importer-col-options csv-importer-hidden", attr: { id } });
+
+		const narrowProp = opts.createDiv({ cls: "csv-importer-opt csv-importer-opt-prop" });
+		narrowProp.createEl("label", { text: "Property name" });
+		const name2 = narrowProp.createEl("input", { type: "text", cls: "csv-importer-prop-input", attr: { placeholder: "Property name", "aria-label": "Extra property name" } });
+		name2.value = prop.property;
+
+		const defField = opts.createDiv({ cls: "csv-importer-opt" });
+		const defId = `${id}-def`;
+		defField.createEl("label", { text: "Default value", attr: { for: defId } });
+		const def = defField.createEl("input", {
+			type: "text",
+			cls: "csv-importer-prop-input csv-importer-extra-default",
+			attr: { id: defId, placeholder: "e.g. open or {{today}}", "aria-label": "Default value" },
+		});
+		def.value = prop.defaultValue;
+		const chips = defField.createDiv({ cls: "csv-importer-chips" });
+		renderChipRow(chips, "Insert:", [...EXTRA_TOKENS, ...placeholderTokens(draft.parsed?.headers)], (token) => {
+			prop.defaultValue = insertAtCursor(def, token);
+			refresh();
+			draft.emit("preview");
+		});
+		const result = defField.createDiv({ cls: "csv-importer-opt-result" });
+
+		let open = false;
+		const setOpen = (v: boolean): void => {
+			open = v;
+			opts.toggleClass("csv-importer-hidden", !open);
+			row.toggleClass("is-open", open);
+			for (const b of [optBtn, summary]) b.setAttr("aria-expanded", String(open));
+			optBtn.setAttr("title", open ? OPTIONS_CLOSE : OPTIONS_OPEN);
+		};
+
+		const refresh = (): void => {
+			const out = this.sampleOf(prop);
+			sampleAfter.setText(out);
+			sampleEl.setAttr("title", out);
+			summaryText.setText(`→ ${prop.property || NEW_PROPERTY}${out === "" ? "" : ` · ${out}`}`);
+			result.setText(out === "" ? "" : `${RESULT}: ${out}`);
+			optDot.toggleClass("csv-importer-hidden", prop.defaultValue === "");
+		};
+		refresh();
+		setOpen(false);
+
+		const onName = (src: HTMLInputElement, other: HTMLInputElement): void => {
+			prop.property = src.value;
+			other.value = src.value;
+			this.updateWarnings();
+			refresh();
+			draft.emitPreviewDebounced();
+		};
+		name.addEventListener("input", () => onName(name, name2));
+		name2.addEventListener("input", () => onName(name2, name));
+		sel.addEventListener("change", () => {
+			prop.type = sel.value as PropertyType;
+			refresh();
+			draft.emit("preview");
+		});
+		def.addEventListener("input", () => {
+			prop.defaultValue = def.value;
+			refresh();
+			draft.emitPreviewDebounced();
+		});
+		optBtn.addEventListener("click", () => setOpen(!open));
+		summary.addEventListener("click", () => setOpen(!open));
+
+		this.warnings.set(prop, row.createDiv({ cls: "csv-importer-field-error csv-importer-extra-warning", attr: { role: "status" } }));
 	}
 
 	private updateWarnings(): void {

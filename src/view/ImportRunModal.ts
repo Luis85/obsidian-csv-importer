@@ -8,7 +8,7 @@ import { CLOSE, IMPORT_FINISHED, driftMessage } from "./labels";
 import {
 	CANCEL, CHECKING_ROWS, IMPORTING_TITLE, MORE_ACTIONS, NOTHING_TO_CHANGE, NO_DATA_ROWS, OPEN_BASE, OPEN_FIRST_NOTE, OUTCOME_LABEL,
 	OUTCOME_ORDER, PREVIEW_TITLE, SAVE_REPORT, STARTING, STOPPING, STOP_IMPORT, UNDO_IMPORT, countsLine, moreRows, previewImportLabel,
-	rowsProgress, targetLine,
+	rowsProgress, selectGroupLabel, selectNoteLabel, targetLine,
 } from "./runCopy";
 
 export type { HeaderDrift };
@@ -26,6 +26,12 @@ export interface ImportRunControls {
 	execute(opts: {
 		onProgress: (done: number, total: number) => void;
 		shouldStop: () => boolean;
+		/**
+		 * Original 1-based data row numbers to import (`ParsedCsv.rowNumbers`). Set only when the user unchecked
+		 * rows in the preview: it lists every previewed row that stays checked, plus the rows that need no
+		 * decision (unchanged, skipped, failed), so the report still covers them. Undefined means the whole run.
+		 */
+		rows?: number[];
 	}): Promise<{ result: ImportResult; undoable: boolean }>;
 	canUndo(): boolean;
 	undo(): Promise<void>;
@@ -57,6 +63,11 @@ export class ImportRunModal extends Modal {
 	private finished: ImportResult | null = null;
 	private undoable = false;
 	private latest: ImportResult | null = null;
+	/** Row numbers of New and Updated notes the user unchecked in the preview. */
+	private readonly excluded = new Set<number>();
+	/** Redraw callbacks of the checkboxes (group headers and rows). */
+	private syncChecks: (() => void)[] = [];
+	private importBtn: HTMLButtonElement | null = null;
 	private resolveClosed!: (r: ImportResult) => void;
 	readonly closed: Promise<ImportResult>;
 
@@ -102,14 +113,15 @@ export class ImportRunModal extends Modal {
 			return;
 		}
 		this.latest = result;
+		this.excluded.clear();
+		this.syncChecks = [];
 		const el = this.reset();
 		this.renderHead(result);
 		this.renderWarnings(el, result, true);
-		this.renderGroups(el, result.rows);
-		const actionable = result.created + result.updated;
-		this.buttons([
+		this.renderGroups(el, result.rows, true);
+		const [importBtn] = this.buttons([
 			{
-				text: previewImportLabel(actionable),
+				text: previewImportLabel(result.created + result.updated),
 				cta: true,
 				disabled: result.rows.length === 0,
 				testid: "run-import",
@@ -117,6 +129,30 @@ export class ImportRunModal extends Modal {
 			},
 			{ text: CANCEL, onClick: () => this.close() },
 		]);
+		this.importBtn = importBtn ?? null;
+		this.syncSelection();
+	}
+
+	/** Rows that New and Updated groups offer a checkbox for. */
+	private actionableRows(): RowOutcome[] {
+		return (this.latest?.rows ?? []).filter((r) => r.outcome === "created" || r.outcome === "updated");
+	}
+
+	/** Keeps the checkboxes and the import button's label in line with what is unchecked. */
+	private syncSelection(): void {
+		for (const sync of this.syncChecks) sync();
+		const btn = this.importBtn;
+		if (!btn || !this.latest) return;
+		const total = this.actionableRows().length;
+		const selected = total - this.excluded.size;
+		btn.setText(previewImportLabel(selected, total));
+		btn.disabled = this.latest.rows.length === 0 || (total > 0 && selected === 0);
+	}
+
+	/** The rows to pass to the run, or undefined when everything stays checked. */
+	private selectedRows(): number[] | undefined {
+		if (this.excluded.size === 0 || !this.latest) return undefined;
+		return this.latest.rows.filter((r) => !this.excluded.has(r.row)).map((r) => r.row);
 	}
 
 	private async runImport(): Promise<void> {
@@ -140,7 +176,9 @@ export class ImportRunModal extends Modal {
 		])[0];
 		let lastPaint = 0;
 		try {
+			const rows = this.selectedRows();
 			const outcome = await this.ctl.execute({
+				...(rows ? { rows } : {}),
 				onProgress: (done, total) => {
 					const now = Date.now();
 					if (now - lastPaint < 80 && done < total) return;
@@ -258,7 +296,7 @@ export class ImportRunModal extends Modal {
 	}
 
 	/** Rows grouped by outcome: failed and skipped open, new and updated open when short, unchanged closed. */
-	private renderGroups(el: HTMLElement, rows: RowOutcome[]): void {
+	private renderGroups(el: HTMLElement, rows: RowOutcome[], selectable = false): void {
 		if (rows.length === 0) {
 			el.createDiv({ cls: "csv-importer-run-note", text: NO_DATA_ROWS });
 			return;
@@ -274,23 +312,65 @@ export class ImportRunModal extends Modal {
 			details.open = open;
 			const summary = details.createEl("summary", { cls: "csv-importer-run-group-title" });
 			setIcon(summary.createSpan({ cls: "csv-importer-run-chevron" }), "chevron-right");
+			const canSelect = selectable && (outcome === "created" || outcome === "updated");
+			if (canSelect) this.groupCheckbox(summary, group, OUTCOME_LABEL[outcome]);
 			summary.createSpan({ cls: "csv-importer-run-group-name", text: OUTCOME_LABEL[outcome] });
 			summary.createSpan({ cls: "csv-importer-run-group-count", text: String(group.length) });
 			const list = details.createDiv({ cls: "csv-importer-run-list" });
 			for (const r of group.slice(0, LIST_LIMIT)) {
-				const item = list.createDiv({ cls: "csv-importer-run-item" });
-				const line = item.createDiv({ cls: "csv-importer-run-path" });
+				const item = list.createEl(canSelect ? "label" : "div", { cls: "csv-importer-run-item" });
+				if (canSelect) this.rowCheckbox(item, r);
+				const text = item.createDiv({ cls: "csv-importer-run-text" });
+				const line = text.createDiv({ cls: "csv-importer-run-path" });
 				line.createSpan({ text: relPath(r.path, folder) });
 				line.createSpan({ cls: "csv-importer-run-row", text: ` \u00b7 row ${r.row}` });
 				const detail: string[] = [];
 				if (r.reason && r.reason !== ROW_REASON.wouldCreate) detail.push(r.reason);
 				if (r.outcome === "updated" && r.changed?.length) detail.push(`changes ${r.changed.join(", ")}`);
 				if (r.preserved?.length) detail.push(`keeps your edits to ${r.preserved.join(", ")}`);
-				if (detail.length > 0) item.createDiv({ cls: "csv-importer-run-detail", text: detail.join(" \u00b7 ") });
+				if (detail.length > 0) text.createDiv({ cls: "csv-importer-run-detail", text: detail.join(" \u00b7 ") });
 			}
 			if (group.length > LIST_LIMIT) list.createDiv({ cls: "csv-importer-run-note", text: moreRows(group.length - LIST_LIMIT) });
 		}
 		if (!any) el.createDiv({ cls: "csv-importer-run-note", text: NOTHING_TO_CHANGE });
+	}
+
+	/** Checkbox in a group header: includes or excludes every row of the group, also those beyond the list limit. */
+	private groupCheckbox(summary: HTMLElement, group: RowOutcome[], name: string): void {
+		const box = summary.createEl("input", {
+			cls: "csv-importer-check csv-importer-run-group-check",
+			type: "checkbox",
+			attr: { "aria-label": selectGroupLabel(name, group.length), "data-testid": "run-group-check" },
+		});
+		// A click on the box must not open or close the group.
+		box.addEventListener("click", (ev) => {
+			ev.stopPropagation();
+			for (const r of group) {
+				if (box.checked) this.excluded.delete(r.row);
+				else this.excluded.add(r.row);
+			}
+			this.syncSelection();
+		});
+		this.syncChecks.push(() => {
+			const off = group.filter((r) => this.excluded.has(r.row)).length;
+			box.checked = off === 0;
+			box.indeterminate = off > 0 && off < group.length;
+		});
+	}
+
+	private rowCheckbox(item: HTMLElement, r: RowOutcome): void {
+		const box = item.createEl("input", {
+			cls: "csv-importer-check",
+			type: "checkbox",
+			attr: { "aria-label": selectNoteLabel(r.row), "data-testid": "run-row-check", "data-row": String(r.row) },
+		});
+		box.checked = !this.excluded.has(r.row);
+		box.addEventListener("change", () => {
+			if (box.checked) this.excluded.delete(r.row);
+			else this.excluded.add(r.row);
+			this.syncSelection();
+		});
+		this.syncChecks.push(() => (box.checked = !this.excluded.has(r.row)));
 	}
 
 	// --- report ---

@@ -5,14 +5,16 @@ import { parseCsv } from "../csv/parser";
 import { detectHeaderDrift, prepareConfig } from "../csv/typeInference";
 import { errorMessage, plural } from "../core/util";
 import { countMatching } from "../import/noteBuilder";
+import { onCsvChanged } from "../obsidian/events";
 import { ImportConfigModal } from "./ImportConfigModal";
 import { TableRenderer } from "./TableRenderer";
 import { renderCallout, safeTargetFolder } from "./dom";
 import { REVIEW_COLUMNS, TYPE_LABELS, delimiterLabel, driftMessage, importRowsLabel, NO_ROWS } from "./labels";
 import { relativeTime } from "./relativeTime";
 import {
-	CHECK_DELIMITER, COLUMNS_CHANGED_TITLE, CONFIGURE_IMPORT, FILTER_LABEL, FILTER_PLACEHOLDER, FIRST_IMPORT_TITLE,
-	READ_ERROR_TITLE, ROW_FILTER_TITLE, UNDO, filterBullet, firstImportItems, importedAgo,
+	CHANGED_SINCE_IMPORT, CHECK_DELIMITER, CLEAR_SELECTION, COLUMNS_CHANGED_TITLE, CONFIGURE_IMPORT, FILTER_LABEL, FILTER_PLACEHOLDER,
+	FIRST_IMPORT_TITLE, READ_ERROR_TITLE, RE_IMPORT, ROW_FILTER_TITLE, UNDO, filterBullet, firstImportItems, importSelectedLabel, importedAgo,
+	selectedCount,
 } from "./runCopy";
 import { LINK_TEMPLATE } from "./shared";
 
@@ -43,6 +45,7 @@ export class CsvView extends TextFileView {
 		lowerRows: (parsed) => this.lowerRows(parsed),
 		requestRender: () => this.renderBody(),
 		openTypeMenu: (ev, index) => this.openTypeMenu(ev, index),
+		selectionChanged: () => this.updateSelectionUi(),
 	});
 	private model: { cfg: FileImportConfig; parsed: ParsedCsv | null; columns: ColumnConfig[]; error: string | null } | null = null;
 
@@ -50,6 +53,11 @@ export class CsvView extends TextFileView {
 	private statusEl: HTMLElement | null = null;
 	private bodyEl: HTMLElement | null = null;
 	private importBtn: HTMLButtonElement | null = null;
+	private importBtnLabel: HTMLElement | null = null;
+	private importCount = 0;
+	private selectionEl: HTMLElement | null = null;
+	private changedEl: HTMLElement | null = null;
+	private statusToken = 0;
 	private bannerEl: HTMLElement | null = null;
 	private loadCounter = 0;
 
@@ -61,6 +69,47 @@ export class CsvView extends TextFileView {
 	constructor(leaf: WorkspaceLeaf, private host: CsvImporterHost) {
 		super(leaf);
 		this.addAction("file-plus", "Import rows as notes", () => void this.runImport());
+		// Settings saved, an import, an undo or a delete (from the dialog, a command or another view): draw again.
+		onCsvChanged(this, (csvPath) => {
+			if (csvPath !== this.file?.path) return;
+			this.render();
+			this.redecode();
+		});
+		// The CSV was edited on disk or by another program: read it again.
+		this.registerEvent(
+			this.app.vault.on("modify", (f) => {
+				if (this.file && f.path === this.file.path) void this.reloadFromDisk();
+			}),
+		);
+	}
+
+	/** Reads the file again (with the configured encoding) and draws the table when the text differs. */
+	private async reloadFromDisk(): Promise<void> {
+		const file = this.file;
+		if (!file) return;
+		const id = ++this.loadCounter;
+		try {
+			const text = await this.host.readCsv(file);
+			if (id !== this.loadCounter || this.file !== file) return;
+			if (text === this.raw) {
+				// Same text, but the saved import state may differ from before ("changed since last import").
+				this.refreshChangedStatus();
+				return;
+			}
+			this.raw = text;
+			this.table.clearSelection();
+			this.render();
+		} catch (e) {
+			new Notice(`Could not read the file: ${errorMessage(e)}`);
+		}
+	}
+
+	private redecode(): void {
+		const pending = this.redecodeIfNeeded();
+		this.pendingDecode = pending;
+		void pending.finally(() => {
+			if (this.pendingDecode === pending) this.pendingDecode = null;
+		});
 	}
 
 	getViewType(): string {
@@ -143,22 +192,22 @@ export class CsvView extends TextFileView {
 		new ImportConfigModal(this.app, this.host, this.file, this.raw, () => {
 			// An encoding change must take effect in the table and in the Import button.
 			this.render();
-			const pending = this.redecodeIfNeeded();
-			this.pendingDecode = pending;
-			void pending.finally(() => {
-				if (this.pendingDecode === pending) this.pendingDecode = null;
-			});
+			this.redecode();
 		}, tab).open();
 	}
 
-	private async runImport(): Promise<void> {
+	/** Imports the whole file, or only the selected rows (`selectedOnly`). */
+	private async runImport(selectedOnly = false): Promise<void> {
 		if (!this.file || this.importing) return;
 		this.importing = true;
 		this.updateImportButton();
 		try {
 			if (this.pendingDecode) await this.pendingDecode;
 			if (!this.file) return;
-			await this.host.importFile(this.file, this.raw);
+			const rows = selectedOnly ? this.table.selectedRows() : [];
+			const result = await this.host.importFile(this.file, this.raw, rows.length > 0 ? { rows } : undefined);
+			// The selection is for one run; keep it when the dialog was cancelled before anything was written.
+			if (!result.dryRun) this.table.clearSelection();
 		} catch (e) {
 			new Notice(`Import failed: ${errorMessage(e)}`);
 		} finally {
@@ -168,7 +217,23 @@ export class CsvView extends TextFileView {
 	}
 
 	private updateImportButton(): void {
-		if (this.importBtn) this.importBtn.disabled = this.importing;
+		if (this.importBtn) this.importBtn.disabled = this.importing || (this.importCount === 0 && this.table.selectionSize === 0);
+	}
+
+	/** Selection changed: the primary button and the "N rows selected" part of the status line follow, in place. */
+	private updateSelectionUi(): void {
+		const n = this.table.selectionSize;
+		if (this.importBtnLabel) this.importBtnLabel.setText(n > 0 ? importSelectedLabel(n) : importRowsLabel(this.importCount));
+		this.updateImportButton();
+		const el = this.selectionEl;
+		if (!el) return;
+		el.empty();
+		if (n === 0) return;
+		el.createSpan({ cls: "csv-importer-status-sep", text: " \u00b7 ", attr: { "aria-hidden": "true" } });
+		el.createSpan({ text: selectedCount(n), attr: { "data-testid": "csv-selected-count" } });
+		el.createSpan({ cls: "csv-importer-status-sep", text: " \u00b7 ", attr: { "aria-hidden": "true" } });
+		const clear = el.createEl("button", { cls: "csv-importer-link-btn", text: CLEAR_SELECTION, attr: { type: "button", "data-testid": "csv-clear-selection" } });
+		clear.addEventListener("click", () => this.table.clearSelection());
 	}
 
 	private render(): void {
@@ -317,10 +382,11 @@ export class CsvView extends TextFileView {
 		const importCount = parsed ? countMatching(parsed, cfg) : 0;
 		const importBtn = el.createEl("button", { cls: "csv-importer-btn mod-cta csv-importer-import", attr: { type: "button", "data-testid": "csv-import" } });
 		setIcon(importBtn.createSpan({ cls: "csv-importer-btn-icon" }), "file-plus");
-		importBtn.createSpan({ text: importRowsLabel(importCount) });
-		importBtn.disabled = this.importing || importCount === 0;
-		importBtn.addEventListener("click", () => void this.runImport());
+		this.importCount = importCount;
+		this.importBtnLabel = importBtn.createSpan({ text: importRowsLabel(importCount) });
+		importBtn.addEventListener("click", () => void this.runImport(this.table.selectionSize > 0));
 		this.importBtn = importBtn;
+		this.updateSelectionUi();
 	}
 
 	/** Muted line under the toolbar: counts, last import time and Undo. */
@@ -342,12 +408,38 @@ export class CsvView extends TextFileView {
 				attr: { title: new Date(cfg.lastImport).toLocaleString() },
 			});
 		}
+		this.changedEl = el.createSpan({ cls: "csv-importer-status-changed" });
 		if (this.file && this.host.canUndo(this.file)) {
 			el.createSpan({ cls: "csv-importer-status-sep", text: " \u00b7 ", attr: { "aria-hidden": "true" } });
 			const undo = el.createEl("button", { cls: "csv-importer-link-btn", text: UNDO, attr: { type: "button", "aria-label": "Undo last import" } });
 			undo.disabled = this.importing;
 			undo.addEventListener("click", () => void this.runUndo());
 		}
+		this.selectionEl = el.createSpan({ cls: "csv-importer-status-selection" });
+		this.updateSelectionUi();
+		this.refreshChangedStatus();
+	}
+
+	/** "Changed since last import · Re-import" when the CSV differs from what was last imported. */
+	private refreshChangedStatus(): void {
+		const file = this.file;
+		const token = ++this.statusToken;
+		if (!file) return;
+		void this.host.csvStatus(file).then(
+			(status) => {
+				const el = this.changedEl;
+				if (token !== this.statusToken || this.file !== file || !el?.isConnected) return;
+				el.empty();
+				if (!status.changed) return;
+				el.createSpan({ cls: "csv-importer-status-sep", text: " \u00b7 ", attr: { "aria-hidden": "true" } });
+				el.createSpan({ cls: "csv-importer-changed", text: CHANGED_SINCE_IMPORT, attr: { "data-testid": "csv-changed" } });
+				el.createSpan({ cls: "csv-importer-status-sep", text: " \u00b7 ", attr: { "aria-hidden": "true" } });
+				const again = el.createEl("button", { cls: "csv-importer-link-btn", text: RE_IMPORT, attr: { type: "button", "data-testid": "csv-reimport" } });
+				again.disabled = this.importing;
+				again.addEventListener("click", () => void this.runImport());
+			},
+			() => undefined,
+		);
 	}
 
 	private openTypeMenu(ev: MouseEvent, index: number): void {

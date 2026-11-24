@@ -48,9 +48,8 @@ describe("encodings, changed columns and parser warnings", function () {
 	it("warns about columns that were added or removed since the last import and offers Review columns", async function () {
 		await importViaDialog(CSV);
 		const text = await readVaultFile(CSV);
-		await browser.executeObsidian(({ app }) => app.workspace.detachLeavesOfType("csv-importer-view"));
+		// The open view picks up the changed file by itself: no closing and reopening.
 		await writeVault(CSV, text.split("\n").map((line, i) => (line === "" ? line : i === 0 ? `${line},Kostenstelle` : `${line},K1`)).join("\n"));
-		await openCsv(CSV);
 		const callout = browser.$("[data-testid=csv-view] .csv-importer-callout");
 		await browser.waitUntil(async () => (await callout.isExisting()) && (await callout.getText()).includes("new or missing columns"), {
 			timeoutMsg: "no drift callout in the table view",

@@ -1,7 +1,8 @@
 import { normalizePath } from "obsidian";
 import type { App } from "obsidian";
 import { parentOf } from "./core/util";
-import type { ImportSnapshot, UndoManifest } from "./types";
+import { sanitizeFingerprint, sanitizeLastRun } from "./import/fingerprint";
+import type { ImportMeta, ImportSnapshot, UndoManifest } from "./types";
 
 /** Cheap per-CSV entry of imports/index.json: what exists, without reading the (large) state files. */
 interface IndexEntry {
@@ -11,6 +12,8 @@ interface IndexEntry {
 	/** Folders of the notes in the snapshot / undo manifest, or null when there are too many to list. */
 	snapDirs: string[] | null;
 	undoDirs: string[] | null;
+	/** Fingerprint of the CSV and counts of its last import. Missing for imports from before these were recorded. */
+	meta?: ImportMeta;
 }
 
 interface Loaded {
@@ -36,6 +39,17 @@ function hashPath(s: string): string {
 	h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
 	h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
 	return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0");
+}
+
+function sanitizeMeta(raw: unknown): ImportMeta | undefined {
+	if (!raw || typeof raw !== "object") return undefined;
+	const r = raw as Record<string, unknown>;
+	const meta: ImportMeta = {};
+	const fingerprint = sanitizeFingerprint(r["fingerprint"]);
+	const lastRun = sanitizeLastRun(r["lastRun"]);
+	if (fingerprint) meta.fingerprint = fingerprint;
+	if (lastRun) meta.lastRun = lastRun;
+	return meta.fingerprint || meta.lastRun ? meta : undefined;
 }
 
 function dirsOf(paths: Iterable<string>): string[] | null {
@@ -125,6 +139,7 @@ export class ImportStorage {
 						hasUndo: e.hasUndo === true,
 						snapDirs: e.snapDirs === undefined ? null : e.snapDirs,
 						undoDirs: e.undoDirs === undefined ? null : e.undoDirs,
+						meta: sanitizeMeta(e.meta),
 					});
 				}
 				return;
@@ -334,6 +349,19 @@ export class ImportStorage {
 	}
 
 	/** Synchronous, from the index (needs init() to have completed). */
+	getMeta(csvPath: string): ImportMeta | undefined {
+		return this.index.get(csvPath)?.meta;
+	}
+
+	/** Records the fingerprint and/or last-run counts of a CSV (merged over what is stored). */
+	async setMeta(csvPath: string, meta: ImportMeta): Promise<void> {
+		await this.init();
+		const idx = this.indexEntry(csvPath);
+		idx.meta = { ...idx.meta, ...meta };
+		await this.persistIndex();
+	}
+
+	/** Synchronous, from the index (needs init() to have completed). */
 	hasUndo(csvPath: string): boolean {
 		return this.index.get(csvPath)?.hasUndo === true;
 	}
@@ -367,6 +395,11 @@ export class ImportStorage {
 		await this.init();
 		await this.saveUndo(csvPath, null);
 		await this.saveSnapshot(csvPath, {});
+		const idx = this.index.get(csvPath);
+		if (idx?.meta) {
+			delete idx.meta;
+			await this.persistIndex();
+		}
 	}
 
 	/** Re-keys snapshot entries and undo references after a note was renamed or moved. */

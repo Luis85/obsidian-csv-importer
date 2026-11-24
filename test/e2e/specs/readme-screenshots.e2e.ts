@@ -72,7 +72,6 @@ describe("README screenshots", function () {
 		lines[2] = (lines[2] ?? "").replace("0,5", "1");
 		lines.push("2026-11-24;Projektleiter;Retrospektive;0,5;4", "2026-11-25;Softwareentwickler;Release-Vorbereitung;0,75;6");
 		await writeVault(CSV_DE, `${lines.join("\n")}\n`);
-		await browser.executeObsidian(({ app }) => app.workspace.detachLeavesOfType("csv-importer-view"));
 		await openFile(CSV_DE);
 		await waitForViewType("csv-importer-view");
 		await runCommand("import-current-csv");

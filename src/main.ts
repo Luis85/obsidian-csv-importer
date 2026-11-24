@@ -2,7 +2,7 @@ import { Notice, Plugin } from "obsidian";
 import type { TFile } from "obsidian";
 import { ConfigStore } from "./configStore";
 import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig } from "./defaults";
-import type { ImportIndexHost, ImportSummary } from "./host";
+import type { CsvStatus, EditedNotes, ImportFileOptions, ImportIndexHost, ImportSummary } from "./host";
 import { ImportService } from "./obsidian/importService";
 import { isCsv, registerVaultEvents } from "./obsidian/vaultEvents";
 import { CsvImporterSettingTab } from "./settings";
@@ -137,6 +137,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 			await leaf.setViewState({ type: VIEW_TYPE_IMPORT_INDEX, active: true });
 		}
 		await workspace.revealLeaf(leaf);
+		workspace.setActiveLeaf(leaf, { focus: true });
 	}
 
 	private async openConfig(file: TFile): Promise<void> {
@@ -186,8 +187,12 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 		return this.service.canUndo(file);
 	}
 
-	importFile(file: TFile, text: string): Promise<ImportResult> {
-		return this.service.runImportDialog(file, text);
+	importFile(file: TFile, text: string, opts?: ImportFileOptions): Promise<ImportResult> {
+		return this.service.runImportDialog(file, text, opts);
+	}
+
+	csvStatus(file: TFile): Promise<CsvStatus> {
+		return this.service.csvStatus(file);
 	}
 
 	undoLastImport(file: TFile): Promise<void> {
@@ -202,6 +207,30 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 
 	countImportedNotes(csvPath: string): Promise<number> {
 		return this.service.countImportedNotes(csvPath);
+	}
+
+	countEditedNotes(csvPath: string): Promise<EditedNotes> {
+		return this.service.countEditedNotes(csvPath);
+	}
+
+	listUnindexedCsvs(): TFile[] {
+		return this.service.listUnindexedCsvs();
+	}
+
+	countCsvRows(file: TFile): Promise<number | null> {
+		return this.service.countCsvRows(file);
+	}
+
+	addToIndex(csvPaths: string[]): Promise<number> {
+		return this.service.addToIndex(csvPaths);
+	}
+
+	addExternalCsv(data: ArrayBuffer, folder: string, fileName: string, conflict: "replace" | "keep"): Promise<TFile> {
+		return this.service.addExternalCsv(data, folder, fileName, conflict);
+	}
+
+	reimportChanged(): Promise<void> {
+		return this.service.reimportChanged();
 	}
 
 	reimport(csvPath: string): Promise<void> {

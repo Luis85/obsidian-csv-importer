@@ -105,7 +105,7 @@ OBSIDIAN_VERSIONS="latest/latest" npm run test:e2e   # one version, "app/install
 npm run screenshots:readme          # rewrites docs/images/*.png from real Obsidian (see below)
 ```
 
-Environment variables: `OBSIDIAN_VERSIONS` (default `earliest/earliest latest/latest`; `earliest` is `minAppVersion`), `WDIO_MAX_INSTANCES` (default 1), `E2E_MOBILE` (`1` adds a mobile-emulation run to the desktop ones, `only` runs just that), `E2E_STRICT_CHROME=1` and `E2E_STRICT_CONTRAST=1` (turn on the checks listed under known findings in `USER-FLOWS.md`).
+Environment variables: `OBSIDIAN_VERSIONS` (default `earliest/earliest latest/latest`; `earliest` is `minAppVersion`), `WDIO_MAX_INSTANCES` (default 1), `E2E_MOBILE` (`1` adds a mobile-emulation run to the desktop ones, `only` runs just that), `E2E_STRICT_CONTRAST=1` (turns on the check listed under known findings in `USER-FLOWS.md`).
 
 On Linux Obsidian needs a display. Locally: `xvfb-run -a npm run test:e2e`. If Node's `fetch` does not use your proxy when downloading Obsidian versions, run with `NODE_USE_ENV_PROXY=1` (Node 22.21 or newer). CI (`.github/workflows/e2e.yml`) installs `herbstluftwm dzen2 x11-xserver-utils`, starts `Xvfb :99` and a window manager, runs the desktop job and the mobile job, and uploads `reports/e2e/` (screenshots, contrast reports, logs) on every run. It runs on pull requests that touch the plugin or the suite, nightly, and on demand. The Obsidian download cache `.obsidian-cache/` is keyed on `manifest.json` and `wdio.conf.mts`.
 

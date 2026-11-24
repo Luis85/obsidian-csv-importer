@@ -13,7 +13,6 @@ import { KEY_NONE, PREVIEW, PREVIEW_TOGGLE_TITLE, REVIEW_FILE_SETTINGS, SUMMARY_
 import { Tabs } from "./config/Tabs";
 import { AdvancedSection } from "./config/AdvancedSection";
 import { ColumnsSection } from "./config/ColumnsSection";
-import { ExtraPropertiesSection } from "./config/ExtraPropertiesSection";
 import { ConfigDraft } from "./config/ConfigDraft";
 import { OutputSection } from "./config/OutputSection";
 import { PreviewPane } from "./config/PreviewPane";
@@ -36,7 +35,6 @@ export class ImportConfigModal extends Modal {
 	private tabs!: Tabs;
 	private previewToggle: HTMLButtonElement | null = null;
 	private readonly columns: ColumnsSection;
-	private readonly extras: ExtraPropertiesSection;
 	private readonly output: OutputSection;
 	private readonly preview: PreviewPane;
 	private readonly advanced: AdvancedSection;
@@ -54,7 +52,6 @@ export class ImportConfigModal extends Modal {
 		this.draft = new ConfigDraft(host, file, text);
 		this.initialConflict = this.draft.cfg.conflict;
 		this.columns = new ColumnsSection(this.draft);
-		this.extras = new ExtraPropertiesSection(this.draft);
 		this.output = new OutputSection(app, this.draft);
 		this.preview = new PreviewPane(this.draft);
 		this.advanced = new AdvancedSection(this.draft);
@@ -154,7 +151,6 @@ export class ImportConfigModal extends Modal {
 
 		const panel = (id: string): HTMLElement => this.tabs.panels.get(id) as HTMLElement;
 		this.columns.build(panel("columns"));
-		this.extras.build(panel("columns"));
 		this.output.buildNotes(panel("notes"));
 		this.advanced.buildNotesContent(panel("notes"));
 		this.output.buildReimport(panel("reimport"));

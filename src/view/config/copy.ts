@@ -2,7 +2,7 @@
 
 export const COLUMNS_HELP = "Choose which CSV columns become note properties.";
 export const REDETECT_TYPES = "Re-detect types";
-export const EXTRA_PROPERTIES = "Extra properties";
+export const NEW_PROPERTY = "New property";
 export const ADD_PROPERTY = "Add property";
 export const ADD_EMPTY_PROPERTY = "Empty property";
 export const ADD_ID_PROPERTY = "ID (unique per note)";

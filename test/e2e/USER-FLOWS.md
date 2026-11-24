@@ -19,6 +19,11 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Table view: Link values / Unlink values | table-view | links values as wikilinks |
 | Table view: Exclude / Include | table-view | excludes a column from the import |
 | Table view: Show more (pages) | table-view | shows more rows in pages |
+| Table view: select rows (checkboxes, shift-click, header checkbox, Clear selection) | table-selection | selecting rows changes the primary button ...; shift-click selects a range; the header checkbox selects every matching row |
+| Table view: import only the selected rows | table-selection | imports only the selected rows and clears the selection afterwards; keeps the selection when the dialog is cancelled |
+| Table view: follows file changes, settings and imports made elsewhere | table-refresh | shows a CSV that changed on disk; shows the settings saved with the Configure command; shows the import made with the import command |
+| Table view: "Changed since last import" and Re-import link | table-refresh | says when the CSV changed since the last import and re-imports from the status line |
+| Import dialog: choose which notes to import (row and group checkboxes) | run-selection | starts with every New note checked ...; the group checkbox toggles the whole group; covers rows beyond the 200 listed ones |
 | Table view: status line and Undo link | undo-index | undoes from the Undo link in the table view's status line |
 | Table view: changed-columns callout, Review columns | encoding-drift-warnings | warns about columns that were added or removed |
 | Table view / preview: parser warnings | encoding-drift-warnings | shows parser warnings for rows with the wrong number of fields |
@@ -30,6 +35,8 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Import settings: Replace whole note + confirm | import-settings | asks for confirmation before choosing Replace whole note; declining keeps the strategy |
 | Import settings: column Options, value template | import-settings | sets a value template under a column's Options |
 | Import settings: Extra properties, ID | import-settings | adds an ID extra property from the Add property menu |
+| Import settings: extra properties as rows of the Columns table (add, type, default `{{uuid}}`, sample and preview, import, remove, inline warning) | config-extra-properties | adds a row, sets a {{uuid}} default, shows it in the sample and preview, and imports it; flags a name that is also a CSV column and removes the row with the trash button |
+| Import settings: summary parts and tabs are flat (no Obsidian button chrome, also on hover), tabs fit on a phone | appearance | gives the summary parts / tabs only what their style says; keeps them flat while hovered; does not reach past the dialog and shows all four tabs |
 | Import settings: row filter | import-settings | filters rows from the File & rows tab |
 | Import settings: live preview | import-settings | shows the live note preview |
 | Typed properties (text IDs, numbers, checkboxes, empty cells) | import-options | writes typed properties |
@@ -65,24 +72,18 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Index: Delete imported notes (+ base option) | index-flows | deletes the imported notes and, when ticked, the base |
 | Index: Remove from index | index-flows | removes a CSV from the index but keeps its notes |
 | Index: CSV missing | index-flows | marks a CSV that no longer exists |
+| Index: Scan vault (list, add, re-scan, empty state) | index-scan | lists CSV files that are not in the index; adds the checked files with default settings; shows an empty state |
+| Index: Add CSV file from outside the vault | index-add-outside | copies the picked file's bytes ...; asks what to do when the file exists |
+| Index: Changed badge, banner, Re-import changed | index-changed | marks a modified CSV as Changed live; does not mark a CSV that was only touched; treats an import without a recorded fingerprint as changed |
+| Index: last import counts, edited since import | index-counts | shows the counts of the last import; counts notes edited since the import |
 | Index: empty state | smoke | opens the CSV imports index from the ribbon icon |
 | Encoding: Windows-1252, UTF-16, manual choice | encoding-drift-warnings | detects Windows-1252; reads UTF-16; lets the encoding be set by hand |
 | Persistence across restarts | persistence | keeps import settings, history and undo data after the plugin is reloaded |
 | Privacy: no network requests | no-network | requests no web resource |
-| Look: contrast >= 4.5:1, overflow, no button chrome | appearance | all tests (button chrome checks are opt-in, see below) |
+| Look: contrast >= 4.5:1, overflow, no button chrome | appearance | all tests |
 | Mobile emulation | mobile, appearance, table-view, smoke | mobile emulation smoke |
 | README images from real Obsidian | readme-screenshots | only with `README_SCREENSHOTS=1` |
 
 ## Known findings the suite records
 
-- The button-chrome checks in `appearance.e2e.ts` (summary parts and tabs of the import settings dialog) fail today because Obsidian's `button` styles outrank the plugin's single-class rules. They run with `E2E_STRICT_CHROME=1` and are skipped otherwise. Enable them once the UI pass lands.
-- Known low-contrast texts (row numbers, "no key", the muted status line, Obsidian's own accent button) are listed in `KNOWN_LOW_CONTRAST`; `E2E_STRICT_CONTRAST=1` fails on them.
-- The table view refreshes after a settings change made with its own **Configure** button, not after the **Configure import for current CSV file** command or an import started with the command. The specs that check the refreshed view use the button.
-
-## Pending (planned UI pass, specs to be added when built)
-
-- Scan vault for CSV files
-- Add a CSV file from outside the vault
-- Changed-CSV detection (the CSV changed since the last import)
-- Note counts in the index (beyond the current count column)
-- Extra properties shown as table rows in the table view
+- Known low-contrast texts (Obsidian's own accent button) are listed in `KNOWN_LOW_CONTRAST`; `E2E_STRICT_CONTRAST=1` fails on them.

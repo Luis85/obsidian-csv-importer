@@ -164,3 +164,39 @@ export async function setWindowSize(width: number, height: number): Promise<void
 	}
 	await browser.pause(500);
 }
+
+// --- imports index ---
+
+export const INDEX = "[data-testid=csv-index]";
+
+/** Opens the CSV imports index through its command. */
+export async function openIndex(): Promise<void> {
+	await runCommand("open-import-index");
+	await waitForViewType("csv-importer-index");
+}
+
+/** The index row whose text contains a CSV file name (looked up again on every call: the index re-renders). */
+export async function indexRow(name: string): Promise<WebdriverIO.Element> {
+	let found: WebdriverIO.Element | undefined;
+	await browser.waitUntil(
+		async () => {
+			for (const row of await browser.$$(`${INDEX} [data-testid=csv-index-row]`)) {
+				if ((await row.getText()).includes(name)) {
+					found = row;
+					return true;
+				}
+			}
+			return false;
+		},
+		{ timeoutMsg: `no index row for ${name}` },
+	);
+	return found as WebdriverIO.Element;
+}
+
+/** Whether an index row for this CSV file name exists right now. */
+export async function hasIndexRow(name: string): Promise<boolean> {
+	for (const row of await browser.$$(`${INDEX} [data-testid=csv-index-row]`)) {
+		if ((await row.getText()).includes(name)) return true;
+	}
+	return false;
+}

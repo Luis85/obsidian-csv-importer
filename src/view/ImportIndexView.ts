@@ -3,8 +3,15 @@ import type { WorkspaceLeaf } from "obsidian";
 import type { ImportIndexHost, ImportSummary } from "../host";
 import { errorMessage } from "../core/util";
 import { relativeTime } from "./relativeTime";
-import { iconButton } from "./dom";
-import { CONFIGURE, CSV_MISSING, IMPORT_BUTTON, NO_IMPORTS_TITLE, REIMPORT_ALL, REIMPORT_BUTTON } from "./labels";
+import { lastRunText } from "../import/fingerprint";
+import { onCsvChanged } from "../obsidian/events";
+import { AddCsvModal } from "./AddCsvModal";
+import { ScanVaultModal } from "./ScanVaultModal";
+import { badge, iconButton, renderCallout } from "./dom";
+import {
+	ADD_CSV_FILE, CHANGED_BADGE, CONFIGURE, CSV_MISSING, IMPORT_BUTTON, NO_IMPORTS_TITLE, REIMPORT_ALL, REIMPORT_BUTTON, REIMPORT_CHANGED, SCAN_VAULT,
+	changedLine, editedLine,
+} from "./labels";
 
 export const VIEW_TYPE_IMPORT_INDEX = "csv-importer-index";
 
@@ -21,14 +28,18 @@ interface RowAction {
 /** Index of every CSV with saved import settings: re-import, configure, undo and bulk delete from one place. */
 export class ImportIndexView extends ItemView {
 	private items: ImportSummary[] = [];
+	private itemsKey = "";
 	private query = "";
 	private loaded = false;
 	private renderToken = 0;
 	private listEl: HTMLElement | null = null;
-	private toolsEl: HTMLElement | null = null;
 	private reimportAllBtn: HTMLButtonElement | null = null;
+	private searchEl: HTMLInputElement | null = null;
+	/** Re-checks the edited-notes count of each visible row (the metadata cache can lag behind an import). */
+	private readonly editedUpdaters = new Map<string, () => void>();
 
-	private readonly refreshSoon = debounce(() => void this.refresh(), 300, true);
+	private readonly refreshSoon = debounce(() => void this.refresh(false), 300, true);
+	private readonly recheckEditedSoon = debounce(() => this.editedUpdaters.forEach((u) => u()), 800, true);
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -55,6 +66,9 @@ export class ImportIndexView extends ItemView {
 		this.registerEvent(vault.on("rename", () => this.refreshSoon()));
 		this.registerEvent(vault.on("delete", () => this.refreshSoon()));
 		this.registerEvent(vault.on("create", (f) => f instanceof TFile && f.extension === "base" && this.refreshSoon()));
+		this.registerEvent(vault.on("modify", (f) => f instanceof TFile && f.extension.toLowerCase() === "csv" && this.refreshSoon()));
+		this.registerEvent(this.app.metadataCache.on("resolved", () => this.recheckEditedSoon()));
+		onCsvChanged(this, () => this.refreshSoon());
 		this.registerEvent(
 			workspace.on("active-leaf-change", (leaf) => {
 				if (leaf === this.leaf) this.refreshSoon();
@@ -69,10 +83,17 @@ export class ImportIndexView extends ItemView {
 		return Promise.resolve();
 	}
 
-	/** Reloads the list from the plugin and redraws it. */
-	async refresh(): Promise<void> {
+	/**
+	 * Reloads the list from the plugin and redraws it. Without `force`, an unchanged list is not redrawn (event driven
+	 * refreshes must not replace the rows under the user's pointer).
+	 */
+	async refresh(force = true): Promise<void> {
 		try {
-			this.items = await this.host.listImports();
+			const items = await this.host.listImports();
+			const key = JSON.stringify(items);
+			if (!force && this.loaded && key === this.itemsKey) return;
+			this.itemsKey = key;
+			this.items = items;
 			this.loaded = true;
 		} catch (e) {
 			console.error("CSV Importer: could not list imports", e);
@@ -88,7 +109,6 @@ export class ImportIndexView extends ItemView {
 		root.setAttr("data-testid", "csv-index");
 
 		const tools = root.createDiv({ cls: "csv-importer-index-tools" });
-		this.toolsEl = tools;
 		const search = tools.createEl("input", {
 			type: "search",
 			cls: "csv-importer-index-search",
@@ -98,6 +118,11 @@ export class ImportIndexView extends ItemView {
 			this.query = search.value.trim().toLowerCase();
 			this.renderList();
 		});
+		this.searchEl = search;
+		const scan = tools.createEl("button", { cls: "csv-importer-index-scan", text: SCAN_VAULT, attr: { type: "button", "data-testid": "csv-index-scan" } });
+		scan.addEventListener("click", () => new ScanVaultModal(this.app, this.host, () => void this.refresh()).open());
+		const add = tools.createEl("button", { cls: "csv-importer-index-add", text: ADD_CSV_FILE, attr: { type: "button", "data-testid": "csv-index-add" } });
+		add.addEventListener("click", () => new AddCsvModal(this.app, this.host, () => void this.refresh()).open());
 		const all = tools.createEl("button", { cls: "csv-importer-index-all", text: REIMPORT_ALL, attr: { type: "button" } });
 		all.addEventListener("click", () => void this.guard(() => this.host.reimportAll()));
 		this.reimportAllBtn = all;
@@ -111,8 +136,24 @@ export class ImportIndexView extends ItemView {
 		if (!list) return;
 		const token = ++this.renderToken;
 		list.empty();
-		if (this.reimportAllBtn) this.reimportAllBtn.disabled = !this.items.some((i) => i.exists);
-		this.toolsEl?.toggleClass("csv-importer-hidden", this.loaded && this.items.length === 0);
+		this.editedUpdaters.clear();
+		const none = this.loaded && this.items.length === 0;
+		if (this.reimportAllBtn) {
+			this.reimportAllBtn.disabled = !this.items.some((i) => i.exists);
+			this.reimportAllBtn.toggleClass("csv-importer-hidden", none);
+		}
+		this.searchEl?.toggleClass("csv-importer-hidden", none);
+		const changed = this.items.filter((i) => i.exists && i.changed).length;
+		if (changed > 0) {
+			const box = renderCallout(list, "info", {
+				title: changedLine(changed),
+				items: [],
+				action: { label: REIMPORT_CHANGED, onClick: () => void this.guard(() => this.host.reimportChanged()) },
+			});
+			box.addClass("csv-importer-index-changed");
+			box.setAttr("data-testid", "csv-index-changed");
+			box.find(".csv-importer-callout-action")?.setAttr("data-testid", "csv-index-reimport-changed");
+		}
 
 		if (this.items.length === 0) {
 			if (!this.loaded) return;
@@ -122,7 +163,11 @@ export class ImportIndexView extends ItemView {
 			const hint = empty.createEl("p", { cls: "csv-importer-index-empty-hint" });
 			hint.appendText("Open a CSV file and choose ");
 			hint.createEl("strong", { text: IMPORT_BUTTON });
-			hint.appendText(" to set one up.");
+			hint.appendText(" to set one up, or use ");
+			hint.createEl("strong", { text: SCAN_VAULT });
+			hint.appendText(" or ");
+			hint.createEl("strong", { text: ADD_CSV_FILE });
+			hint.appendText(".");
 			return;
 		}
 		const visible = this.items.filter(
@@ -156,12 +201,24 @@ export class ImportIndexView extends ItemView {
 		});
 		name.disabled = !item.exists;
 		name.addEventListener("click", () => this.openCsv(item));
+		if (item.exists && item.changed) {
+			const b = badge(nameLine, CHANGED_BADGE, { kind: "warning", cls: "csv-importer-index-changed-badge" });
+			b.setAttr("data-testid", "csv-index-changed-badge");
+			if (item.modifiedAt) b.setAttr("title", `CSV modified ${relativeTime(item.modifiedAt)} (${new Date(item.modifiedAt).toLocaleString()})`);
+		}
 		if (!item.exists) {
 			const warn = nameLine.createSpan({ cls: "csv-importer-index-missing" });
 			setIcon(warn.createSpan({ cls: "csv-importer-index-missing-icon" }), "alert-triangle");
 			warn.createSpan({ text: CSV_MISSING });
 		}
 		main.createDiv({ cls: "csv-importer-index-path", text: dir || "Vault root" });
+		const changedText = item.exists && item.changed && item.modifiedAt ? `CSV changed ${relativeTime(item.modifiedAt)}` : "";
+		const resultText = item.lastRun ? lastRunText(item.lastRun) : "";
+		if (changedText) main.createDiv({ cls: "csv-importer-index-meta mod-changed", text: changedText, attr: { "data-testid": "csv-index-changed-time" } });
+		const resultLine = main.createDiv({ cls: "csv-importer-index-meta", attr: { "data-testid": "csv-index-result" } });
+		if (resultText) resultLine.createSpan({ cls: "csv-importer-index-result", text: resultText });
+		const editedEl = resultLine.createSpan({ cls: "csv-importer-index-edited csv-importer-hidden", attr: { "data-testid": "csv-index-edited" } });
+		if (!resultText) resultLine.addClass("csv-importer-hidden");
 
 		const lastText = item.lastImport ? relativeTime(item.lastImport) : "Never imported";
 		const last = row.createDiv({ cls: "csv-importer-index-last", text: lastText });
@@ -169,12 +226,40 @@ export class ImportIndexView extends ItemView {
 		const count = row.createDiv({ cls: "csv-importer-index-count", text: "..." });
 
 		const summary = row.createDiv({ cls: "csv-importer-index-summary" });
-		const setCount = (text: string): void => {
-			count.setText(text);
+		let countText = "...";
+		let editedText = "";
+		const renderSummary = (): void => {
+			count.setText(countText);
 			const parts = [dir || "Vault root", lastText];
-			if (text !== "...") parts.push(`${text} ${text === "1" ? "note" : "notes"}`);
+			if (countText !== "...") parts.push(`${countText} ${countText === "1" ? "note" : "notes"}`);
+			if (resultText) parts.push(resultText);
+			if (editedText) parts.push(editedText);
+			if (changedText) parts.push(changedText);
 			summary.setText(parts.join(" \u00b7 "));
 		};
+		const setCount = (text: string): void => {
+			countText = text;
+			renderSummary();
+		};
+		const showEdited = (): void => {
+			if (!item.lastImport) return;
+			void this.host
+				.countEditedNotes(item.csvPath)
+				.then((e) => {
+					if (token !== this.renderToken) return;
+					editedText = e.count > 0 ? editedLine(e.count) : "";
+					editedEl.setText(editedText ? (resultText ? ` \u00b7 ${editedText}` : editedText) : "");
+					editedEl.toggleClass("csv-importer-hidden", !editedText);
+					resultLine.toggleClass("csv-importer-hidden", !resultText && !editedText);
+					const shown = e.properties.slice(0, 6).join(", ");
+					const more = e.properties.length > 6 ? ", ..." : "";
+					editedEl.setAttr("title", e.count > 0 ? `Edited properties: ${shown}${more}` : "");
+					renderSummary();
+				})
+				.catch(() => undefined);
+		};
+		this.editedUpdaters.set(item.csvPath, showEdited);
+		showEdited();
 		setCount("...");
 		void this.host
 			.countImportedNotes(item.csvPath)
@@ -194,6 +279,7 @@ export class ImportIndexView extends ItemView {
 				text: label,
 				attr: { type: "button", "aria-label": `${label} ${item.fileName}`, "data-testid": "csv-index-primary" },
 			});
+			if (item.changed) primary.addClass("mod-cta");
 			primary.addEventListener("click", () => void this.guard(() => this.host.reimport(item.csvPath)));
 			const cfg = all.find((a) => a.id === "configure");
 			if (cfg) {

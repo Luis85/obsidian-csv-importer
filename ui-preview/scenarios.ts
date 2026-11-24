@@ -42,6 +42,9 @@ class FakeHost {
 		modal.open();
 		return modal.closed;
 	}
+	async csvStatus() {
+		return { changed: false };
+	}
 	canUndo() {
 		return this.undoable;
 	}

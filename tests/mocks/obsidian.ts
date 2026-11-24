@@ -116,6 +116,7 @@ export class MockVault {
 		path = normalizePath(path);
 		if (this.nodes.has(path)) throw new Error("File already exists.");
 		const f = new TFile(path);
+		f.stat.size = data.length;
 		this.parentFolder(path).children.push(f);
 		this.nodes.set(path, f);
 		this.files.set(path, data);
@@ -124,6 +125,28 @@ export class MockVault {
 
 	async modify(file: TFile, data: string): Promise<void> {
 		this.files.set(file.path, data);
+		file.stat.size = data.length;
+		file.stat.mtime += 1;
+	}
+
+	getFiles(): TFile[] {
+		return [...this.nodes.values()].filter((n): n is TFile => n instanceof TFile);
+	}
+
+	async readBinary(file: TFile): Promise<ArrayBuffer> {
+		const u = new TextEncoder().encode(this.files.get(file.path) ?? "");
+		return u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength);
+	}
+
+	async createBinary(path: string, data: ArrayBuffer): Promise<TFile> {
+		const f = await this.create(path, new TextDecoder().decode(data));
+		f.stat.size = data.byteLength;
+		return f;
+	}
+
+	async modifyBinary(file: TFile, data: ArrayBuffer): Promise<void> {
+		await this.modify(file, new TextDecoder().decode(data));
+		file.stat.size = data.byteLength;
 	}
 
 	async read(file: TFile): Promise<string> {
@@ -163,6 +186,14 @@ export class MockVault {
 
 export class MockApp {
 	vault = new MockVault();
+	/** Events triggered with `workspace.trigger`, as [name, ...args]. */
+	triggered: unknown[][] = [];
+	workspace = {
+		trigger: (...args: unknown[]): void => {
+			this.triggered.push(args);
+		},
+		getLeaf: () => ({ openFile: async (): Promise<void> => undefined }),
+	};
 	metadataCache = {
 		getFileCache: (file: TFile) => ({ frontmatter: splitFrontmatter(this.vault.files.get(file.path) ?? "").fm }),
 	};

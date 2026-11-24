@@ -1,6 +1,7 @@
 import { Setting } from "obsidian";
 import { CONFIG_TABS } from "../labels";
 import { renderColumnRow } from "./ColumnRow";
+import { ExtraPropertiesSection } from "./ExtraPropertiesSection";
 import type { ConfigDraft } from "./ConfigDraft";
 import { COLUMNS_HELP, NO_COLUMNS, REDETECT_TYPES, SAMPLE_HEADER } from "./copy";
 
@@ -8,7 +9,11 @@ import { COLUMNS_HELP, NO_COLUMNS, REDETECT_TYPES, SAMPLE_HEADER } from "./copy"
 export class ColumnsSection {
 	private columnsEl!: HTMLElement;
 
-	constructor(private readonly draft: ConfigDraft) {}
+	private readonly extras: ExtraPropertiesSection;
+
+	constructor(private readonly draft: ConfigDraft) {
+		this.extras = new ExtraPropertiesSection(draft);
+	}
 
 	build(parent: HTMLElement): void {
 		new Setting(parent)
@@ -18,6 +23,8 @@ export class ColumnsSection {
 		this.columnsEl = parent.createDiv({ cls: "csv-importer-columns" });
 		this.render();
 		this.draft.on("columns", () => this.render());
+		// Extra properties are further rows of the same table.
+		this.extras.build(parent.createDiv({ cls: "csv-importer-extras" }));
 	}
 
 	private render(): void {
