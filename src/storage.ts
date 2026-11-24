@@ -455,24 +455,26 @@ export class ImportStorage {
 		const snapMaybe = mayList(idx.snapDirs, move.fromDir);
 		const undoMaybe = idx.hasUndo && mayList(idx.undoDirs, move.fromDir);
 		if (!snapMaybe && !undoMaybe) return false;
-		let indexChanged = false;
 		const l = this.slot(csvPath);
-		if (snapMaybe && rekeyEntry(await this.loadSnapshot(csvPath), move.from, move.to)) {
-			l.snapDirty = true;
-			if (addDir(idx.snapDirs, move.toDir)) indexChanged = true;
-		}
-		if (undoMaybe && (await this.rekeyUndoOf(csvPath, move.from, move.to))) {
-			l.undoDirty = true;
-			if (addDir(idx.undoDirs, move.toDir)) indexChanged = true;
-		}
+		const snapDirsChanged = snapMaybe && (await this.rekeySnapshotOf(csvPath, l, idx, move));
+		const undoDirsChanged = undoMaybe && (await this.rekeyUndoOf(csvPath, l, idx, move));
 		if (l.snapDirty || l.undoDirty) pending.push(this.persist(csvPath));
-		return indexChanged;
+		return snapDirsChanged || undoDirsChanged;
 	}
 
-	/** Re-keys a renamed note in the undo manifest of `csvPath`. Returns true when the manifest listed it. */
-	private async rekeyUndoOf(csvPath: string, oldNotePath: string, newNotePath: string): Promise<boolean> {
+	/** Re-keys a renamed note in the snapshot of `csvPath`. Returns true when the index's snapshot folders changed. */
+	private async rekeySnapshotOf(csvPath: string, l: Loaded, idx: IndexEntry, move: NoteMove): Promise<boolean> {
+		if (!rekeyEntry(await this.loadSnapshot(csvPath), move.from, move.to)) return false;
+		l.snapDirty = true;
+		return addDir(idx.snapDirs, move.toDir);
+	}
+
+	/** Re-keys a renamed note in the undo manifest of `csvPath`. Returns true when the index's undo folders changed. */
+	private async rekeyUndoOf(csvPath: string, l: Loaded, idx: IndexEntry, move: NoteMove): Promise<boolean> {
 		const undo = await this.loadUndo(csvPath);
-		return undo !== null && rekeyUndo(undo, oldNotePath, newNotePath);
+		if (undo === null || !rekeyUndo(undo, move.from, move.to)) return false;
+		l.undoDirty = true;
+		return addDir(idx.undoDirs, move.toDir);
 	}
 
 	/** Drops a deleted note from every snapshot that lists it. */
