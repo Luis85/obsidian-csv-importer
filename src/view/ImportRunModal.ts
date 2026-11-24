@@ -49,6 +49,25 @@ const LIST_LIMIT = 200;
 /** New and Updated groups start open up to this many rows. */
 const OPEN_LIMIT = 10;
 
+/** Outcomes that write a note (the ones the preview lets you deselect). */
+function isWrite(outcome: RowOutcome["outcome"]): boolean {
+	return outcome === "created" || outcome === "updated";
+}
+
+/** Failed and skipped groups start open; new and updated ones when short; unchanged ones closed. */
+function opensByDefault(outcome: RowOutcome["outcome"], size: number): boolean {
+	return outcome === "failed" || outcome === "skipped" || (isWrite(outcome) && size <= OPEN_LIMIT);
+}
+
+/** What the run says about a row besides its path: the reason, the changed and the protected properties. */
+function rowDetail(r: RowOutcome): string[] {
+	const detail: string[] = [];
+	if (r.reason && r.reason !== ROW_REASON.wouldCreate) detail.push(r.reason);
+	if (r.outcome === "updated" && r.changed?.length) detail.push(`changes ${r.changed.join(", ")}`);
+	if (r.preserved?.length) detail.push(`keeps your edits to ${r.preserved.join(", ")}`);
+	return detail;
+}
+
 /** Rows that need a look: failed and skipped. */
 function attention(r: ImportResult): number {
 	return r.failed + r.skipped;
@@ -345,38 +364,40 @@ export class ImportRunModal extends Modal {
 			el.createDiv({ cls: "csv-importer-run-note", text: NO_DATA_ROWS });
 			return;
 		}
-		const folder = this.ctl.targetFolder;
 		let any = false;
 		for (const outcome of OUTCOME_ORDER) {
 			const group = rows.filter((r) => r.outcome === outcome);
 			if (group.length === 0) continue;
 			any = true;
-			const open = outcome === "failed" || outcome === "skipped" || ((outcome === "created" || outcome === "updated") && group.length <= OPEN_LIMIT);
-			const details = el.createEl("details", { cls: `csv-importer-run-group is-${outcome}` });
-			details.open = open;
-			const summary = details.createEl("summary", { cls: "csv-importer-run-group-title" });
-			setIcon(summary.createSpan({ cls: "csv-importer-run-chevron" }), "chevron-right");
-			const canSelect = selectable && (outcome === "created" || outcome === "updated");
-			if (canSelect) this.groupCheckbox(summary, group, OUTCOME_LABEL[outcome]);
-			summary.createSpan({ cls: "csv-importer-run-group-name", text: OUTCOME_LABEL[outcome] });
-			summary.createSpan({ cls: "csv-importer-run-group-count", text: String(group.length) });
-			const list = details.createDiv({ cls: "csv-importer-run-list" });
-			for (const r of group.slice(0, LIST_LIMIT)) {
-				const item = list.createEl(canSelect ? "label" : "div", { cls: "csv-importer-run-item" });
-				if (canSelect) this.rowCheckbox(item, r);
-				const text = item.createDiv({ cls: "csv-importer-run-text" });
-				const line = text.createDiv({ cls: "csv-importer-run-path" });
-				line.createSpan({ text: relPath(r.path, folder) });
-				line.createSpan({ cls: "csv-importer-run-row", text: ` \u00b7 row ${r.row}` });
-				const detail: string[] = [];
-				if (r.reason && r.reason !== ROW_REASON.wouldCreate) detail.push(r.reason);
-				if (r.outcome === "updated" && r.changed?.length) detail.push(`changes ${r.changed.join(", ")}`);
-				if (r.preserved?.length) detail.push(`keeps your edits to ${r.preserved.join(", ")}`);
-				if (detail.length > 0) text.createDiv({ cls: "csv-importer-run-detail", text: detail.join(" \u00b7 ") });
-			}
-			if (group.length > LIST_LIMIT) list.createDiv({ cls: "csv-importer-run-note", text: moreRows(group.length - LIST_LIMIT) });
+			this.renderGroup(el, outcome, group, selectable && isWrite(outcome));
 		}
 		if (!any) el.createDiv({ cls: "csv-importer-run-note", text: NOTHING_TO_CHANGE });
+	}
+
+	/** One outcome group: a details element with its title, count and the first LIST_LIMIT rows. */
+	private renderGroup(el: HTMLElement, outcome: RowOutcome["outcome"], group: RowOutcome[], canSelect: boolean): void {
+		const details = el.createEl("details", { cls: `csv-importer-run-group is-${outcome}` });
+		details.open = opensByDefault(outcome, group.length);
+		const summary = details.createEl("summary", { cls: "csv-importer-run-group-title" });
+		setIcon(summary.createSpan({ cls: "csv-importer-run-chevron" }), "chevron-right");
+		if (canSelect) this.groupCheckbox(summary, group, OUTCOME_LABEL[outcome]);
+		summary.createSpan({ cls: "csv-importer-run-group-name", text: OUTCOME_LABEL[outcome] });
+		summary.createSpan({ cls: "csv-importer-run-group-count", text: String(group.length) });
+		const list = details.createDiv({ cls: "csv-importer-run-list" });
+		for (const r of group.slice(0, LIST_LIMIT)) this.renderRunItem(list, r, canSelect);
+		if (group.length > LIST_LIMIT) list.createDiv({ cls: "csv-importer-run-note", text: moreRows(group.length - LIST_LIMIT) });
+	}
+
+	/** One row of a group: the note path, the row number and what happens to it. */
+	private renderRunItem(list: HTMLElement, r: RowOutcome, canSelect: boolean): void {
+		const item = list.createEl(canSelect ? "label" : "div", { cls: "csv-importer-run-item" });
+		if (canSelect) this.rowCheckbox(item, r);
+		const text = item.createDiv({ cls: "csv-importer-run-text" });
+		const line = text.createDiv({ cls: "csv-importer-run-path" });
+		line.createSpan({ text: relPath(r.path, this.ctl.targetFolder) });
+		line.createSpan({ cls: "csv-importer-run-row", text: ` \u00b7 row ${r.row}` });
+		const detail = rowDetail(r);
+		if (detail.length > 0) text.createDiv({ cls: "csv-importer-run-detail", text: detail.join(" \u00b7 ") });
 	}
 
 	/** Checkbox in a group header: includes or excludes every row of the group, also those beyond the list limit. */
