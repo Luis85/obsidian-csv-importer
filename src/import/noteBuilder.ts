@@ -191,7 +191,7 @@ export function effectiveKeyColumns(config: FileImportConfig): string[] {
 }
 
 /** Property that stores a composite key (2+ key columns): `config.keyProperty`, suffixed " 2".. when a column uses it. Null otherwise. */
-function compositeKeyProperty(config: FileImportConfig, columns: ColumnConfig[] = config.columns): string | null {
+export function compositeKeyProperty(config: FileImportConfig, columns: ColumnConfig[] = config.columns): string | null {
 	if (effectiveKeyColumns(config).length < 2) return null;
 	const taken = new Set(columns.map((c) => c.property.toLowerCase()));
 	const base = (config.keyProperty ?? "").trim() || "import_key";

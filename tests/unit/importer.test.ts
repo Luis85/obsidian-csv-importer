@@ -9,10 +9,10 @@ import {
 	KEY_WARNING,
 	LARGE_IMPORT_WARNING,
 	NOT_OWNED_WARNING,
-	ObsidianVaultGateway,
 	ROW_FILTER_WARNING,
 	writeNotesWith,
 } from "../../src/import/importer";
+import { ObsidianVaultGateway } from "../../src/import/vaultGateway";
 import type { FileImportConfig, FrontmatterValue, ImportSnapshot, PlannedNote } from "../../src/types";
 import { cfg } from "./helpers/harness";
 import { MockApp } from "./mocks/obsidian";

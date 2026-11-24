@@ -76,7 +76,7 @@ const UNIT_WORDS_RE = /\b(?:CHF|EUR|USD|GBP)\b/gi;
 const GROUPED_SPACES_RE = /^([+-]?\d{1,3}(?:[ \u00a0\u202f]\d{3})+)(?=[.,]\d+$|$)/;
 
 /** Remove currency symbols/codes, percent signs and space-like thousands separators from a numeric cell. */
-function stripNumberUnits(raw: string): string {
+export function stripNumberUnits(raw: string): string {
 	let s = raw.replace(/[\u20ac$\u00a3\u00a5%]/g, "").replace(UNIT_WORDS_RE, "").trim();
 	const g = GROUPED_SPACES_RE.exec(s);
 	if (g) s = grp(g, 1).replace(/[ \u00a0\u202f]/g, "") + s.slice(grp(g, 1).length);
