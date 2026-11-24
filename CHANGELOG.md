@@ -13,8 +13,10 @@ Second UI/UX pass with a clearer information architecture; see `docs/archive/UX-
 - **Settings tab** is ordered as the journey (CSV imports, New notes, Re-import, Reading files, Table view, Danger zone), shares descriptions with the import settings, and marks the reset button as destructive.
 
 ### Development
-- Mutation testing with Stryker (`npm run test:mutation`). The release workflow runs it in a `mutation` job first and fails below a 65 % mutation score (first run: 68.2 %).
-- Code-quality checks with fallow (`npm run quality`): dead code, duplication and complexity. The release workflow fails on findings that are not in `.fallow-baselines/`.
+- All tests are under `tests/`: unit tests in `tests/unit/`, end-to-end tests in `tests/e2e/` (was `test/e2e/`).
+- CSS: `:has()` replaced by a class (flagged by the community directory review) and forbidden by Stylelint.
+- Mutation testing with Stryker (`npm run test:mutation`). The release workflow runs it in an advisory `mutation` job next to the release: a score below 65 % (first run: 68.2 %) shows as a warning and does not block the release yet.
+- Code-quality checks with fallow (`npm run quality`): dead code, duplication and complexity. The release workflow reports findings that are not in `.fallow-baselines/` as warnings; it does not block the release yet.
 
 ### Fixes
 - CSS: replaced `column-gap` (flagged as partially supported multi-column CSS in the 0.2.0 review) with `gap`, and removed other partially supported features; Stylelint now checks browser support.
