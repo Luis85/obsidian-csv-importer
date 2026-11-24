@@ -155,7 +155,8 @@ body {
 }
 
 /* ---- form controls ---- */
-button {
+/* Selectors mirror Obsidian's (`button:not(.clickable-icon)`, specificity 0,1,1 + :not), so a plugin rule that is too weak loses here as it does in Obsidian. */
+button:not(.clickable-icon) {
 	font-family: inherit;
 	font-size: var(--font-ui-small);
 	color: var(--text-normal);
@@ -172,7 +173,7 @@ button {
 	line-height: 1;
 	white-space: nowrap;
 }
-button:hover {
+button:not(.clickable-icon):hover {
 	background: var(--interactive-hover);
 	box-shadow: var(--input-shadow-hover);
 }
@@ -323,6 +324,9 @@ details > summary {
 
 /* icon button */
 .clickable-icon {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;

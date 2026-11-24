@@ -13,7 +13,6 @@ import { KEY_NONE, PREVIEW, PREVIEW_TOGGLE_TITLE, REVIEW_FILE_SETTINGS, SUMMARY_
 import { Tabs } from "./config/Tabs";
 import { AdvancedSection } from "./config/AdvancedSection";
 import { ColumnsSection } from "./config/ColumnsSection";
-import { ExtraPropertiesSection } from "./config/ExtraPropertiesSection";
 import { ConfigDraft } from "./config/ConfigDraft";
 import { OutputSection } from "./config/OutputSection";
 import { PreviewPane } from "./config/PreviewPane";
@@ -36,7 +35,6 @@ export class ImportConfigModal extends Modal {
 	private tabs!: Tabs;
 	private previewToggle: HTMLButtonElement | null = null;
 	private readonly columns: ColumnsSection;
-	private readonly extras: ExtraPropertiesSection;
 	private readonly output: OutputSection;
 	private readonly preview: PreviewPane;
 	private readonly advanced: AdvancedSection;
@@ -54,7 +52,6 @@ export class ImportConfigModal extends Modal {
 		this.draft = new ConfigDraft(host, file, text);
 		this.initialConflict = this.draft.cfg.conflict;
 		this.columns = new ColumnsSection(this.draft);
-		this.extras = new ExtraPropertiesSection(this.draft);
 		this.output = new OutputSection(app, this.draft);
 		this.preview = new PreviewPane(this.draft);
 		this.advanced = new AdvancedSection(this.draft);
@@ -62,6 +59,7 @@ export class ImportConfigModal extends Modal {
 
 	override onOpen(): void {
 		this.modalEl.addClass("csv-importer-modal");
+		this.modalEl.setAttr("data-testid", "import-config-modal");
 		this.setTitle(`Import settings: ${this.file.name}`);
 		this.draft.reparse();
 		this.build();
@@ -122,7 +120,7 @@ export class ImportConfigModal extends Modal {
 		}
 		parts.forEach((part, i) => {
 			if (i > 0) el.createSpan({ cls: "csv-importer-summary-sep", text: "\u00b7", attr: { "aria-hidden": "true" } });
-			const btn = el.createEl("button", { cls: "csv-importer-summary-link", text: part.text, attr: { type: "button" } });
+			const btn = el.createEl("button", { cls: "csv-importer-summary-link", text: part.text, attr: { type: "button", "data-testid": "config-summary-link" } });
 			btn.toggleClass("is-muted", part.muted === true);
 			btn.addEventListener("click", () => {
 				this.setPreviewOpen(false);
@@ -141,7 +139,7 @@ export class ImportConfigModal extends Modal {
 		root.empty();
 		root.addClass("csv-importer-config-root");
 
-		this.summaryEl = root.createDiv({ cls: "csv-importer-summary", attr: { role: "group", "aria-label": SUMMARY_LABEL } });
+		this.summaryEl = root.createDiv({ cls: "csv-importer-summary", attr: { role: "group", "aria-label": SUMMARY_LABEL, "data-testid": "config-summary" } });
 		this.tabs = new Tabs(root, createDiv(), TAB_DEFS, "csv-importer-config", () => this.setPreviewOpen(false));
 		// The tab bar sits under the summary; the panels live in the scroll area next to the preview pane.
 		const main = root.createDiv({ cls: "csv-importer-config-main" });
@@ -153,7 +151,6 @@ export class ImportConfigModal extends Modal {
 
 		const panel = (id: string): HTMLElement => this.tabs.panels.get(id) as HTMLElement;
 		this.columns.build(panel("columns"));
-		this.extras.build(panel("columns"));
 		this.output.buildNotes(panel("notes"));
 		this.advanced.buildNotesContent(panel("notes"));
 		this.output.buildReimport(panel("reimport"));

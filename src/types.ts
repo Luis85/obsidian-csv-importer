@@ -290,3 +290,27 @@ export interface ImportResult {
 	warnings: string[];
 	errors: { row: number; message: string }[];
 }
+
+/** What identifies the content of a CSV file at the time of an import (size and mtime are checked first). */
+export interface CsvFingerprint {
+	size: number;
+	/** Modification time in epoch ms. */
+	mtime: number;
+	/** FNV-1a hash of the file's bytes, base 36. */
+	hash: string;
+}
+
+/** Outcome counts of the last import of a CSV (shown in the imports index). */
+export interface LastRunCounts {
+	created: number;
+	updated: number;
+	unchanged: number;
+	skipped: number;
+	failed: number;
+}
+
+/** Per-CSV facts recorded at the end of an import, kept next to the snapshot (not in the settings). */
+export interface ImportMeta {
+	fingerprint?: CsvFingerprint;
+	lastRun?: LastRunCounts;
+}

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+- CSS: replaced `column-gap` (flagged as partially supported multi-column CSS in the 0.2.0 review) with `gap`, and removed other partially supported features; Stylelint now checks browser support.
+
+### Features
+- **Scan vault** in the CSV imports index lists every CSV file that is not in the index yet (size and row count, all checked) and adds the chosen ones with default settings, without importing.
+- **Add CSV file...** copies a CSV from outside the vault into a folder you choose (system file picker, works on mobile; bytes unchanged; **Replace** or **Keep both** when the name exists), adds it to the index and opens it.
+- **Changed CSV files**: the index marks CSV files that changed since their last import (**Changed** badge with the time, highlighted **Re-import**), shows "N CSV files changed since their last import" with **Re-import changed**, and updates live when a CSV is modified, renamed or deleted. The table view can ask the plugin for the same status.
+- The index shows the counts of the last import ("12 new · 5 updated · 120 unchanged · 2 skipped") and "N edited since import" for notes whose managed properties you changed.
+- The plugin announces changes (settings saved, import, undo, delete, remove) on the workspace event `csv-importer:changed`, and `importFile` accepts the rows to import.
+
+### Fixes
+- The **Open CSV imports** command now brings an already open index to the front.
+
+### Privacy
+- The file picker of **Add CSV file...** reads only the file you select, only when you do, and copies it into the vault. Documented in the README and the submission guide.
+
+### Docs
+- Submission guide rewritten for the community directory portal (community.obsidian.md), which replaced pull requests to obsidian-releases: claim flow, scorecard severities, re-review, current requirements and README disclosures.
+
 ## 0.2.0
 ### Features
 - **CSV imports index**: a ribbon icon and command **Open CSV imports** open a list of every configured CSV with last import, note count and status. Re-import, configure, open the base or undo from the list, re-import everything at once, and **Delete imported notes** (moves only the notes this import owns to the trash) or **Remove from index**.

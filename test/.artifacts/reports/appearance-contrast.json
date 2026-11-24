@@ -1,0 +1,390 @@
+{
+ "run-modal-light": [
+  {
+   "text": "Import preview",
+   "testid": "import-run-modal",
+   "ratio": 21
+  },
+  {
+   "text": "→ Data/timesheet/",
+   "testid": "import-run-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Nothing to import",
+   "testid": "import-run-modal",
+   "ratio": 21
+  },
+  {
+   "text": "The file has no data rows.",
+   "testid": "import-run-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Cancel",
+   "testid": "import-run-modal",
+   "ratio": 19.43
+  }
+ ],
+ "run-modal-dark": [
+  {
+   "text": "Import preview",
+   "testid": "import-run-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "→ Data/timesheet/",
+   "testid": "import-run-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Nothing to import",
+   "testid": "import-run-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "The file has no data rows.",
+   "testid": "import-run-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Cancel",
+   "testid": "import-run-modal",
+   "ratio": 8.83
+  }
+ ],
+ "config-modal-light": [
+  {
+   "text": "Import settings: timesheet.csv",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "0 rows",
+   "testid": "config-summary-link",
+   "ratio": 19.43
+  },
+  {
+   "text": "·",
+   "testid": "config-summary",
+   "ratio": 6.68
+  },
+  {
+   "text": "comma",
+   "testid": "config-summary-link",
+   "ratio": 19.43
+  },
+  {
+   "text": "·",
+   "testid": "config-summary",
+   "ratio": 6.68
+  },
+  {
+   "text": "→ Data/timesheet/",
+   "testid": "config-summary-link",
+   "ratio": 19.43
+  },
+  {
+   "text": "·",
+   "testid": "config-summary",
+   "ratio": 6.68
+  },
+  {
+   "text": "no key",
+   "testid": "config-summary-link",
+   "ratio": 2.12
+  },
+  {
+   "text": "Columns",
+   "testid": "config-tab-columns",
+   "ratio": 19.43
+  },
+  {
+   "text": "Notes",
+   "testid": "config-tab-notes",
+   "ratio": 19.43
+  },
+  {
+   "text": "Re-import",
+   "testid": "config-tab-reimport",
+   "ratio": 19.43
+  },
+  {
+   "text": "File & rows",
+   "testid": "config-tab-file",
+   "ratio": 19.43
+  },
+  {
+   "text": "Filter rows",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Rows that do not match are left out of the preview",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Encoding",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Text encoding of the file. Change it if special ch",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Delimiter",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Auto detects the delimiter from the file content.",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "First row contains column names",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Turn off if the first row already contains data.",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Decimal separator",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Used to read numbers, for example 0,625 with a com",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Date order for dates like 03/04/2026",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Decides whether the first number is the day or the",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "List separator",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Splits the values of columns with the list type.",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Empty cells",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Leave the property empty, or omit it from the note",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Number precision",
+   "testid": "import-config-modal",
+   "ratio": 21
+  },
+  {
+   "text": "Decimal places for numbers, 0 to 10. Leave empty t",
+   "testid": "import-config-modal",
+   "ratio": 6.68
+  },
+  {
+   "text": "Preview",
+   "testid": "import-config-modal",
+   "ratio": 19.43
+  },
+  {
+   "text": "Import now",
+   "testid": "import-config-modal",
+   "ratio": 3.42
+  },
+  {
+   "text": "Save",
+   "testid": "import-config-modal",
+   "ratio": 19.43
+  }
+ ],
+ "config-modal-dark": [
+  {
+   "text": "Import settings: timesheet.csv",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "0 rows",
+   "testid": "config-summary-link",
+   "ratio": 8.83
+  },
+  {
+   "text": "·",
+   "testid": "config-summary",
+   "ratio": 7.95
+  },
+  {
+   "text": "comma",
+   "testid": "config-summary-link",
+   "ratio": 8.83
+  },
+  {
+   "text": "·",
+   "testid": "config-summary",
+   "ratio": 7.95
+  },
+  {
+   "text": "→ Data/timesheet/",
+   "testid": "config-summary-link",
+   "ratio": 8.83
+  },
+  {
+   "text": "·",
+   "testid": "config-summary",
+   "ratio": 7.95
+  },
+  {
+   "text": "no key",
+   "testid": "config-summary-link",
+   "ratio": 2.15
+  },
+  {
+   "text": "Columns",
+   "testid": "config-tab-columns",
+   "ratio": 8.83
+  },
+  {
+   "text": "Notes",
+   "testid": "config-tab-notes",
+   "ratio": 8.83
+  },
+  {
+   "text": "Re-import",
+   "testid": "config-tab-reimport",
+   "ratio": 8.83
+  },
+  {
+   "text": "File & rows",
+   "testid": "config-tab-file",
+   "ratio": 8.83
+  },
+  {
+   "text": "Filter rows",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Rows that do not match are left out of the preview",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Encoding",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Text encoding of the file. Change it if special ch",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Delimiter",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Auto detects the delimiter from the file content.",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "First row contains column names",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Turn off if the first row already contains data.",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Decimal separator",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Used to read numbers, for example 0,625 with a com",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Date order for dates like 03/04/2026",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Decides whether the first number is the day or the",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "List separator",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Splits the values of columns with the list type.",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Empty cells",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Leave the property empty, or omit it from the note",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Number precision",
+   "testid": "import-config-modal",
+   "ratio": 11.92
+  },
+  {
+   "text": "Decimal places for numbers, 0 to 10. Leave empty t",
+   "testid": "import-config-modal",
+   "ratio": 7.95
+  },
+  {
+   "text": "Preview",
+   "testid": "import-config-modal",
+   "ratio": 8.83
+  },
+  {
+   "text": "Import now",
+   "testid": "import-config-modal",
+   "ratio": 4.25
+  },
+  {
+   "text": "Save",
+   "testid": "import-config-modal",
+   "ratio": 8.83
+  }
+ ]
+}

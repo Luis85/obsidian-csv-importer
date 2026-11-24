@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "@wdio/globals/types", "@wdio/mocha-framework", "wdio-obsidian-service"],
+    "noEmit": true,
+    "inlineSourceMap": false,
+    "inlineSources": false,
+    "importHelpers": false
+  },
+  "include": ["wdio.conf.mts", "test/e2e/**/*.ts"]
+}

@@ -1,0 +1,100 @@
+name: E2E
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "styles.css"
+      - "manifest.json"
+      - "test/e2e/**"
+      - "wdio.conf.mts"
+      - "package*.json"
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Desktop (earliest and latest Obsidian)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DISPLAY: ":99"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: .obsidian-cache
+          key: obsidian-cache-${{ runner.os }}-${{ hashFiles('manifest.json', 'wdio.conf.mts') }}
+          restore-keys: obsidian-cache-${{ runner.os }}-
+      - name: Install display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y herbstluftwm dzen2 x11-xserver-utils
+      - name: Start Xvfb and a window manager
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 +extension GLX -noreset &
+          sleep 2
+          herbstluftwm &
+          sleep 1
+      - run: npm run test:e2e
+      - name: Upload reports, screenshots and logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-desktop-artifacts
+          path: |
+            reports/e2e/
+            wdio*.log
+          if-no-files-found: ignore
+
+  mobile:
+    name: Mobile emulation (latest Obsidian)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DISPLAY: ":99"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: .obsidian-cache
+          key: obsidian-cache-${{ runner.os }}-${{ hashFiles('manifest.json', 'wdio.conf.mts') }}
+          restore-keys: obsidian-cache-${{ runner.os }}-
+      - name: Install display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y herbstluftwm dzen2 x11-xserver-utils
+      - name: Start Xvfb and a window manager
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 +extension GLX -noreset &
+          sleep 2
+          herbstluftwm &
+          sleep 1
+      - run: npm run test:e2e:mobile
+      - name: Upload reports, screenshots and logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-mobile-artifacts
+          path: |
+            reports/e2e/
+            wdio*.log
+          if-no-files-found: ignore

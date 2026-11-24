@@ -185,69 +185,101 @@
 	font-size: var(--font-ui-small);
 }
 
-.csv-importer-summary-link {
+/*
+ * Summary parts and tabs are buttons, and Obsidian styles every button with `button:not(.clickable-icon)` (fill,
+ * shadow, height, padding, also on hover). The selectors below are one class more specific, so they win in every state.
+ */
+.csv-importer-modal button.csv-importer-summary-link {
 	height: auto;
 	padding: var(--size-2-1) 0;
+	border: 0;
+	border-radius: var(--radius-s);
 	background: transparent;
 	box-shadow: none;
 	color: var(--text-muted);
+	font-family: inherit;
 	font-size: inherit;
 	font-weight: inherit;
+	line-height: inherit;
 	cursor: pointer;
 }
 
-.csv-importer-summary-link:hover {
+.csv-importer-modal button.csv-importer-summary-link:hover {
 	background: transparent;
+	box-shadow: none;
 	color: var(--text-normal);
 	text-decoration: underline;
 }
 
-.csv-importer-summary-link.is-muted {
-	color: var(--text-faint);
+.csv-importer-modal button.csv-importer-summary-link.is-muted {
+	font-style: italic;
 }
 
-.csv-importer-summary-link:focus-visible,
-.csv-importer-tab:focus-visible,
-.csv-importer-col-summary:focus-visible {
+.csv-importer-modal button.csv-importer-summary-link:focus-visible,
+.csv-importer-modal button.csv-importer-tab:focus-visible,
+.csv-importer-modal button.csv-importer-col-summary:focus-visible {
 	outline: none;
 	box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
 }
 
-/* Tabs */
+/* Tabs: a flat bar with an underline under the active tab */
 .csv-importer-tabs {
 	display: flex;
 	flex: none;
 	gap: var(--size-4-1);
 	overflow-x: auto;
 	border-bottom: 1px solid var(--background-modifier-border);
-	scrollbar-width: none;
 }
 
-.csv-importer-tab {
+.csv-importer-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.csv-importer-modal button.csv-importer-tab {
 	display: inline-flex;
-	flex: none;
+	flex: 0 1 auto;
 	align-items: center;
 	gap: var(--size-2-3);
 	height: auto;
+	min-width: 0;
+	margin-bottom: -1px;
 	padding: var(--size-4-2) var(--size-4-3);
-	border-radius: var(--radius-s) var(--radius-s) 0 0;
+	border: 0;
 	border-bottom: 2px solid transparent;
+	border-radius: 0;
 	background: transparent;
 	box-shadow: none;
 	color: var(--text-muted);
+	font-family: inherit;
 	font-size: var(--font-ui-small);
+	font-weight: inherit;
+	line-height: var(--line-height-tight);
+	white-space: nowrap;
 	cursor: pointer;
 }
 
-.csv-importer-tab:hover {
-	background: var(--background-modifier-hover);
+.csv-importer-modal button.csv-importer-tab:hover {
+	background: transparent;
+	box-shadow: none;
+	border-bottom-color: var(--background-modifier-border-hover);
 	color: var(--text-normal);
 }
 
-.csv-importer-tab.is-active {
+.csv-importer-modal button.csv-importer-tab.is-active {
 	border-bottom-color: var(--interactive-accent);
 	color: var(--text-normal);
 	font-weight: var(--font-semibold);
+}
+
+@media (max-width: 600px) {
+	.csv-importer-tabs {
+		gap: 0;
+	}
+
+	.csv-importer-modal button.csv-importer-tab {
+		padding-right: var(--size-4-2);
+		padding-left: var(--size-4-2);
+	}
 }
 
 .csv-importer-tab-dot,
@@ -409,9 +441,10 @@
 	font-size: var(--font-ui-smaller);
 }
 
-.csv-importer-chip {
+.csv-importer-modal button.csv-importer-chip {
 	height: auto;
 	padding: 0 var(--size-4-2);
+	border: 0;
 	border-radius: var(--radius-l);
 	font-size: var(--font-ui-smaller);
 	font-family: var(--font-monospace);
@@ -419,7 +452,8 @@
 	background: var(--background-modifier-hover);
 }
 
-.csv-importer-chip:hover {
+.csv-importer-modal button.csv-importer-chip:hover {
+	box-shadow: none;
 	background: var(--background-modifier-active-hover);
 }
 
@@ -510,7 +544,7 @@
 	flex: none;
 }
 
-.csv-importer-col-summary {
+.csv-importer-modal button.csv-importer-col-summary {
 	display: none;
 }
 
@@ -597,7 +631,7 @@
 		font-weight: var(--font-semibold);
 	}
 
-	.csv-importer-col-summary {
+	.csv-importer-modal button.csv-importer-col-summary {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -607,11 +641,19 @@
 		min-height: 32px;
 		margin: 0;
 		padding: 0 0 var(--size-4-2) 32px;
+		border: 0;
+		border-radius: 0;
 		background: transparent;
 		box-shadow: none;
 		color: var(--text-muted);
 		font-size: var(--font-ui-smaller);
 		text-align: left;
+	}
+
+	.csv-importer-modal button.csv-importer-col-summary:hover {
+		background: transparent;
+		box-shadow: none;
+		color: var(--text-normal);
 	}
 
 	.csv-importer-col-summary-text {
@@ -637,29 +679,45 @@
 		display: flex;
 	}
 
-	.csv-importer-extra-fields {
-		grid-template-columns: minmax(0, 1fr) auto;
-	}
-
-	.csv-importer-extra-fields > .csv-importer-extra-default {
-		grid-column: 1 / -1;
+	.csv-importer-extra-warning {
+		margin-left: 0;
 	}
 }
 
-/* Extra properties */
-.csv-importer-extra-row {
-	margin-bottom: var(--size-4-2);
+/* Extra properties: rows of the Columns table */
+.csv-importer-new-prop {
+	font-style: italic;
 }
 
-.csv-importer-extra-fields {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1.2fr) 32px;
-	align-items: center;
-	gap: var(--size-4-2);
+.csv-importer-extra-remove {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	justify-self: center;
+}
+
+.csv-importer-extra-warning {
+	margin: 0 0 var(--size-4-2) 32px;
+}
+
+.csv-importer-extra-warning.csv-importer-hidden {
+	display: none;
 }
 
 .csv-importer-extra-add {
-	padding-bottom: var(--size-4-2);
+	padding: var(--size-4-2) 0;
+}
+
+.csv-importer-add-prop {
+	gap: var(--size-2-3);
+}
+
+.csv-importer-add-prop-icon {
+	display: inline-flex;
+}
+
+.csv-importer-extra-help {
+	margin-bottom: var(--size-4-3);
 }
 
 /* Key choice: checkbox list of columns */
@@ -766,14 +824,15 @@
 	display: flex;
 	flex-wrap: wrap;
 	align-items: baseline;
-	column-gap: var(--size-2-2);
+	gap: 0 var(--size-2-2);
 	padding: 0 var(--size-4-4) var(--size-4-2);
 	border-bottom: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
 
-.csv-importer-link-btn {
+.csv-importer-link-btn,
+.csv-importer-status .csv-importer-link-btn {
 	padding: 0;
 	height: auto;
 	border: 0;
@@ -899,10 +958,45 @@
 }
 
 .csv-importer-table .csv-importer-rownum {
-	color: var(--text-faint);
+	color: var(--text-muted);
 	text-align: right;
 	width: 1%;
 	font-variant-numeric: tabular-nums;
+}
+
+/* Row selection: a checkbox column, selected rows tinted. */
+.csv-importer-table .csv-importer-select {
+	width: 1%;
+	padding-right: 0;
+	text-align: center;
+}
+
+.csv-importer-check {
+	margin: 0;
+	vertical-align: middle;
+	cursor: pointer;
+}
+
+.csv-importer-table tbody tr.is-selected td {
+	background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+
+.csv-importer-status-changed,
+.csv-importer-status-selection {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--size-2-2);
+}
+
+.csv-importer-changed {
+	color: var(--text-normal);
+}
+
+/* The callout title in Obsidian's accent colours is too light on some themes: keep the icon coloured, the words normal. */
+.csv-importer-view .csv-importer-callout .callout-title-inner,
+.csv-importer-run .csv-importer-callout .callout-title-inner {
+	color: var(--text-normal);
 }
 
 .csv-importer-table .is-numeric {
@@ -972,6 +1066,15 @@
 .is-phone .csv-importer-import {
 	flex: 1 1 100%;
 	justify-content: center;
+}
+
+.is-phone .csv-importer-table .csv-importer-select {
+	min-width: 44px;
+}
+
+.is-phone .csv-importer-run-item:has(.csv-importer-check) {
+	min-height: 44px;
+	align-items: center;
 }
 
 .is-phone .csv-importer-link-btn {
@@ -1141,6 +1244,26 @@
 	border-bottom: none;
 }
 
+.csv-importer-run-item:has(.csv-importer-check) {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-2);
+	cursor: pointer;
+}
+
+.csv-importer-run-item .csv-importer-check {
+	flex: none;
+	margin-top: 2px;
+}
+
+.csv-importer-run-text {
+	min-width: 0;
+}
+
+.csv-importer-run-group-check {
+	flex: none;
+}
+
 .csv-importer-run-path {
 	overflow-wrap: anywhere;
 }
@@ -1211,12 +1334,13 @@
 .csv-importer-index-tools {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: var(--size-4-2);
 	margin-bottom: var(--size-4-4);
 }
 
 .csv-importer-index-search {
-	flex: 1 1 auto;
+	flex: 1 1 12em;
 	min-width: 0;
 }
 
@@ -1235,7 +1359,7 @@
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 140px 80px calc(var(--size-4-4) * 11);
 	align-items: center;
-	column-gap: var(--size-4-4);
+	gap: 0 var(--size-4-4);
 	min-height: 48px;
 	padding: var(--size-4-2) var(--size-4-2);
 	border-bottom: 1px solid var(--background-modifier-border);
@@ -1464,6 +1588,156 @@
 	width: 100%;
 	font-family: var(--font-monospace);
 	resize: vertical;
+}
+
+/* Index: scan vault, add CSV, changed banner, result counts */
+.csv-importer-index-changed.callout.csv-importer-callout {
+	margin: 0 0 var(--size-4-2);
+}
+
+.csv-importer-index-changed .callout-title {
+	align-items: center;
+}
+
+.csv-importer-index-changed .callout-content {
+	padding-top: 0;
+}
+
+.csv-importer-index-changed-badge {
+	flex: 0 0 auto;
+}
+
+.csv-importer-index-meta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.csv-importer-index-meta.mod-changed {
+	color: var(--text-warning);
+}
+
+.csv-importer-index-edited {
+	cursor: help;
+}
+
+.csv-importer-scan-intro,
+.csv-importer-add-note {
+	margin: 0 0 var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.csv-importer-scan-bar {
+	display: flex;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-1);
+}
+
+.csv-importer-scan-bar .csv-importer-scan-link {
+	height: auto;
+	padding: var(--size-2-1) 0;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text-accent);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+.csv-importer-scan-list {
+	max-height: 50vh;
+	overflow-y: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+}
+
+.csv-importer-scan-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+.csv-importer-scan-row:last-child {
+	border-bottom: none;
+}
+
+.csv-importer-scan-main {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.csv-importer-scan-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+.csv-importer-scan-path,
+.csv-importer-scan-meta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.csv-importer-scan-meta {
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	align-items: flex-end;
+}
+
+.csv-importer-scan-empty {
+	padding: var(--size-4-8) var(--size-4-4);
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.csv-importer-scan-empty-title {
+	margin: 0 0 var(--size-4-2);
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
+}
+
+.csv-importer-add-modal .setting-item-description.is-picked {
+	color: var(--text-normal);
+}
+
+.csv-importer-add-conflict {
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+}
+
+.csv-importer-add-conflict-text {
+	margin: 0 0 var(--size-4-1);
+	color: var(--text-warning);
+}
+
+.csv-importer-add-choice {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-2-2) 0;
+}
+
+.is-phone .csv-importer-index-scan,
+.is-phone .csv-importer-index-add,
+.is-phone .csv-importer-scan-bar .csv-importer-scan-link,
+.is-phone .csv-importer-scan-row {
+	min-height: 44px;
 }
 
 /* === end owner:index-settings === */

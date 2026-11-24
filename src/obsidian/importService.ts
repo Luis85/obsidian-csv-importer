@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, TFile } from "obsidian";
+import { MarkdownView, Notice, TFile, TFolder, normalizePath } from "obsidian";
 import type { App } from "obsidian";
 import type { ConfigStore } from "../configStore";
 import { decodeCsv } from "../csv/encoding";
@@ -8,16 +8,19 @@ import { emptyResult } from "../core/result";
 import { errorMessage, plural } from "../core/util";
 import { ROW_FILTER_WARNING, HISTORY_NOT_SAVED_WARNING, applyUndo, applyUndoToSnapshot, writeNotes } from "../import/importer";
 import { valueHash } from "../import/merge";
-import { countMatching, planNotes, resolveTargetFolder, staticPrefix } from "../import/noteBuilder";
+import { checkChanged, hashBytes, lastRunOf, makeFingerprint } from "../import/fingerprint";
+import { sanitizeFileName } from "../import/folders";
+import { countMatching, filterNotesByRows, planNotes, resolveTargetFolder, staticPrefix } from "../import/noteBuilder";
 import { createDefaultFileConfig, migrateFileConfig } from "../defaults";
-import type { ImportSummary } from "../host";
+import type { CsvStatus, EditedNotes, ImportFileOptions, ImportSummary } from "../host";
 import type { ImportStorage } from "../storage";
-import type { CsvEncoding, FileImportConfig, ImportResult, ImportSnapshot, PluginSettings, UndoManifest } from "../types";
+import type { CsvEncoding, CsvFingerprint, FileImportConfig, ImportResult, ImportSnapshot, PluginSettings, UndoManifest } from "../types";
 import { confirmDialog, confirmDialogWithOption } from "../view/ConfirmModal";
 import { CsvView } from "../view/CsvView";
 import { ImportRunModal } from "../view/ImportRunModal";
 import type { ImportRunControls } from "../view/ImportRunModal";
 import { basePath, createBaseFile, openBase } from "./baseFiles";
+import { triggerCsvChanged } from "./events";
 import { isCsv } from "./vaultEvents";
 
 function hasChanges(u: UndoManifest): boolean {
@@ -45,8 +48,9 @@ export class ImportService {
 		return stored ? migrateFileConfig({ ...defaults, ...stored }, this.getSettings()) : defaults;
 	}
 
-	saveFileConfig(file: TFile, config: FileImportConfig): Promise<void> {
-		return this.store.set(file.path, config);
+	async saveFileConfig(file: TFile, config: FileImportConfig): Promise<void> {
+		await this.store.set(file.path, config);
+		triggerCsvChanged(this.app, file.path);
 	}
 
 	async readCsvDecoded(
@@ -79,14 +83,16 @@ export class ImportService {
 	 * Opens the import dialog (preview, confirm, progress, report) and resolves with its result. Failures are
 	 * reported in a notice and returned as a failed dry-run result.
 	 */
-	async runImportDialog(file: TFile, text: string): Promise<ImportResult> {
+	async runImportDialog(file: TFile, text: string, runOpts: ImportFileOptions = {}): Promise<ImportResult> {
 		try {
 			await this.storage.init();
+			const fingerprint = makeFingerprint(await this.app.vault.readBinary(file), file.stat);
 			const cfg = this.getFileConfig(file);
 			const parsed = parseCsv(text, cfg);
 			const drift = cfg.lastImport === null ? null : detectHeaderDrift(cfg.columns, parsed);
 			prepareConfig(cfg, parsed, this.getSettings().midnightAsDate);
-			const notes = planNotes(parsed, cfg, { path: file.path, basename: file.basename });
+			const allNotes = planNotes(parsed, cfg, { path: file.path, basename: file.basename });
+			const notes = runOpts.rows ? filterNotesByRows(allNotes, runOpts.rows) : allNotes;
 			const stored = await this.storage.loadSnapshot(file.path);
 			const warnings = [...parsed.warnings];
 			if (cfg.rowFilter) warnings.push(ROW_FILTER_WARNING(countMatching(parsed, cfg), parsed.rows.length));
@@ -100,8 +106,12 @@ export class ImportService {
 				preview: async () =>
 					(await writeNotes(this.app, notes, cfg, { dryRun: true, snapshot: stored, warnings })).result,
 				execute: async (opts) => {
+					// Rows kept checked in the preview win over rows passed to importFile (they are a subset of them).
+					const { rows: pickedRows, ...writeOpts } = opts;
+					const toWrite = pickedRows ? filterNotesByRows(allNotes, pickedRows) : notes;
+					const partial = pickedRows !== undefined || runOpts.rows !== undefined;
 					const snap = await this.storage.loadSnapshot(file.path);
-					const out = await writeNotes(this.app, notes, cfg, {
+					const out = await writeNotes(this.app, toWrite, cfg, {
 						snapshot: snap,
 						warnings,
 						onCheckpoint: async (s, u) => {
@@ -112,7 +122,7 @@ export class ImportService {
 								console.error("CSV Importer: could not save import state", e);
 							}
 						},
-						...opts,
+						...writeOpts,
 					});
 					const undo: UndoManifest = { ...out.undo, csvPath: file.path };
 					if (cfg.createBase && staticFolder && (out.result.created > 0 || out.result.updated > 0)) {
@@ -123,7 +133,7 @@ export class ImportService {
 							(undo.writtenHashes ??= {})[created.path] = valueHash(created.content);
 						}
 					}
-					return this.saveFinalState(file, cfg, out.snapshot, undo, out.result);
+					return this.saveFinalState(file, cfg, out.snapshot, undo, out.result, partial ? undefined : fingerprint);
 				},
 				canUndo: () => this.canUndo(file),
 				undo: () => this.undoLastImport(file),
@@ -148,17 +158,21 @@ export class ImportService {
 		snapshot: ImportSnapshot,
 		undo: UndoManifest,
 		result: ImportResult,
+		fingerprint?: CsvFingerprint,
 	): Promise<{ result: ImportResult; undoable: boolean }> {
 		const undoable = hasChanges(undo);
 		try {
 			await this.storage.saveSnapshot(file.path, snapshot);
 			if (undoable) await this.storage.saveUndo(file.path, undo);
 			cfg.lastImport = Date.now();
-			await this.saveFileConfig(file, cfg);
+			await this.store.set(file.path, cfg);
+			// A stopped or partial run does not count as "the CSV as it is now was imported".
+			await this.storage.setMeta(file.path, { lastRun: lastRunOf(result), ...(fingerprint && !result.cancelled ? { fingerprint } : {}) });
 		} catch (e) {
 			console.error("CSV Importer: could not save import history", e);
 			result.warnings.push(HISTORY_NOT_SAVED_WARNING);
 		}
+		triggerCsvChanged(this.app, file.path);
 		return { result, undoable };
 	}
 
@@ -188,6 +202,7 @@ export class ImportService {
 		const outcome = await applyUndo(this.app, manifest);
 		await this.storage.saveSnapshot(csvPath, applyUndoToSnapshot(snapshot, manifest, new Set(outcome.changed)));
 		await this.storage.saveUndo(csvPath, null);
+		triggerCsvChanged(this.app, csvPath);
 		new Notice(undoNoticeText(manifest, outcome), 10000);
 	}
 
@@ -228,7 +243,7 @@ export class ImportService {
 	/** All CSVs with saved settings: last import first (never imported last), then by file name. */
 	async listImports(): Promise<ImportSummary[]> {
 		await this.storage.init();
-		const list = this.store.paths().map((csvPath): ImportSummary => {
+		const list = await Promise.all(this.store.paths().map(async (csvPath): Promise<ImportSummary> => {
 			const cfg = this.configFor(csvPath);
 			let targetFolder = "";
 			try {
@@ -236,22 +251,143 @@ export class ImportService {
 			} catch {
 				targetFolder = "";
 			}
+			const abstract = this.app.vault.getAbstractFileByPath(csvPath);
+			const csv = isCsv(abstract) ? abstract : null;
+			const status = csv ? await this.csvStatus(csv).catch(() => null) : null;
 			return {
 				csvPath,
 				fileName: csvPath.split("/").pop() ?? csvPath,
-				exists: isCsv(this.app.vault.getAbstractFileByPath(csvPath)),
+				exists: csv !== null,
 				targetFolder,
 				lastImport: cfg.lastImport,
 				hasUndo: this.storage.hasUndo(csvPath),
 				basePath: basePath(this.app, targetFolder),
+				changed: status?.changed ?? false,
+				modifiedAt: csv ? csv.stat.mtime : null,
+				lastRun: this.storage.getMeta(csvPath)?.lastRun ?? null,
 			};
-		});
+		}));
 		return list.sort(
 			(a, b) =>
 				(b.lastImport ?? -1) - (a.lastImport ?? -1) ||
 				a.fileName.localeCompare(b.fileName, undefined, { sensitivity: "base", numeric: true }) ||
 				a.csvPath.localeCompare(b.csvPath),
 		);
+	}
+
+	/** Whether a CSV differs from what was last imported. */
+	async csvStatus(file: TFile): Promise<CsvStatus> {
+		await this.storage.init();
+		const lastImport = this.store.get(file.path)?.lastImport ?? null;
+		const base = { lastImport, modifiedAt: file.stat.mtime };
+		if (lastImport === null) return { ...base, imported: false, changed: false };
+		const meta = this.storage.getMeta(file.path);
+		const check = await checkChanged(meta?.fingerprint, file.stat, async () => hashBytes(new Uint8Array(await this.app.vault.readBinary(file))));
+		if (check.touched) void this.storage.setMeta(file.path, { fingerprint: check.touched }).catch(() => undefined);
+		return { ...base, imported: true, changed: check.changed };
+	}
+
+	/** Notes whose managed properties were changed in Obsidian since the import (compared with the snapshot hashes). */
+	async countEditedNotes(csvPath: string): Promise<EditedNotes> {
+		const snapshot = await this.storage.loadSnapshot(csvPath);
+		const props = new Set<string>();
+		let count = 0;
+		let checked = 0;
+		for (const [notePath, hashes] of Object.entries(snapshot)) {
+			const f = this.app.vault.getAbstractFileByPath(notePath);
+			if (!(f instanceof TFile)) continue;
+			const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
+			if (!fm) continue;
+			checked++;
+			let edited = false;
+			for (const [prop, hash] of Object.entries(hashes)) {
+				if (valueHash(fm[prop] ?? null) !== hash) {
+					edited = true;
+					props.add(prop);
+				}
+			}
+			if (edited) count++;
+		}
+		return { count, checked, properties: [...props].sort((a, b) => a.localeCompare(b)).slice(0, 12) };
+	}
+
+	/** CSV files in the vault without import settings, sorted by path. */
+	listUnindexedCsvs(): TFile[] {
+		return this.app.vault
+			.getFiles()
+			.filter((f) => f.extension.toLowerCase() === "csv" && !this.store.has(f.path))
+			.sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base", numeric: true }));
+	}
+
+	/** Row count of a CSV with the default settings; null when too large or unreadable. */
+	async countCsvRows(file: TFile): Promise<number | null> {
+		if (file.stat.size > 20_000_000) return null;
+		try {
+			const text = await this.readCsv(file);
+			return parseCsv(text, this.getFileConfig(file)).rows.length;
+		} catch {
+			return null;
+		}
+	}
+
+	/** Gives the CSVs default import settings so they show in the index (no import). */
+	async addToIndex(csvPaths: string[]): Promise<number> {
+		const entries: Record<string, FileImportConfig> = {};
+		for (const p of csvPaths) {
+			if (this.store.has(p) || !isCsv(this.app.vault.getAbstractFileByPath(p))) continue;
+			entries[p] = createDefaultFileConfig(this.getSettings());
+		}
+		const paths = Object.keys(entries);
+		if (paths.length === 0) return 0;
+		await this.store.setMany(entries);
+		for (const p of paths) triggerCsvChanged(this.app, p);
+		return paths.length;
+	}
+
+	/** Writes the bytes of a file picked outside the vault into the vault, adds it to the index and opens it. */
+	async addExternalCsv(data: ArrayBuffer, folder: string, fileName: string, conflict: "replace" | "keep"): Promise<TFile> {
+		const { vault } = this.app;
+		const stem = sanitizeFileName(fileName.replace(/\.csv$/i, ""));
+		if (stem === "") throw new Error("Enter a file name.");
+		const dir = normalizePath(folder.trim() || "/");
+		let walked = "";
+		for (const seg of dir === "/" ? [] : dir.split("/")) {
+			walked = walked ? `${walked}/${seg}` : seg;
+			const node = vault.getAbstractFileByPath(walked);
+			if (node instanceof TFolder) continue;
+			if (node) throw new Error(`${walked} is not a folder.`);
+			await vault.createFolder(walked);
+		}
+		const join = (name: string): string => normalizePath(dir === "/" ? `${name}.csv` : `${dir}/${name}.csv`);
+		let path = join(stem);
+		let file: TFile;
+		const existing = vault.getAbstractFileByPath(path);
+		if (existing && conflict === "replace") {
+			if (!(existing instanceof TFile)) throw new Error(`${path} is a folder.`);
+			await vault.modifyBinary(existing, data);
+			file = existing;
+		} else {
+			for (let n = 1; existing && ((await vault.adapter.exists(path)) || vault.getAbstractFileByPath(path)); n++) path = join(`${stem} ${n}`);
+			file = await vault.createBinary(path, data);
+		}
+		await this.addToIndex([file.path]);
+		triggerCsvChanged(this.app, file.path);
+		await this.app.workspace.getLeaf("tab").openFile(file);
+		return file;
+	}
+
+	/** Runs the import dialog for every configured CSV that changed since its last import. */
+	async reimportChanged(): Promise<void> {
+		const changed: TFile[] = [];
+		for (const p of this.store.paths()) {
+			const f = this.app.vault.getAbstractFileByPath(p);
+			if (isCsv(f) && (await this.csvStatus(f)).changed) changed.push(f);
+		}
+		if (changed.length === 0) {
+			new Notice("No CSV files have changed since their last import.");
+			return;
+		}
+		for (const f of changed) await this.importFromDisk(f);
 	}
 
 	/** Number of notes the import of this CSV owns (snapshot entries). */
@@ -339,6 +475,7 @@ export class ImportService {
 			stored.lastImport = null;
 			await this.store.set(csvPath, stored);
 		}
+		triggerCsvChanged(this.app, csvPath);
 		new Notice(failed > 0 ? `Moved ${plural(trashed, "note", "notes")} to the trash. ${failed} could not be deleted.` : `Moved ${plural(trashed, "note", "notes")} to the trash.`);
 		return trashed;
 	}
@@ -356,6 +493,7 @@ export class ImportService {
 		if (!ok) return false;
 		await this.store.delete(csvPath);
 		await this.storage.delete(csvPath);
+		triggerCsvChanged(this.app, csvPath);
 		new Notice(`Removed ${fileName} from the index.`);
 		return true;
 	}

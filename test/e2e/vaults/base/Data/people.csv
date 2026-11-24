@@ -1,0 +1,5 @@
+ID,Name,Status,Tags,Betrag,Aktiv
+007,Anna Schmidt,open,"a, b",12.50,yes
+008,Ben Weber,done,c,7,no
+009,Clara Vogel,open,"a, c",,yes
+010,Dirk Maier,open,b,100,yes

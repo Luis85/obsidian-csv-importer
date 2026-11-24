@@ -310,7 +310,7 @@ export function planNotes(
 	parsed: ParsedCsv,
 	config: FileImportConfig,
 	csv: { path: string; basename: string },
-	opts: { now?: Date; uuid?: () => string } = {},
+	opts: { now?: Date; uuid?: () => string; rows?: number[] } = {},
 ): PlannedNote[] {
 	const dynamicFolder = hasFolderPlaceholders(config);
 	const staticFolder = resolveTargetFolder(config, csv.path);
@@ -427,5 +427,11 @@ export function planNotes(
 			key,
 		});
 	});
-	return notes;
+	return opts.rows ? filterNotesByRows(notes, opts.rows) : notes;
+}
+
+/** Keeps only the planned notes of these original 1-based data row numbers (paths were allocated over all rows, so they stay stable). */
+export function filterNotesByRows(notes: PlannedNote[], rows: readonly number[]): PlannedNote[] {
+	const wanted = new Set(rows);
+	return notes.filter((n) => wanted.has(n.row));
 }

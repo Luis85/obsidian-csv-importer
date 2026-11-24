@@ -20,11 +20,11 @@ export class Tabs {
 		private readonly onSelect?: (id: string) => void,
 	) {
 		this.current = tabs[0]?.id ?? "";
-		const bar = barParent.createDiv({ cls: "csv-importer-tabs", attr: { role: "tablist" } });
+		const bar = barParent.createDiv({ cls: "csv-importer-tabs", attr: { role: "tablist", "data-testid": "config-tabs" } });
 		for (const t of tabs) {
 			const btn = bar.createEl("button", {
 				cls: "csv-importer-tab",
-				attr: { type: "button", role: "tab", id: `${idPrefix}-tab-${t.id}`, "aria-controls": `${idPrefix}-panel-${t.id}` },
+				attr: { type: "button", role: "tab", "data-testid": `config-tab-${t.id}`, id: `${idPrefix}-tab-${t.id}`, "aria-controls": `${idPrefix}-panel-${t.id}` },
 			});
 			btn.createSpan({ text: t.label });
 			this.dots.set(t.id, btn.createSpan({ cls: "csv-importer-tab-dot csv-importer-hidden", attr: { "aria-hidden": "true" } }));
@@ -70,6 +70,7 @@ export class Tabs {
 			btn?.setAttr("aria-selected", String(on));
 			btn?.setAttr("tabindex", on ? "0" : "-1");
 			btn?.toggleClass("is-active", on);
+			if (on) btn?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
 			this.panels.get(t.id)?.toggleClass("csv-importer-hidden", !on);
 		}
 	}

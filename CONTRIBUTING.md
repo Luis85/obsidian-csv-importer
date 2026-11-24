@@ -23,6 +23,9 @@ Copy (or symlink) `main.js`, `manifest.json` and `styles.css` into `<vault>/.obs
 | `npm run lint` | ESLint (with `eslint-plugin-obsidianmd`), Stylelint and the API version check |
 | `npm run lint:css` | Stylelint only |
 | `npm run lint:api` | API version check only |
+| `npm run test:e2e` | End-to-end tests in real Obsidian (see below) |
+| `npm run test:e2e:mobile` | The same suite's UI specs in mobile emulation |
+| `npm run screenshots:readme` | Regenerates the README images from real Obsidian |
 
 ## Architecture
 
@@ -74,8 +77,8 @@ Tests are in `tests/` and run with vitest. `tests/mocks/obsidian.ts` is a mock o
 `npm run lint` runs three checks, in this order:
 
 1. `eslint .` with `eslint-plugin-obsidianmd` (the rules the community plugin review applies). Typical points: sentence case UI text, no `innerHTML`, no default hotkeys, `vault.process` instead of `vault.modify`, no stray `console.log`.
-2. `stylelint styles.css` (`.stylelintrc.json`), mainly to catch duplicate declarations, which the review bot reports.
-3. `node scripts/check-api-versions.mjs`. It uses the TypeScript compiler to report every Obsidian API (method or property) whose `@since` is newer than `minAppVersion` in `manifest.json` and is not guarded by `requireApiVersion`. Why: the review bot checks this, but `eslint-plugin-obsidianmd`'s `no-unsupported-api` rule only checks methods, not plain properties (for example `Plugin.settings`). Run it alone with `npm run lint:api`; `npm run lint:css` runs Stylelint alone.
+2. `stylelint styles.css` (`.stylelintrc.json`), mainly to catch duplicate declarations, which the community directory review reports.
+3. `node scripts/check-api-versions.mjs`. It uses the TypeScript compiler to report every Obsidian API (method or property) whose `@since` is newer than `minAppVersion` in `manifest.json` and is not guarded by `requireApiVersion`. Why: the community directory review checks this, but `eslint-plugin-obsidianmd`'s `no-unsupported-api` rule only checks methods, not plain properties (for example `Plugin.settings`). Run it alone with `npm run lint:api`; `npm run lint:css` runs Stylelint alone.
 
 `minAppVersion` is 1.15.1. Raising it relaxes the API check; lowering it can make the check fail. See [docs/SUBMISSION.md](docs/SUBMISSION.md) for the full checklist.
 
@@ -88,6 +91,29 @@ node ui-preview/build.mjs && node ui-preview/screenshot.mjs [filter]
 ```
 
 Screenshots go to `ui-preview/screenshots/`; `filter` is a substring of a scenario name (for example `c-config`). Scenarios are in `ui-preview/scenarios.ts`: add one when you add a dialog state. The theme is an approximation, so check final spacing in Obsidian itself. Details are in `ui-preview/README.md`.
+
+## End-to-end tests
+
+`test/e2e/` runs the plugin in real Obsidian with [WebdriverIO](https://webdriver.io) and [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service). The service downloads Obsidian, installs the built plugin (`main.js`, `manifest.json`, `styles.css` from the repository root) into a copy of the fixture vault `test/e2e/vaults/base/`, and drives the app. Every user flow of the README has a spec; `test/e2e/USER-FLOWS.md` maps flows to specs and lists the flows still pending. Unit tests (`npm test`, vitest) are separate and unchanged.
+
+How the specs work: functional specs use the plugin's commands, its real dialogs and `app` APIs through `browser.executeObsidian`. UI clicks are used where the UI is under test (badge menus, dialogs, index rows). Elements the specs assert have `data-testid` attributes. Each spec ends by asserting that the plugin logged no errors or warnings. State is reset before every test (`resetEverything` in `test/e2e/support.ts`: fixture files, the plugin's saved data, plugin restart).
+
+```sh
+npm run test:e2e                    # builds first (pretest:e2e), then runs earliest and latest Obsidian
+npm run test:e2e:mobile             # builds first, runs the UI specs in Obsidian's mobile emulation (390x844)
+OBSIDIAN_VERSIONS="latest/latest" npm run test:e2e   # one version, "app/installer" pairs separated by spaces
+npm run screenshots:readme          # rewrites docs/images/*.png from real Obsidian (see below)
+```
+
+Environment variables: `OBSIDIAN_VERSIONS` (default `earliest/earliest latest/latest`; `earliest` is `minAppVersion`), `WDIO_MAX_INSTANCES` (default 1), `E2E_MOBILE` (`1` adds a mobile-emulation run to the desktop ones, `only` runs just that), `E2E_STRICT_CONTRAST=1` (turns on the check listed under known findings in `USER-FLOWS.md`).
+
+On Linux Obsidian needs a display. Locally: `xvfb-run -a npm run test:e2e`. If Node's `fetch` does not use your proxy when downloading Obsidian versions, run with `NODE_USE_ENV_PROXY=1` (Node 22.21 or newer). CI (`.github/workflows/e2e.yml`) installs `herbstluftwm dzen2 x11-xserver-utils`, starts `Xvfb :99` and a window manager, runs the desktop job and the mobile job, and uploads `reports/e2e/` (screenshots, contrast reports, logs) on every run. It runs on pull requests that touch the plugin or the suite, nightly, and on demand. The Obsidian download cache `.obsidian-cache/` is keyed on `manifest.json` and `wdio.conf.mts`.
+
+Outputs, all gitignored: `reports/e2e/screenshots/<spec>/<step>.png` (key steps of each flow, light and dark for UI-heavy steps), `reports/e2e/appearance-contrast.json` (measured contrast per text), `reports/e2e/failures/` (a screenshot per failed test) and `reports/e2e/logs/`.
+
+Limitations: Obsidian downloads come from GitHub (`raw.githubusercontent.com` and `github.com` release assets), so the first run needs network access; later runs use `.obsidian-cache/`. Mobile emulation is the desktop app in a phone-sized window, not the real mobile app. The functional import and undo specs run on desktop only. Beta versions need an Obsidian account and are not used.
+
+README images: `npm run screenshots:readme` runs only `readme-screenshots.e2e.ts`, which sets up the example vault state in the latest Obsidian with the default light theme, resizes the window and captures the five images at a device scale factor of 2 into `docs/images/` under the names the README uses. Run it after UI changes and commit the new images.
 
 ## Styles
 
@@ -115,4 +141,4 @@ Notes:
 - Run the workflow from a branch. The selected ref must be a branch, not a tag; the workflow pushes the release commit to it. The workflow file must exist on the default branch to be run manually.
 - If the branch is protected, allow `github-actions[bot]` to push.
 - Alternatives that do not bump the version: push a tag equal to the `manifest.json` version (`git push origin 1.2.3`), or publish a release in the GitHub UI with such a tag. Both build and attach the files.
-- To submit to the community catalog, see [docs/SUBMISSION.md](docs/SUBMISSION.md).
+- To publish to the community directory (community.obsidian.md), see [docs/SUBMISSION.md](docs/SUBMISSION.md).
