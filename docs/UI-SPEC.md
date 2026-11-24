@@ -1,5 +1,7 @@
 # CSV Importer: UI redesign spec
 
+> Superseded in part by `docs/UX-REVIEW-2026-11.md` (second pass): tab names and order of the import settings, vocabulary, and the settings tab order are defined there.
+
 Evidence: `ui-preview/screenshots/` (`node ui-preview/build.mjs && node ui-preview/screenshot.mjs`). In file names, `x` means light or dark.
 
 ## 1. Top problems (ranked)
