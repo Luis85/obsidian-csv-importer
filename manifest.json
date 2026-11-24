@@ -1,7 +1,7 @@
 {
 	"id": "csv-importer",
 	"name": "CSV Importer",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"minAppVersion": "1.15.1",
 	"description": "Turn CSV files into one note per row with typed properties that Bases can sum and filter. Re-import safely when the CSV changes: your edits are kept. Includes table view, preview and undo.",
 	"author": "Luis Mendez",
