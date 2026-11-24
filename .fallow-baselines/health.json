@@ -1,0 +1,218 @@
+{
+  "kind": "health",
+  "finding_counts": {
+    "scripts/check-api-versions.mjs": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "complexity_high": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 3
+      }
+    },
+    "src/main.ts": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/obsidian/importService.ts": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/view/AddCsvModal.ts": {
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "src/view/CsvView.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_high": {
+        "count": 5
+      },
+      "crap_moderate": {
+        "count": 4
+      }
+    },
+    "src/view/ImportConfigModal.ts": {
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/view/ImportIndexView.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_high": {
+        "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/view/ScanVaultModal.ts": {
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/view/TableRenderer.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 2
+      },
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/view/config/AdvancedSection.ts": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/view/config/ColumnRow.ts": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/view/config/ColumnsSection.ts": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/view/config/ConfigDraft.ts": {
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "src/view/config/ExtraPropertiesSection.ts": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      }
+    },
+    "src/view/config/OutputSection.ts": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "src/view/config/PreviewPane.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      }
+    },
+    "src/view/config/Tabs.ts": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 2
+      }
+    },
+    "tests/e2e/support.ts": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "ui-preview/build.mjs": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "ui-preview/obsidian-shim.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 3
+      }
+    },
+    "ui-preview/scenarios.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    }
+  },
+  "runtime_coverage_findings": [],
+  "target_keys": [
+    "src/import/importer.ts:high impact",
+    "src/view/ImportRunModal.ts:high impact",
+    "src/main.ts:hidden coupling",
+    "src/view/ImportConfigModal.ts:hidden coupling",
+    "src/import/noteBuilder.ts:high impact",
+    "src/view/CsvView.ts:high impact",
+    "src/csv/typeInference.ts:high impact",
+    "src/defaults.ts:hidden coupling",
+    "src/view/ImportIndexView.ts:untested risk",
+    "src/csv/parser.ts:high impact",
+    "src/core/util.ts:high impact",
+    "src/view/config/ColumnRow.ts:untested risk",
+    "src/storage.ts:hidden coupling",
+    "src/import/merge.ts:high impact",
+    "src/view/TableRenderer.ts:untested risk",
+    "src/settings.ts:hidden coupling",
+    "src/obsidian/importService.ts:high impact",
+    "src/view/config/Tabs.ts:untested risk",
+    "scripts/check-api-versions.mjs:untested risk",
+    "tests/e2e/support.ts:high impact",
+    "src/import/fingerprint.ts:high impact",
+    "src/import/templates.ts:high impact",
+    "src/import/folders.ts:high impact",
+    "ui-preview/obsidian-shim.ts:untested risk"
+  ]
+}

@@ -57,7 +57,9 @@
 	min-height: 32px;
 }
 
-.csv-importer-hidden {
+/* The button selector outweighs Obsidian's `button:not(.clickable-icon)` display rule. */
+.csv-importer-hidden,
+button.csv-importer-hidden:not(.clickable-icon) {
 	display: none;
 }
 
@@ -361,7 +363,8 @@
 		display: flex;
 	}
 
-	.csv-importer-preview-toggle {
+	/* The pane is already visible: no toggle. One class more than Obsidian's `button:not(.clickable-icon)`. */
+	.csv-importer-modal .csv-importer-footer button.csv-importer-preview-toggle {
 		display: none;
 	}
 }
@@ -527,21 +530,12 @@
 	font-size: var(--font-ui-smaller);
 }
 
-.csv-importer-col-before,
 .csv-importer-col-after {
 	flex: 0 1 auto;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.csv-importer-col-after {
-	color: var(--text-normal);
-}
-
-.csv-importer-col-arrow {
-	flex: none;
 }
 
 .csv-importer-modal button.csv-importer-col-summary {
@@ -716,8 +710,15 @@
 	display: inline-flex;
 }
 
-.csv-importer-extra-help {
-	margin-bottom: var(--size-4-3);
+.csv-importer-opt-help {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+/* The intro row above the column table has a description and a button, but no name. */
+.csv-importer-columns-intro {
+	padding-top: 0;
+	border-top: 0;
 }
 
 /* Key choice: checkbox list of columns */
@@ -746,6 +747,26 @@
 	flex: none;
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+.csv-importer-key-meta.mod-warning {
+	color: var(--text-warning);
+}
+
+/* "Use X" next to the key suggestion: a real button, one size smaller than the default. */
+.csv-importer-modal button.csv-importer-use-key {
+	height: auto;
+	padding: var(--size-2-1) var(--size-4-2);
+	font-size: var(--font-ui-smaller);
+}
+
+.csv-importer-key-setting {
+	padding-bottom: var(--size-4-2);
+}
+
+.csv-importer-key-setting + .csv-importer-key-hint {
+	padding-bottom: var(--size-4-2);
+	font-size: var(--font-ui-small);
 }
 
 .csv-importer-chip-remove {
@@ -777,6 +798,7 @@
 .is-phone .csv-importer-modal .csv-importer-col-summary,
 .is-phone .csv-importer-modal .csv-importer-key-option,
 .is-phone .csv-importer-modal .csv-importer-chip,
+.is-phone .csv-importer-modal .csv-importer-use-key,
 .is-phone .csv-importer-modal .csv-importer-prop-input,
 .is-phone .csv-importer-modal select.dropdown,
 .is-phone .csv-importer-modal .clickable-icon {
@@ -790,6 +812,13 @@
 .is-phone .csv-importer-modal input[type="checkbox"] {
 	width: 24px;
 	height: 24px;
+}
+
+/* Section headings inside a tab (Extra properties, Values): flush with the rows above, with room between sections.
+   Obsidian indents heading rows in some versions; the dialog's rows are not indented. */
+.csv-importer-config .setting-item.setting-item-heading {
+	padding-inline: 0;
+	margin-top: var(--size-4-4);
 }
 
 /* === end owner:config === */
@@ -858,6 +887,20 @@
 	color: var(--text-faint);
 	cursor: default;
 	text-decoration: none;
+}
+
+/* Undo in the status line: a way back, not the next step, so muted instead of accent. */
+.csv-importer-status .csv-importer-link-btn.mod-muted {
+	color: var(--text-muted);
+	text-decoration: underline;
+}
+
+.csv-importer-status .csv-importer-link-btn.mod-muted:hover {
+	color: var(--text-normal);
+}
+
+.csv-importer-status .csv-importer-link-btn.mod-muted:disabled {
+	color: var(--text-faint);
 }
 
 .csv-importer-banner-slot {
@@ -989,6 +1032,19 @@
 	gap: 0 var(--size-2-2);
 }
 
+.csv-importer-status-part {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0 var(--size-2-2);
+	white-space: nowrap;
+}
+
+/* An empty part would still add a gap to the status line. */
+.csv-importer-status-changed:empty,
+.csv-importer-status-selection:empty {
+	display: none;
+}
+
 .csv-importer-changed {
 	color: var(--text-normal);
 }
@@ -1072,14 +1128,56 @@
 	min-width: 44px;
 }
 
-.is-phone .csv-importer-run-item:has(.csv-importer-check) {
+/* Phone header row stays one line: the type badge keeps its compact height and centers on the name. */
+.is-phone .csv-importer-table thead th {
+	vertical-align: middle;
+}
+
+.is-phone .csv-importer-table .csv-importer-badge.is-clickable {
+	position: relative;
+	min-height: 24px;
+	min-width: 24px;
+}
+
+/* The touch target is taller than the badge: it fills the header cell instead of growing the row. */
+.is-phone .csv-importer-table .csv-importer-badge.is-clickable::after {
+	content: "";
+	position: absolute;
+	inset: calc(-1 * var(--size-4-2)) calc(-1 * var(--size-2-2));
+}
+
+.is-phone .csv-importer-run-item.mod-selectable {
 	min-height: 44px;
 	align-items: center;
 }
 
 .is-phone .csv-importer-link-btn {
 	min-height: 44px;
-	padding: 0 var(--size-4-2);
+	padding: 0 var(--size-2-2);
+}
+
+/* Phone: the import history starts its own line, without a separator in front. */
+.csv-importer-status-break {
+	display: none;
+}
+
+.is-phone .csv-importer-status-break {
+	display: block;
+	flex-basis: 100%;
+	height: 0;
+}
+
+.is-phone .csv-importer-status-break + .csv-importer-status-part > .csv-importer-status-sep {
+	display: none;
+}
+
+/* Phone: the selection part starts its own line instead of wrapping with a stray separator in front. */
+.is-phone .csv-importer-status-selection {
+	flex-basis: 100%;
+}
+
+.is-phone .csv-importer-status-selection > .csv-importer-status-sep:first-child {
+	display: none;
 }
 
 .csv-importer-badge.is-clickable {
@@ -1165,6 +1263,12 @@
 	background: var(--background-primary);
 }
 
+.csv-importer-run-headline {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	overflow-wrap: anywhere;
+}
+
 .csv-importer-run-target {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
@@ -1173,6 +1277,7 @@
 
 .csv-importer-run-counts {
 	margin-top: var(--size-2-2);
+	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 	font-variant-numeric: tabular-nums;
 }
@@ -1244,7 +1349,7 @@
 	border-bottom: none;
 }
 
-.csv-importer-run-item:has(.csv-importer-check) {
+.csv-importer-run-item.mod-selectable {
 	display: flex;
 	align-items: flex-start;
 	gap: var(--size-4-2);
@@ -1283,17 +1388,14 @@
 	min-height: 44px;
 }
 
-/* Footer on phone: Close fills the row, the "more" menu sits beside it, Open base moves into the menu. */
+/* Footer on phone: the primary button (Open base / Open first note, else Close) fills the row; "More actions" sits at the end. */
 .is-phone .csv-importer-run-buttons button {
 	min-height: 44px;
 }
 
-.is-phone .csv-importer-run-buttons .csv-importer-run-close {
+.is-phone .csv-importer-run-buttons .csv-importer-run-primary,
+.is-phone .csv-importer-run-buttons:not(.has-primary) .csv-importer-run-close {
 	flex: 1 1 auto;
-}
-
-.is-phone .csv-importer-run-buttons .csv-importer-run-base {
-	display: none;
 }
 
 .is-phone .csv-importer-run-buttons .clickable-icon {
@@ -1388,29 +1490,41 @@
 	min-width: 0;
 }
 
-.csv-importer-index-name {
+/* File name: a link, not a button. Scoped to the view so it beats Obsidian's `button:not(.clickable-icon)` chrome. */
+.csv-importer-index .csv-importer-index-name {
 	flex: 0 1 auto;
 	min-width: 0;
-	padding: 0;
 	height: auto;
+	padding: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	background: transparent;
 	box-shadow: none;
 	border: none;
+	border-radius: var(--radius-s);
 	color: var(--text-normal);
+	font-size: var(--font-ui-small);
 	font-weight: var(--font-medium);
 	text-align: left;
 	cursor: pointer;
 }
 
-.csv-importer-index-name:hover:not(:disabled) {
+.csv-importer-index .csv-importer-index-name:hover:not(:disabled) {
+	background: transparent;
 	color: var(--text-accent);
 	text-decoration: underline;
 }
 
-.csv-importer-index-name:disabled {
+.csv-importer-index .csv-importer-index-name:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+.csv-importer-index .csv-importer-index-name:disabled {
+	background: transparent;
 	color: var(--text-muted);
 	cursor: default;
 }
@@ -1449,8 +1563,29 @@
 	color: var(--text-muted);
 }
 
+.csv-importer-index-count.mod-none {
+	color: var(--text-faint);
+}
+
 .csv-importer-index-summary {
 	display: none;
+}
+
+/* Add CSV menu button: label and a small chevron. */
+.csv-importer-index-add {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.csv-importer-index-add-chevron {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+
+.csv-importer-index-add-chevron .svg-icon {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
 }
 
 .csv-importer-index-actions {
@@ -1479,7 +1614,8 @@
 }
 
 .csv-importer-index-primary:focus-visible,
-.csv-importer-index-all:focus-visible {
+.csv-importer-index-all:focus-visible,
+.csv-importer-index-add:focus-visible {
 	box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
 }
 
@@ -1529,10 +1665,12 @@
 		grid-column: 2;
 	}
 
+	/* The summary line carries folder, result, edits and changes, so the desktop meta lines are hidden. */
 	.csv-importer-index-row.mod-head,
 	.csv-importer-index-last,
 	.csv-importer-index-count,
-	.csv-importer-index-path {
+	.csv-importer-index-path,
+	.csv-importer-index-meta {
 		display: none;
 	}
 
@@ -1554,7 +1692,7 @@
 
 .is-phone .csv-importer-index-primary,
 .is-phone .csv-importer-index-all,
-.is-phone .csv-importer-index-name,
+.is-phone .csv-importer-index .csv-importer-index-name,
 .is-phone .csv-importer-index-more,
 .is-phone .csv-importer-index-search {
 	min-height: 44px;
@@ -1733,7 +1871,6 @@
 	padding: var(--size-2-2) 0;
 }
 
-.is-phone .csv-importer-index-scan,
 .is-phone .csv-importer-index-add,
 .is-phone .csv-importer-scan-bar .csv-importer-scan-link,
 .is-phone .csv-importer-scan-row {

@@ -102,6 +102,7 @@ export function applyUndo(app: App, manifest: UndoManifest): Promise<UndoOutcome
 }
 
 /** `applyUndo` over any vault gateway. */
+// fallow-ignore-next-line unused-export -- test seam: applies undo against a fake VaultGateway
 export async function applyUndoWith(vault: VaultGateway, manifest: UndoManifest): Promise<UndoOutcome> {
 	const out: UndoOutcome = { trashed: 0, restored: 0, failed: 0, changed: [] };
 	const hashes = manifest.writtenHashes;

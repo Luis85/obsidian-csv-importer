@@ -215,7 +215,7 @@ export class ImportService {
 			.map((p) => this.app.vault.getAbstractFileByPath(p))
 			.filter(isCsv);
 		if (files.length === 0) {
-			new Notice("No configured CSV files found.");
+			new Notice("No CSV files with import settings found.");
 			return;
 		}
 		for (const f of files) await this.importFromDisk(f);
@@ -350,6 +350,27 @@ export class ImportService {
 		const stem = sanitizeFileName(fileName.replace(/\.csv$/i, ""));
 		if (stem === "") throw new Error("Enter a file name.");
 		const dir = normalizePath(folder.trim() || "/");
+		await this.createFolders(dir);
+		const join = (name: string): string => normalizePath(dir === "/" ? `${name}.csv` : `${dir}/${name}.csv`);
+		const path = join(stem);
+		const existing = vault.getAbstractFileByPath(path);
+		let file: TFile;
+		if (existing && conflict === "replace") {
+			if (!(existing instanceof TFile)) throw new Error(`${path} is a folder.`);
+			await vault.modifyBinary(existing, data);
+			file = existing;
+		} else {
+			file = await vault.createBinary(existing ? await this.freePath(path, (n) => join(`${stem} ${n}`)) : path, data);
+		}
+		await this.addToIndex([file.path]);
+		triggerCsvChanged(this.app, file.path);
+		await this.app.workspace.getLeaf("tab").openFile(file);
+		return file;
+	}
+
+	/** Creates the folders of `dir` that are missing ("/" is the vault root). Throws when a file is in the way. */
+	private async createFolders(dir: string): Promise<void> {
+		const { vault } = this.app;
 		let walked = "";
 		for (const seg of dir === "/" ? [] : dir.split("/")) {
 			walked = walked ? `${walked}/${seg}` : seg;
@@ -358,22 +379,14 @@ export class ImportService {
 			if (node) throw new Error(`${walked} is not a folder.`);
 			await vault.createFolder(walked);
 		}
-		const join = (name: string): string => normalizePath(dir === "/" ? `${name}.csv` : `${dir}/${name}.csv`);
-		let path = join(stem);
-		let file: TFile;
-		const existing = vault.getAbstractFileByPath(path);
-		if (existing && conflict === "replace") {
-			if (!(existing instanceof TFile)) throw new Error(`${path} is a folder.`);
-			await vault.modifyBinary(existing, data);
-			file = existing;
-		} else {
-			for (let n = 1; existing && ((await vault.adapter.exists(path)) || vault.getAbstractFileByPath(path)); n++) path = join(`${stem} ${n}`);
-			file = await vault.createBinary(path, data);
-		}
-		await this.addToIndex([file.path]);
-		triggerCsvChanged(this.app, file.path);
-		await this.app.workspace.getLeaf("tab").openFile(file);
-		return file;
+	}
+
+	/** `path` if nothing is there, else the first `numbered(n)` (n = 1, 2, ...) that is free on disk and in the vault. */
+	private async freePath(path: string, numbered: (n: number) => string): Promise<string> {
+		const { vault } = this.app;
+		let p = path;
+		for (let n = 1; (await vault.adapter.exists(p)) || vault.getAbstractFileByPath(p); n++) p = numbered(n);
+		return p;
 	}
 
 	/** Runs the import dialog for every configured CSV that changed since its last import. */
@@ -412,72 +425,95 @@ export class ImportService {
 	 */
 	async deleteImportedNotes(csvPath: string): Promise<number> {
 		const fileName = csvPath.split("/").pop() ?? csvPath;
-		const snapshot = await this.storage.loadSnapshot(csvPath);
-		const owned = Object.keys(snapshot).filter((p) => {
-			const f = this.app.vault.getAbstractFileByPath(p);
-			return f instanceof TFile && f.extension.toLowerCase() === "md";
-		});
+		const owned = await this.ownedNotePaths(csvPath);
 		if (owned.length === 0) {
 			new Notice(`${fileName} has no imported notes to delete.`);
 			return 0;
 		}
-		const cfg = this.configFor(csvPath);
-		let folder = "";
-		try {
-			folder = staticPrefix(resolveTargetFolder(cfg, csvPath));
-		} catch {
-			folder = "";
-		}
-		const base = basePath(this.app, folder);
+		const base = basePath(this.app, this.staticTargetFolder(csvPath));
 		const message = `This moves ${plural(owned.length, "note", "notes")} created by importing ${fileName} to the trash. Notes you created yourself are not affected.`;
-		let alsoBase = false;
-		if (base) {
-			const r = await confirmDialogWithOption(this.app, "Delete imported notes?", message, "Delete notes", { label: "Also delete the base file" }, true);
-			if (!r.ok) return 0;
-			alsoBase = r.checked;
-		} else if (!(await confirmDialog(this.app, "Delete imported notes?", message, "Delete notes", true))) {
-			return 0;
-		}
+		const answer = await this.confirmDelete(message, Boolean(base));
+		if (!answer.ok) return 0;
 
 		const progress = owned.length > 50 ? new Notice(`Deleting notes: 0 of ${owned.length}`, 0) : null;
-		let trashed = 0;
-		let failed = 0;
+		let result: { trashed: number; failed: number };
 		try {
-			for (const [i, p] of owned.entries()) {
-				const f = this.app.vault.getAbstractFileByPath(p);
-				if (f instanceof TFile) {
-					try {
-						await this.app.fileManager.trashFile(f);
-						trashed++;
-					} catch (e) {
-						failed++;
-						console.error("CSV Importer: could not trash a note", p, e);
-					}
-				}
-				if (progress && i % 25 === 0) progress.setMessage(`Deleting notes: ${i + 1} of ${owned.length}`);
-			}
-			if (alsoBase && base) {
-				const bf = this.app.vault.getAbstractFileByPath(base);
-				if (bf instanceof TFile) {
-					try {
-						await this.app.fileManager.trashFile(bf);
-					} catch (e) {
-						console.error("CSV Importer: could not trash the base file", e);
-					}
-				}
-			}
+			result = await this.trashNotes(owned, progress);
+			if (answer.alsoBase && base) await this.trashBaseFile(base);
 		} finally {
 			progress?.hide();
 		}
+		const { trashed, failed } = result;
 		await this.storage.clearImportState(csvPath);
-		const stored = this.store.get(csvPath);
-		if (stored) {
-			stored.lastImport = null;
-			await this.store.set(csvPath, stored);
-		}
+		await this.resetLastImport(csvPath);
 		triggerCsvChanged(this.app, csvPath);
 		new Notice(failed > 0 ? `Moved ${plural(trashed, "note", "notes")} to the trash. ${failed} could not be deleted.` : `Moved ${plural(trashed, "note", "notes")} to the trash.`);
 		return trashed;
+	}
+
+	/** Snapshot entries of the CSV that still exist as markdown files. */
+	private async ownedNotePaths(csvPath: string): Promise<string[]> {
+		const snapshot = await this.storage.loadSnapshot(csvPath);
+		return Object.keys(snapshot).filter((p) => {
+			const f = this.app.vault.getAbstractFileByPath(p);
+			return f instanceof TFile && f.extension.toLowerCase() === "md";
+		});
+	}
+
+	/** The fixed part of the CSV's target folder ("" when it cannot be resolved). */
+	private staticTargetFolder(csvPath: string): string {
+		try {
+			return staticPrefix(resolveTargetFolder(this.configFor(csvPath), csvPath));
+		} catch {
+			return "";
+		}
+	}
+
+	/** Asks before deleting imported notes; with a base file, also whether to delete that. */
+	private async confirmDelete(message: string, hasBase: boolean): Promise<{ ok: boolean; alsoBase: boolean }> {
+		if (hasBase) {
+			const r = await confirmDialogWithOption(this.app, "Delete imported notes?", message, "Delete notes", { label: "Also delete the base file" }, true);
+			return { ok: r.ok, alsoBase: r.ok && r.checked };
+		}
+		return { ok: await confirmDialog(this.app, "Delete imported notes?", message, "Delete notes", true), alsoBase: false };
+	}
+
+	/** Moves the notes to the trash, updating the progress notice. Failures are logged and counted. */
+	private async trashNotes(paths: string[], progress: Notice | null): Promise<{ trashed: number; failed: number }> {
+		let trashed = 0;
+		let failed = 0;
+		for (const [i, p] of paths.entries()) {
+			const f = this.app.vault.getAbstractFileByPath(p);
+			if (f instanceof TFile) {
+				try {
+					await this.app.fileManager.trashFile(f);
+					trashed++;
+				} catch (e) {
+					failed++;
+					console.error("CSV Importer: could not trash a note", p, e);
+				}
+			}
+			if (progress && i % 25 === 0) progress.setMessage(`Deleting notes: ${i + 1} of ${paths.length}`);
+		}
+		return { trashed, failed };
+	}
+
+	private async trashBaseFile(base: string): Promise<void> {
+		const bf = this.app.vault.getAbstractFileByPath(base);
+		if (!(bf instanceof TFile)) return;
+		try {
+			await this.app.fileManager.trashFile(bf);
+		} catch (e) {
+			console.error("CSV Importer: could not trash the base file", e);
+		}
+	}
+
+	/** Clears the stored last import of a CSV's config. */
+	private async resetLastImport(csvPath: string): Promise<void> {
+		const stored = this.store.get(csvPath);
+		if (!stored) return;
+		stored.lastImport = null;
+		await this.store.set(csvPath, stored);
 	}
 
 	/** Deletes the settings and import history of a CSV after confirmation. Imported notes stay. */
@@ -485,8 +521,8 @@ export class ImportService {
 		const fileName = csvPath.split("/").pop() ?? csvPath;
 		const ok = await confirmDialog(
 			this.app,
-			"Remove from index?",
-			`Remove ${fileName} from the index? Its import settings and import history are deleted. Imported notes stay.`,
+			"Remove from CSV imports?",
+			`Remove ${fileName} from CSV imports? Its import settings and import history are deleted. Imported notes stay.`,
 			"Remove",
 			true,
 		);
@@ -494,7 +530,7 @@ export class ImportService {
 		await this.store.delete(csvPath);
 		await this.storage.delete(csvPath);
 		triggerCsvChanged(this.app, csvPath);
-		new Notice(`Removed ${fileName} from the index.`);
+		new Notice(`Removed ${fileName} from CSV imports.`);
 		return true;
 	}
 

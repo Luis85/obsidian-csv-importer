@@ -1,4 +1,4 @@
-import type { FileImportConfig, PluginSettings } from "./types";
+import type { ExtraProperty, FileImportConfig, PluginSettings, RowFilter } from "./types";
 
 export const DEFAULT_SETTINGS: PluginSettings = {
 	defaultDelimiter: "auto",
@@ -66,23 +66,36 @@ const PROP_TYPES = ["text", "number", "checkbox", "date", "datetime", "list"];
 export function migrateFileConfig(raw: Partial<FileImportConfig>, settings: PluginSettings): FileImportConfig {
 	const src: Partial<FileImportConfig> = raw && typeof raw === "object" ? raw : {};
 	const cfg: FileImportConfig = { ...createDefaultFileConfig(settings), ...src };
-	if (!Array.isArray(src.keyColumns)) cfg.keyColumns = typeof cfg.keyColumn === "string" && cfg.keyColumn !== "" ? [cfg.keyColumn] : [];
-	else cfg.keyColumns = src.keyColumns.filter((k): k is string => typeof k === "string" && k !== "");
+	cfg.keyColumns = migrateKeyColumns(src.keyColumns, cfg.keyColumn);
 	if (typeof cfg.keyColumn !== "string") cfg.keyColumn = "";
 	if (typeof cfg.keyProperty !== "string" || cfg.keyProperty.trim() === "") cfg.keyProperty = "import_key";
 	if (!DATE_ORDERS.includes(cfg.dateOrder)) cfg.dateOrder = "auto";
-	const f = cfg.rowFilter;
-	if (!f || typeof f !== "object" || typeof f.column !== "string" || !FILTER_OPS.includes(f.op)) cfg.rowFilter = null;
-	else cfg.rowFilter = { column: f.column, op: f.op, value: typeof f.value === "string" ? f.value : "" };
-	cfg.extraProperties = Array.isArray(cfg.extraProperties)
-		? cfg.extraProperties
-				.filter((e) => e && typeof e === "object" && typeof e.property === "string")
-				.map((e) => ({
-					property: e.property,
-					type: PROP_TYPES.includes(e.type) ? e.type : "text",
-					defaultValue: typeof e.defaultValue === "string" ? e.defaultValue : "",
-				}))
-		: [];
+	cfg.rowFilter = sanitizeRowFilter(cfg.rowFilter);
+	cfg.extraProperties = sanitizeExtraProperties(cfg.extraProperties);
 	if (!Array.isArray(cfg.columns)) cfg.columns = [];
 	return cfg;
+}
+
+/** Stored `keyColumns` without empty entries; when missing, the legacy `keyColumn` (if set). */
+function migrateKeyColumns(keyColumns: unknown, keyColumn: unknown): string[] {
+	if (!Array.isArray(keyColumns)) return typeof keyColumn === "string" && keyColumn !== "" ? [keyColumn] : [];
+	return keyColumns.filter((k): k is string => typeof k === "string" && k !== "");
+}
+
+/** A well-formed row filter, or null. */
+function sanitizeRowFilter(f: RowFilter | null): RowFilter | null {
+	if (!f || typeof f !== "object" || typeof f.column !== "string" || !FILTER_OPS.includes(f.op)) return null;
+	return { column: f.column, op: f.op, value: typeof f.value === "string" ? f.value : "" };
+}
+
+/** Extra properties with a name, a known type (else text) and a string default. */
+function sanitizeExtraProperties(list: ExtraProperty[]): ExtraProperty[] {
+	if (!Array.isArray(list)) return [];
+	return list
+		.filter((e) => e && typeof e === "object" && typeof e.property === "string")
+		.map((e) => ({
+			property: e.property,
+			type: PROP_TYPES.includes(e.type) ? e.type : "text",
+			defaultValue: typeof e.defaultValue === "string" ? e.defaultValue : "",
+		}));
 }

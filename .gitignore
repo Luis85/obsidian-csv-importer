@@ -10,3 +10,5 @@ ui-preview/dist/
 ui-preview/screenshots/
 .obsidian-cache/
 reports/e2e/
+.stryker-tmp/
+reports/mutation/

@@ -31,6 +31,8 @@ export interface CsvImporterHost {
 	canUndo(file: TFile): boolean;
 	/** Reverts the last import of this CSV (asks for confirmation, shows a notice). */
 	undoLastImport(file: TFile): Promise<void>;
+	/** Opens the CSV imports view in a new tab, or reveals the open one. */
+	openImportIndex(): Promise<void>;
 }
 
 /** Options of `CsvImporterHost.importFile`. */

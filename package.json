@@ -22,7 +22,10 @@
     "check": "npm run typecheck && npm run typecheck:test && npm run typecheck:e2e",
     "version": "node version-bump.mjs && git add manifest.json versions.json",
     "lint:css": "stylelint styles.css",
-    "lint:api": "node scripts/check-api-versions.mjs"
+    "lint:api": "node scripts/check-api-versions.mjs",
+    "test:mutation": "stryker run",
+    "quality": "fallow --baseline .fallow-baselines/dead-code.json --dupes-baseline .fallow-baselines/dupes.json --health-baseline .fallow-baselines/health.json",
+    "quality:baseline": "node scripts/fallow-baseline.mjs"
   },
   "keywords": [
     "obsidian",
@@ -36,6 +39,8 @@
     "node": ">=20.19"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.20.5",
     "@wdio/cli": "^9.33.1",
@@ -46,6 +51,7 @@
     "esbuild": "^0.25.12",
     "eslint": "^9.39.5",
     "eslint-plugin-obsidianmd": "^0.6.0",
+    "fallow": "3.42.0",
     "globals": "^17.14.0",
     "mocha": "^10.8.2",
     "obsidian": "^1.14.4",

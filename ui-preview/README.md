@@ -21,9 +21,7 @@ node ui-preview/build.mjs && node ui-preview/screenshot.mjs
 - Open a scenario manually: `dist/index.html?theme=dark&mobile=1#c-config` (`theme=light|dark`, `mobile=1`
   adds `is-phone`/`is-mobile` body classes; hash = scenario name).
 
-Scenarios: `a-table-first-import`, `b-table-drift`, `c-config`, `d-config-advanced`, `e-run-preview`,
-`f-run-done`, `g-settings`. Add more in `scenarios.ts` (export them from the `scenarios` object).
-Example data comes from `examples/*.csv` (imported as text at build time).
+Scenarios: see the `scenarios` object at the end of `scenarios.ts` (table view `a-`/`b-`, import settings `c-`/`d-`, run dialog `e-`/`f-`, settings tab `g-`, CSV imports `h-`). Add more there.
 
 If `src/view` has a transient compile error the build fails: fix or wait, then rerun. Any value the plugin
 imports from `obsidian` that the shim lacks is auto-stubbed at build time (a warning is printed and using it

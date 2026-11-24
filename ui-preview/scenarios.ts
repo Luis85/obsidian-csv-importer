@@ -4,7 +4,7 @@
  * Scenario registry for the ui-preview harness. Each scenario mounts the plugin's real view/modal code
  * (with the obsidian shim) into the page. Select by URL hash, e.g. index.html?theme=dark&mobile=1#c-config.
  */
-import { App, TFile, Notice, WorkspaceLeaf, Setting } from "obsidian";
+import { App, TFile, Notice, WorkspaceLeaf, Setting, Menu } from "obsidian";
 import { CsvView } from "../src/view/CsvView";
 import { ImportConfigModal } from "../src/view/ImportConfigModal";
 import { ImportRunModal } from "../src/view/ImportRunModal";
@@ -13,6 +13,7 @@ import { ImportIndexView } from "../src/view/ImportIndexView";
 import { DEFAULT_SETTINGS, createDefaultFileConfig } from "../src/defaults";
 import { parseCsv } from "../src/csv/parser";
 import { prepareConfig } from "../src/csv/typeInference";
+import { KEY_WARNING } from "../src/import/importer";
 import timesheetEn from "../examples/timesheet.csv";
 import timesheetDe from "../examples/timesheet-de.csv";
 
@@ -51,6 +52,7 @@ class FakeHost {
 	async undoLastImport() {
 		new Notice("Last import undone.");
 	}
+	async openImportIndex() {}
 }
 
 const ROWS_PREVIEW = [
@@ -63,7 +65,7 @@ const ROWS_PREVIEW = [
 	{ row: 7, path: "Data/timesheet/timesheet 7.md", outcome: "skipped", reason: "duplicate key" },
 	{ row: 8, path: "Data/timesheet/timesheet 8.md", outcome: "failed", reason: "file name taken by another record" },
 ];
-const RUN_WARNING = "No key column: notes are matched by file name. Renaming a note creates a duplicate on the next import.";
+const RUN_WARNING = KEY_WARNING;
 
 function tally(rows, extra = {}) {
 	const n = (o) => rows.filter((r) => r.outcome === o).length;
@@ -168,16 +170,24 @@ function extrasConfig(host, text) {
 }
 
 // --- owner:config scenarios (helper) ---
-async function mountConfig(tab, extras = false) {
-	const host = new FakeHost(timesheetEn);
-	const { app, file } = mountTableView(host, timesheetEn);
-	if (extras) host.configs.set(file.path, extrasConfig(host, timesheetEn));
-	new ImportConfigModal(app, host, file, timesheetEn).open();
+async function mountConfig(tab, extras = false, text = timesheetEn) {
+	const host = new FakeHost(text);
+	const { app, file } = mountTableView(host, text);
+	if (extras) host.configs.set(file.path, extrasConfig(host, text));
+	new ImportConfigModal(app, host, file, text).open();
 	await sleep(300);
-	const idx = { columns: 0, notes: 1, reimport: 2, file: 3 }[tab];
-	document.querySelectorAll(".csv-importer-tab")[idx]?.click();
+	document.querySelector(`[data-testid=config-tab-${tab}]`)?.click();
 	await sleep(200);
 }
+
+/** A CSV with a short ID-like column, so the Re-import tab suggests a key ("Use ISBN"). */
+const BOOKS_CSV = [
+	"Title,Author,ISBN,Year,Genre",
+	"The Left Hand of Darkness,Ursula K. Le Guin,978-0441478125,1969,Science fiction",
+	"Kindred,Octavia E. Butler,978-0807083697,1979,Science fiction",
+	"The Remains of the Day,Kazuo Ishiguro,978-0679731726,1989,Literary fiction",
+	"Piranesi,Susanna Clarke,978-1635575637,2020,Fantasy",
+].join("\n");
 
 const INDEX_ITEMS = [
 	{ csvPath: "Data/timesheet.csv", fileName: "timesheet.csv", exists: true, targetFolder: "Data/timesheet", lastImport: Date.now() - 2 * 3600e3, hasUndo: true, basePath: "Data/timesheet/timesheet.base" },
@@ -200,6 +210,12 @@ async function mountIndex(items) {
 		app,
 		listImports: async () => items,
 		countImportedNotes: async (p) => INDEX_COUNTS[p] ?? 0,
+		countEditedNotes: async (p) => (p.includes("timesheet") ? { count: 2, properties: ["Stunden"], checked: INDEX_COUNTS[p] ?? 0 } : { count: 0, properties: [], checked: INDEX_COUNTS[p] ?? 0 }),
+		listUnindexedCsvs: () => [],
+		countCsvRows: async () => 6,
+		addToIndex: async () => 0,
+		addExternalCsv: async () => { throw new Error("not in preview"); },
+		reimportChanged: async () => {},
 		reimport: async () => {},
 		reimportAll: async () => {},
 		configureImport: async () => {},
@@ -224,7 +240,61 @@ function manyRows(n) {
 	return rows;
 }
 
+/** Table view of the English sample with saved settings from an earlier import (Undo available). */
+function importedTable() {
+	const host = new FakeHost(timesheetEn);
+	host.undoable = true;
+	const cfg = createDefaultFileConfig(host.settings);
+	prepareConfig(cfg, parseCsv(timesheetEn, { delimiter: cfg.delimiter, hasHeader: cfg.hasHeader }), host.settings.midnightAsDate);
+	cfg.lastImport = LAST_IMPORT;
+	host.configs.set("Data/timesheet.csv", cfg);
+	return { host, ...mountTableView(host, timesheetEn) };
+}
+
+/** Table view of the English timesheet, and run dialog controls for it. */
+function timesheetRun() {
+	const host = new FakeHost(timesheetEn);
+	const { app, file } = mountTableView(host, timesheetEn);
+	return { app, ctl: runControls(file) };
+}
+
+/** Done state of the run dialog for `ctl`. */
+async function mountDone(ctl, app = new App()) {
+	new ImportRunModal(app, ctl).open();
+	const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
+	cta.click();
+	await waitFor(() => document.querySelector(".modal-title")?.textContent?.startsWith("Import finished"));
+	await sleep(200);
+}
+
 const tableRunScenarios = {
+	"a4-table-selection": {
+		title: "Table view: two rows selected, Undo in the status line",
+		async mount() {
+			importedTable();
+			document.querySelector('[data-testid=csv-row-check][data-row="2"]').click();
+			document.querySelector('[data-testid=csv-row-check][data-row="4"]').click();
+			await sleep(100);
+		},
+	},
+	"a5-table-pane-menu": {
+		title: "Table view: more-options menu with Import settings and Open CSV imports",
+		async mount() {
+			const { view } = importedTable();
+			const menu = new Menu();
+			view.onPaneMenu(menu, "more-options");
+			const more = document.querySelector(".view-action-more").getBoundingClientRect();
+			menu.showAtPosition({ x: more.right - 220, y: more.bottom + 4 });
+			await sleep(100);
+		},
+	},
+	"b2-table-parser-warning": {
+		title: "Table view: parser warning only (title names the problem)",
+		async mount() {
+			const text = timesheetEn.trimEnd() + "\n\n,,,,\n";
+			mountTableView(new FakeHost(text), text);
+		},
+	},
 	"a2-table-filter-nomatch": {
 		title: "Table view: active row filter callout, search without matches",
 		async mount() {
@@ -247,9 +317,7 @@ const tableRunScenarios = {
 	"e2-run-many": {
 		title: "Import run dialog, preview with many rows (groups open/closed)",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { file } = mountTableView(host, timesheetEn);
-			const ctl = runControls(file);
+			const { ctl } = timesheetRun();
 			ctl.preview = async () => tally(manyRows(30), { dryRun: true, warnings: [RUN_WARNING] });
 			new ImportRunModal(new App(), ctl).open();
 			await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
@@ -259,9 +327,7 @@ const tableRunScenarios = {
 	"e3-run-progress": {
 		title: "Import run dialog, mid-progress",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { file } = mountTableView(host, timesheetEn);
-			const ctl = runControls(file);
+			const { ctl } = timesheetRun();
 			ctl.execute = ({ onProgress }) => {
 				onProgress(3, 8);
 				return new Promise(() => {});
@@ -275,16 +341,28 @@ const tableRunScenarios = {
 	"f2-run-done-many": {
 		title: "Import run dialog, done state with many rows",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { file } = mountTableView(host, timesheetEn);
-			const ctl = runControls(file);
+			const { ctl } = timesheetRun();
 			ctl.preview = async () => tally(manyRows(30), { dryRun: true });
 			ctl.execute = async () => ({ undoable: true, result: tally(manyRows(30)) });
-			new ImportRunModal(new App(), ctl).open();
-			const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
-			cta.click();
-			await waitFor(() => document.querySelector(".modal-title")?.textContent?.startsWith("Import finished"));
-			await sleep(200);
+			await mountDone(ctl);
+		},
+	},
+	"f4-run-done-no-base": {
+		title: "Import run dialog, done state without a base: Open first note is the CTA",
+		async mount() {
+			const { ctl } = timesheetRun();
+			ctl.basePath = () => null;
+			await mountDone(ctl);
+		},
+	},
+	"f5-run-done-clean": {
+		title: "Import run dialog, done state: all new, no warnings, no base",
+		async mount() {
+			const { ctl } = timesheetRun();
+			const rows = ROWS_PREVIEW.slice(0, 2).concat([3, 4, 5, 6].map((n) => ({ row: n, path: `Data/timesheet/timesheet ${n}.md`, outcome: "created" })));
+			ctl.preview = async () => tally(rows, { dryRun: true });
+			ctl.execute = async () => ({ undoable: true, result: tally(rows) });
+			await mountDone(ctl);
 		},
 	},
 	"f3-run-done-menu": {
@@ -348,13 +426,18 @@ export const scenarios = {
 		},
 	},
 	// --- owner:config scenarios ---
-	"c-config": { title: "Import settings dialog, Columns tab", async mount() { await mountConfig("columns"); } },
+	"c-config": { title: "Import settings dialog, Properties tab", async mount() { await mountConfig("columns"); } },
 	"c-config-notes": { title: "Import settings dialog, Notes tab", async mount() { await mountConfig("notes"); } },
-	"c-config-reimport": { title: "Import settings dialog, Re-import tab", async mount() { await mountConfig("reimport"); } },
-	"c-config-file": { title: "Import settings dialog, File & rows tab", async mount() { await mountConfig("file"); } },
-	"c-config-extras": { title: "Import settings dialog: extra properties (ID uuid), Columns tab", async mount() { await mountConfig("columns", true); } },
+	"c-config-rows": { title: "Import settings dialog, Rows tab (no filter)", async mount() { await mountConfig("rows"); } },
+	"c-config-reimport": { title: "Import settings dialog, Re-import tab (no key, nothing to suggest)", async mount() { await mountConfig("reimport"); } },
+	"c-config-reimport-suggest": {
+		title: "Import settings dialog, Re-import tab with a key suggestion (Use ISBN)",
+		async mount() { await mountConfig("reimport", false, BOOKS_CSV); },
+	},
+	"c-config-format": { title: "Import settings dialog, File format tab", async mount() { await mountConfig("file"); } },
+	"c-config-extras": { title: "Import settings dialog: extra properties (ID uuid), Properties tab", async mount() { await mountConfig("columns", true); } },
 	"c-config-extras-reimport": { title: "Import settings dialog: composite key, Re-import tab", async mount() { await mountConfig("reimport", true); } },
-	"c-config-extras-filter": { title: "Import settings dialog: active row filter, File & rows tab", async mount() { await mountConfig("file", true); } },
+	"c-config-extras-filter": { title: "Import settings dialog: active row filter, Rows tab", async mount() { await mountConfig("rows", true); } },
 	"c-config-options": {
 		title: "Import settings dialog, column options expanded (number column)",
 		async mount() {
@@ -375,7 +458,7 @@ export const scenarios = {
 			await sleep(150);
 		},
 	},
-	"d-config-advanced": { title: "Import settings dialog, File & rows tab (alias)", async mount() { await mountConfig("file"); } },
+	"d-config-advanced": { title: "Import settings dialog, File format tab (alias)", async mount() { await mountConfig("file"); } },
 	// --- end owner:config scenarios ---
 	"h-index": {
 		title: "CSV imports index view (4 imports, one missing CSV, one with undo)",
@@ -402,13 +485,8 @@ export const scenarios = {
 	"f-run-done": {
 		title: "Import run dialog, done state",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { app, file } = mountTableView(host, timesheetEn);
-			new ImportRunModal(app, runControls(file)).open();
-			const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
-			cta.click();
-			await waitFor(() => document.querySelector(".modal-title")?.textContent?.startsWith("Import finished"));
-			await sleep(200);
+			const { app, ctl } = timesheetRun();
+			await mountDone(ctl, app);
 		},
 	},
 	"g-settings": {
@@ -453,6 +531,23 @@ export const scenarios = {
 				basePath: null,
 			}));
 			await mountIndex(long);
+		},
+	},
+	"h-index-changed": {
+		title: "CSV imports index view, one CSV changed since its last import (badge, CTA, callout)",
+		async mount() {
+			const items = INDEX_ITEMS.map((i) => ({ ...i, changed: false, modifiedAt: i.exists ? LAST_IMPORT : null, lastRun: null }));
+			items[0] = { ...items[0], changed: true, modifiedAt: Date.now() - 20 * 60e3, lastRun: { created: 6, updated: 2, unchanged: 0, skipped: 0, failed: 0 } };
+			items[1] = { ...items[1], lastRun: { created: 0, updated: 3, unchanged: 211, skipped: 0, failed: 0 } };
+			await mountIndex(items);
+		},
+	},
+	"h-index-add-menu": {
+		title: "CSV imports index view, Add CSV menu open",
+		async mount() {
+			await mountIndex(INDEX_ITEMS);
+			document.querySelector("[data-testid=csv-index-add]")?.click();
+			await sleep(150);
 		},
 	},
 	// --- end owner:index-settings scenarios ---

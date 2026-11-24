@@ -42,25 +42,32 @@ export function inferenceOptionsOf(cfg: FileImportConfig, midnightAsDate: boolea
 export function formatNumber(n: number, precision?: number | null): string {
 	if (!Number.isFinite(n)) return "";
 	if (precision !== null && precision !== undefined && precision >= 0) {
-		const p = Math.min(Math.floor(precision), 100);
-		const fixed = Math.abs(n) < 1e21 ? n.toFixed(p) : String(n);
-		if (!fixed.includes("e")) {
-			const out = fixed.includes(".") ? fixed.replace(/\.?0+$/, "") : fixed;
-			return out === "-0" || out === "" ? "0" : out;
-		}
+		const rounded = formatRounded(n, precision);
+		if (rounded !== null) return rounded;
 	}
-	let str = String(n);
-	const m = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(str);
-	if (m) {
-		const exp = Number(m[4]);
-		const mantDigits = (m[3] ?? "").length;
-		if (exp < 0 && mantDigits - exp > 100) {
-			// Too small for toFixed (would round to 0): keep exponent form, always with a decimal point (YAML float).
-			str = `${m[1]}${m[2]}.${m[3] ?? "0"}e${m[4]}`;
-		} else if (exp < 0) str = n.toFixed(mantDigits - exp);
-		else str = (grp(m, 1) + grp(m, 2) + (m[3] ?? "")).padEnd(grp(m, 1).length + 1 + exp, "0");
-	}
+	const str = expandExponent(n, String(n));
 	return str === "-0" ? "0" : str;
+}
+
+/** `n` rounded to `precision` decimals, trailing zeros stripped; null when the result would need exponent notation. */
+function formatRounded(n: number, precision: number): string | null {
+	const p = Math.min(Math.floor(precision), 100);
+	const fixed = Math.abs(n) < 1e21 ? n.toFixed(p) : String(n);
+	if (fixed.includes("e")) return null;
+	const out = fixed.includes(".") ? fixed.replace(/\.?0+$/, "") : fixed;
+	return out === "-0" || out === "" ? "0" : out;
+}
+
+/** `str` (String(n)) written out without exponent notation, except for values too small for toFixed. */
+function expandExponent(n: number, str: string): string {
+	const m = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(str);
+	if (!m) return str;
+	const exp = Number(m[4]);
+	const mantDigits = (m[3] ?? "").length;
+	// Too small for toFixed (would round to 0): keep exponent form, always with a decimal point (YAML float).
+	if (exp < 0 && mantDigits - exp > 100) return `${m[1]}${m[2]}.${m[3] ?? "0"}e${m[4]}`;
+	if (exp < 0) return n.toFixed(mantDigits - exp);
+	return (grp(m, 1) + grp(m, 2) + (m[3] ?? "")).padEnd(grp(m, 1).length + 1 + exp, "0");
 }
 
 // ---------------------------------------------------------------- numbers
@@ -86,24 +93,29 @@ export function parseNumber(raw: string, decimalSeparator: "." | ",", strict = f
 	let s = raw.trim();
 	if (stripUnits) s = stripNumberUnits(s);
 	if (s === "") return null;
-	const thousands = decimalSeparator === "." ? "\\," : "\\.";
-	const decimal = decimalSeparator === "." ? "\\." : ",";
-	const re = new RegExp(
-		`^([+-]?)([1-9]\\d{0,2}(?:${thousands}\\d{3})+|\\d+)?(?:${decimal}(\\d+))?(?:[eE]([+-]?\\d+))?$`,
-	);
-	const m = re.exec(s);
+	const m = numberPattern(decimalSeparator).exec(s);
 	if (!m) return null;
 	const [, sign, intPart, frac, exp] = m;
 	if (intPart === undefined && frac === undefined) return null;
 	const intDigits = (intPart ?? "").replace(/[.,]/g, "");
-	if (strict) {
-		if (sign === "+" || exp !== undefined) return null;
-		if (intDigits.length > 1 && intDigits.startsWith("0")) return null;
-		if (intDigits.length + (frac?.length ?? 0) > 15) return null;
-	}
+	if (strict && !passesStrict(sign, intDigits, frac, exp)) return null;
 	const normalized = `${sign}${intDigits || "0"}${frac ? "." + frac : ""}${exp ? "e" + exp : ""}`;
 	const n = Number(normalized);
 	return Number.isFinite(n) ? n : null;
+}
+
+/** Sign, integer part (optionally grouped by the other separator), fraction and exponent of a number. */
+function numberPattern(decimalSeparator: "." | ","): RegExp {
+	const thousands = decimalSeparator === "." ? "\\," : "\\.";
+	const decimal = decimalSeparator === "." ? "\\." : ",";
+	return new RegExp(`^([+-]?)([1-9]\\d{0,2}(?:${thousands}\\d{3})+|\\d+)?(?:${decimal}(\\d+))?(?:[eE]([+-]?\\d+))?$`);
+}
+
+/** Strict mode: no explicit "+", no exponent, no leading zeros, at most 15 significant digits. */
+function passesStrict(sign: string | undefined, intDigits: string, frac: string | undefined, exp: string | undefined): boolean {
+	if (sign === "+" || exp !== undefined) return false;
+	if (intDigits.length > 1 && intDigits.startsWith("0")) return false;
+	return intDigits.length + (frac?.length ?? 0) <= 15;
 }
 
 // ---------------------------------------------------------------- dates
@@ -162,26 +174,27 @@ function parseDatePart(s: string, order: SlashOrder): string | null {
 	m = DOT_RE.exec(s) ?? DASH_DMY_RE.exec(s);
 	if (m) return ymd(+grp(m, 3), +grp(m, 2), +grp(m, 1));
 	m = SLASH_RE.exec(s);
-	if (m) {
-		const a = +grp(m, 1);
-		const b = +grp(m, 2);
-		let o: SlashOrder = order;
-		if (o === "auto") o = a === b || a > 12 ? "dmy" : b > 12 ? "mdy" : "none";
-		if (o === "dmy") return ymd(+grp(m, 3), b, a);
-		if (o === "mdy") return ymd(+grp(m, 3), a, b);
-		return null;
-	}
+	if (m) return slashDate(+grp(m, 1), +grp(m, 2), +grp(m, 3), order);
 	m = NAME_DMY_RE.exec(s);
-	if (m) {
-		const mo = MONTHS[grp(m, 2).toLowerCase()];
-		return mo ? ymd(+grp(m, 3), mo, +grp(m, 1)) : null;
-	}
+	if (m) return namedMonthDate(+grp(m, 3), grp(m, 2), +grp(m, 1));
 	m = NAME_MDY_RE.exec(s);
-	if (m) {
-		const mo = MONTHS[grp(m, 1).toLowerCase()];
-		return mo ? ymd(+grp(m, 3), mo, +grp(m, 2)) : null;
-	}
+	if (m) return namedMonthDate(+grp(m, 3), grp(m, 1), +grp(m, 2));
 	return null;
+}
+
+/** `a/b/y` read in `order`; "auto" decides per value (equal parts or a > 12: day first, b > 12: month first). */
+function slashDate(a: number, b: number, y: number, order: SlashOrder): string | null {
+	let o: SlashOrder = order;
+	if (o === "auto") o = a === b || a > 12 ? "dmy" : b > 12 ? "mdy" : "none";
+	if (o === "dmy") return ymd(y, b, a);
+	if (o === "mdy") return ymd(y, a, b);
+	return null;
+}
+
+/** A date with a month name (English or German, full or abbreviated). */
+function namedMonthDate(y: number, monthName: string, d: number): string | null {
+	const mo = MONTHS[monthName.toLowerCase()];
+	return mo ? ymd(y, mo, d) : null;
 }
 
 /** Split off a trailing time of day; `date` is the remaining date text. */
@@ -284,61 +297,79 @@ interface Inferred {
  * (currency, percent, space thousands) is a number with `stripUnits`.
  */
 function inferFrom(count: number, get: (i: number) => string, opts: InferenceOptions): Inferred {
-	let order: SlashOrder = "none";
-	{
-		const vals: string[] = [];
-		for (let i = 0; i < count; i++) vals.push(get(i));
-		order = resolveDateOrder(vals, opts.dateOrder ?? "auto") ?? "none";
-	}
-	let n = 0;
-	let allBool = true;
-	let anyNotNo = false;
-	let allNum = true;
-	let allNumU = true;
-	let anyUnit = false;
-	let allDate = true;
-	let anyTime = false;
-	let allMidnight = true;
+	const vals: string[] = [];
+	for (let i = 0; i < count; i++) vals.push(get(i));
+	const order: SlashOrder = resolveDateOrder(vals, opts.dateOrder ?? "auto") ?? "none";
+	const t = newTally();
 	for (let i = 0; i < count; i++) {
 		const v = get(i).trim();
 		if (v === "") continue;
-		n++;
-		if (allBool) {
-			if (parseBool(v) === null) allBool = false;
-			else if (v !== "no" && v !== "No" && v !== "NO") anyNotNo = true;
-		}
-		if (allNumU) {
-			if (parseNumber(v, opts.decimalSeparator, true) !== null) {
-				// plain number
-			} else if (parseNumber(v, opts.decimalSeparator, true, true) !== null) {
-				anyUnit = true;
-				allNum = false;
-			} else {
-				allNumU = false;
-				allNum = false;
-			}
-		}
-		if (allDate) {
-			const d = parseDateValue(v, order);
-			if (d === null) allDate = false;
-			else if (d.kind === "datetime") {
-				anyTime = true;
-				if (d.time !== "00:00:00") allMidnight = false;
-			}
-		}
-		if (!allBool && !allNumU && !allDate) return { type: "text", stripUnits: false };
+		t.n++;
+		tallyBool(t, v);
+		tallyNumber(t, v, opts.decimalSeparator);
+		tallyDate(t, v, order);
+		if (!t.allBool && !t.allNumU && !t.allDate) return { type: "text", stripUnits: false };
 	}
-	if (n === 0) return { type: "text", stripUnits: false };
+	return verdictOf(t, opts.midnightAsDate);
+}
+
+/** What the non-empty values of a column seen so far have in common. */
+interface Tally {
+	n: number;
+	allBool: boolean;
+	/** Some checkbox value is not a bare "no". */
+	anyNotNo: boolean;
+	/** All plain numbers. */
+	allNum: boolean;
+	/** All numbers, with or without units. */
+	allNumU: boolean;
+	anyUnit: boolean;
+	allDate: boolean;
+	anyTime: boolean;
+	allMidnight: boolean;
+}
+
+function newTally(): Tally {
+	return { n: 0, allBool: true, anyNotNo: false, allNum: true, allNumU: true, anyUnit: false, allDate: true, anyTime: false, allMidnight: true };
+}
+
+function tallyBool(t: Tally, v: string): void {
+	if (!t.allBool) return;
+	if (parseBool(v) === null) t.allBool = false;
+	else if (v !== "no" && v !== "No" && v !== "NO") t.anyNotNo = true;
+}
+
+function tallyNumber(t: Tally, v: string, decimalSeparator: "." | ","): void {
+	if (!t.allNumU || parseNumber(v, decimalSeparator, true) !== null) return;
+	t.allNum = false;
+	if (parseNumber(v, decimalSeparator, true, true) !== null) t.anyUnit = true;
+	else t.allNumU = false;
+}
+
+function tallyDate(t: Tally, v: string, order: SlashOrder): void {
+	if (!t.allDate) return;
+	const d = parseDateValue(v, order);
+	if (d === null) t.allDate = false;
+	else if (d.kind === "datetime") {
+		t.anyTime = true;
+		if (d.time !== "00:00:00") t.allMidnight = false;
+	}
+}
+
+/** The column type the tally supports, in the order checkbox, number, date, datetime, text. */
+function verdictOf(t: Tally, midnightAsDate: boolean): Inferred {
+	if (t.n === 0) return { type: "text", stripUnits: false };
 	// A column of only bare "no" is far more likely a text/word column than a checkbox.
-	if (allBool && anyNotNo) return { type: "checkbox", stripUnits: false };
-	if (allNum) return { type: "number", stripUnits: false };
-	if (allNumU && anyUnit) return { type: "number", stripUnits: true };
-	if (allDate) {
-		if (!anyTime) return { type: "date", stripUnits: false };
-		if (opts.midnightAsDate && allMidnight) return { type: "date", stripUnits: false };
-		return { type: "datetime", stripUnits: false };
-	}
-	return { type: "text", stripUnits: false };
+	if (t.allBool && t.anyNotNo) return { type: "checkbox", stripUnits: false };
+	if (t.allNum) return { type: "number", stripUnits: false };
+	if (t.allNumU && t.anyUnit) return { type: "number", stripUnits: true };
+	return { type: dateTypeOf(t, midnightAsDate), stripUnits: false };
+}
+
+/** date, datetime, or text when not all values are dates. */
+function dateTypeOf(t: Tally, midnightAsDate: boolean): PropertyType {
+	if (!t.allDate) return "text";
+	return !t.anyTime || (midnightAsDate && t.allMidnight) ? "date" : "datetime";
 }
 
 /**
@@ -370,32 +401,44 @@ export function convertValue(raw: string, type: PropertyType, opts: ConversionOp
 	const t = (raw ?? "").trim();
 	if (t === "") return null;
 	switch (type) {
-		case "number": {
-			const n = parseNumber(t, opts.decimalSeparator, false, opts.stripUnits);
-			if (n === null) return t;
-			const p = opts.precision;
-			return p !== null && p !== undefined ? Number(formatNumber(n, p)) : n;
-		}
+		case "number":
+			return convertNumber(t, opts);
 		case "checkbox": {
 			const b = parseBool(t);
 			return b === null ? t : b;
 		}
 		case "date": {
-			const d = parseDateValue(t, opts.dateOrder ?? "auto") ?? parseExcelSerial(t, opts.decimalSeparator);
+			const d = parseDateOrSerial(t, opts);
 			return d ? d.date : t;
 		}
 		case "datetime": {
-			const d = parseDateValue(t, opts.dateOrder ?? "auto") ?? parseExcelSerial(t, opts.decimalSeparator);
+			const d = parseDateOrSerial(t, opts);
 			return d ? `${d.date}T${d.time ?? "00:00:00"}` : t;
 		}
-		case "list": {
-			const sep = opts.listSeparator;
-			const items = (sep ? t.split(sep) : [t]).map((x) => x.trim()).filter((x) => x !== "");
-			return items.length > 0 ? items : null;
-		}
+		case "list":
+			return splitList(t, opts.listSeparator);
 		default:
 			return t;
 	}
+}
+
+/** A trimmed, non-empty cell as a number (rounded to `precision`), or the text itself when it is not one. */
+function convertNumber(t: string, opts: ConversionOptions): number | string {
+	const n = parseNumber(t, opts.decimalSeparator, false, opts.stripUnits);
+	if (n === null) return t;
+	const p = opts.precision;
+	return p !== null && p !== undefined ? Number(formatNumber(n, p)) : n;
+}
+
+/** A date or datetime value, or else an Excel serial date. */
+function parseDateOrSerial(t: string, opts: ConversionOptions): ParsedDate | null {
+	return parseDateValue(t, opts.dateOrder ?? "auto") ?? parseExcelSerial(t, opts.decimalSeparator);
+}
+
+/** List items (trimmed, empty ones dropped); null when none are left. */
+function splitList(t: string, sep: string): string[] | null {
+	const items = (sep ? t.split(sep) : [t]).map((x) => x.trim()).filter((x) => x !== "");
+	return items.length > 0 ? items : null;
 }
 
 /** Turn a header into a safe property name (trimmed, whitespace collapsed, no YAML-hostile chars, non-empty). */
@@ -474,23 +517,23 @@ function detectDecimalSeparator(parsed: ParsedCsv): "." | "," | null {
 	let comma = 0;
 	let dot = 0;
 	for (let c = 0; c < parsed.headers.length; c++) {
-		let seen = false;
-		let asDot = true;
-		let asComma = true;
-		for (const r of parsed.rows) {
-			const v = (r[c] ?? "").trim();
-			if (v === "") continue;
-			seen = true;
-			if (asDot && parseNumber(v, ".", true, true) === null) asDot = false;
-			if (asComma && parseNumber(v, ",", true, true) === null) asComma = false;
-			if (!asDot && !asComma) break;
-		}
-		if (!seen) continue;
-		if (asComma && !asDot) comma++;
-		else if (asDot && !asComma) dot++;
+		const vote = separatorVote(parsed, c);
+		if (vote === ",") comma++;
+		else if (vote === ".") dot++;
 	}
 	if (comma > dot) return ",";
 	if (dot > comma) return ".";
+	return null;
+}
+
+/** The decimal separator column `c` is numeric with (and not with the other), or null. */
+function separatorVote(parsed: ParsedCsv, c: number): "." | "," | null {
+	const values = parsed.rows.map((r) => (r[c] ?? "").trim()).filter((v) => v !== "");
+	if (values.length === 0) return null;
+	const asDot = values.every((v) => parseNumber(v, ".", true, true) !== null);
+	const asComma = values.every((v) => parseNumber(v, ",", true, true) !== null);
+	if (asComma && !asDot) return ",";
+	if (asDot && !asComma) return ".";
 	return null;
 }
 
@@ -540,19 +583,20 @@ export function suggestKeyColumn(parsed: ParsedCsv, columns: ColumnConfig[]): st
 		if (!col.include) continue;
 		const idLike = ID_NAME_RE.test(col.source.trim()) || /id$/i.test(col.source.trim());
 		if (!idLike && col.type !== "text") continue;
-		const seen = new Set<string>();
-		let ok = true;
-		for (const r of parsed.rows) {
-			const v = (r[col.index] ?? "").trim();
-			if (v === "" || seen.has(v)) {
-				ok = false;
-				break;
-			}
-			seen.add(v);
-		}
-		if (!ok) continue;
+		if (!hasUniqueValues(parsed, col.index)) continue;
 		if (idLike) return col.source;
 		fallback ??= col.source;
 	}
 	return fallback;
+}
+
+/** Every row has a non-empty value in column `index`, and no two are the same (trimmed, case-sensitive). */
+function hasUniqueValues(parsed: ParsedCsv, index: number): boolean {
+	const seen = new Set<string>();
+	for (const r of parsed.rows) {
+		const v = (r[index] ?? "").trim();
+		if (v === "" || seen.has(v)) return false;
+		seen.add(v);
+	}
+	return true;
 }

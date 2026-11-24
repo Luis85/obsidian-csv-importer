@@ -15,10 +15,12 @@ Sources, checked 2026-11-23:
 
 ## Steps
 
-1. **Check that `main` is green.** CI must pass on Node 20, 22 and 24 (lint, test, build). `npm run lint` runs ESLint (`eslint-plugin-obsidianmd`), Stylelint and the API version check.
+1. **Check that `main` is green.** CI (`.github/workflows/ci.yml`) must pass on Node 20, 22 and 24: `npm run lint`, `npm test`, `npm run build`. `npm run lint` runs ESLint (`eslint-plugin-obsidianmd`), Stylelint (`styles.css`) and the API version check.
 2. **Check the repository root.** It must contain `README.md`, `LICENSE` (MIT) and `manifest.json`. The directory reads `manifest.json` from the **default branch**, so it must be committed there.
-3. **Publish a release** with the Release workflow (see CONTRIBUTING.md): `version=patch|minor|major|x.y.z`.
-   - The tag equals the manifest `version`, with no `v` prefix.
+3. **Publish a release** with the Release workflow (see [CONTRIBUTING.md](../CONTRIBUTING.md#release-process)): `version=current|patch|minor|major|x.y.z`. Leave **prerelease** off: the community directory ignores pre-releases (BRAT still installs them).
+   - The `release` job runs, in order: `npm run lint`, **Code quality (advisory)** (`npm run quality`, fallow), `npm test`, `npm run build`, then attests, commits, tags and publishes. Lint, tests and build block the release; the quality step does not.
+   - The `mutation` job (**Mutation tests (advisory)**, Stryker) runs next to it and never blocks it. See [Quality gates](#quality-gates-advisory).
+   - The tag equals the manifest `version`, with no `v` prefix. The workflow fails if they differ.
    - The assets are `main.js`, `manifest.json` and `styles.css`, uploaded individually.
    - `main.js` and `styles.css` get build-provenance attestations. The directory shows these as a passed check. Missing attestations are only a recommendation, not a blocker.
    - Versions are semver `x.y.z`. The docs suggest `1.0.0` for a first public release. Earlier `0.x` releases (0.1.0, 0.2.0) were BRAT betas.
@@ -69,17 +71,32 @@ Code and repository:
 - [ ] Command names don't contain the plugin name, and there are no default hotkeys.
 - [ ] No sample-plugin code is left over.
 - [ ] No `innerHTML`, `outerHTML` or `insertAdjacentHTML`. Build the DOM with `createEl` and `createDiv`.
-- [ ] UI text uses sentence case. ESLint enforces `obsidianmd/ui/sentence-case`.
+- [ ] UI text uses sentence case. ESLint checks `obsidianmd/ui/sentence-case` as a **warning**, so `npm run lint` passes with findings: read its output and fix them before submitting.
 - [ ] Settings use the declarative settings API (`getSettingDefinitions()`), with group headings, no "settings" in the headings and no top-level heading.
 - [ ] No global `app`; the plugin uses `this.app`.
-- [ ] Notes are written with the Vault API (`vault.create`, `vault.process`, `fileManager.processFrontMatter`) and deleted with `fileManager.trashFile`. `vault.adapter` is used only for plugin-folder state (`imports/`).
+- [ ] Notes are written with the Vault API (`vault.create`, `vault.process`, `fileManager.processFrontMatter`) and deleted with `fileManager.trashFile`. **Add CSV file** writes the copied CSV with `vault.createBinary` or `vault.modifyBinary`. `vault.adapter` is used for plugin-folder state (`imports/`) and for one existence check when **Add CSV file** picks a free file name.
 - [ ] User paths go through `normalizePath()`.
 - [ ] Listeners are registered with `registerEvent` and `registerDomEvent`, so none leak.
-- [ ] Styles live in `styles.css` and use Obsidian CSS variables. There are no inline styles and no `!important`.
-- [ ] Only documented APIs are used (no `metadataTypeManager`, no file-explorer internals). Before submitting, search `src/` for `as unknown as`.
+- [ ] Only documented APIs are used (no `metadataTypeManager`, no file-explorer internals). Before submitting, search `src/` for `as unknown as`. The known uses are typed key access to the plugin's own settings (`settings.ts`) and the plugin's custom workspace event `csv-importer:changed` (`obsidian/events.ts`); anything else needs a reason.
 - [ ] There is no `console.log` noise.
-- [ ] The code is not obfuscated, and `main.js` stays well under 5 MB (currently about 135 KB).
+- [ ] The code is not obfuscated, and `main.js` stays well under 5 MB (about 165 KB in November 2026).
 - [ ] `LICENSE` is MIT, which GitHub recognizes. The repository is not a fork and is public, open source code.
+
+Styles (`styles.css`, checked by `npm run lint` through Stylelint, `.stylelintrc.json`):
+
+- [ ] Styles live in `styles.css` and use Obsidian CSS variables. There are no inline styles and no `!important`.
+- [ ] No `:has()` selector. The community directory review flags it for selector invalidation cost, and Stylelint forbids it (`selector-pseudo-class-disallowed-list`). Add a class in code instead, as the run dialog does with `has-primary`.
+- [ ] No duplicate properties or selectors in a rule, no shorthand that overrides an earlier longhand, no unknown properties, units or pseudo-classes.
+- [ ] Only features fully supported in Chrome 120 and later (`stylelint-no-unsupported-browser-features`, partial support counts as an error). Use `gap`, not `column-gap`; avoid `display: contents` and `scrollbar-width`.
+
+## Quality gates (advisory)
+
+The Release workflow runs two code-quality checks that are **advisory** for now: they report, but never stop a release. The community directory does not run them, so they do not affect the scorecard. Look at them before a release anyway, because they catch dead code and untested behavior.
+
+- [ ] **Code quality (fallow).** The **Code quality (advisory)** step of the `release` job runs `npm run quality` with `continue-on-error`. Findings that are not in `.fallow-baselines/` appear as annotations and mark the step with a warning. Run `npm run quality` locally before releasing.
+- [ ] **Mutation tests (Stryker).** The `mutation` job runs `npm run test:mutation` with `continue-on-error`, and the `release` job does not wait for it. A score below `thresholds.break` in `stryker.config.mjs` (90 %; the last full run scored 93.8 %) marks the job failed as a warning. The score per file is in the run summary, and the HTML report is the `mutation-report` artifact.
+
+To make either one blocking later, follow the steps in [CONTRIBUTING.md](../CONTRIBUTING.md#code-quality) and [Mutation testing](../CONTRIBUTING.md#mutation-testing), then update this section.
 
 ## README disclosures (Developer policies)
 
@@ -89,7 +106,7 @@ The Developer policies forbid client-side telemetry, ads in the plugin UI, obfus
 - [ ] **Clipboard:** not used. If the code ever reads or writes the clipboard, disclose it, because the scanner flags undisclosed clipboard use.
 - [ ] **Data stored:**
   - settings in `data.json`;
-  - import state in `.obsidian/plugins/csv-importer/imports/`: `index.json` and `<hash>.json`, which hold hashes of the last imported values;
+  - import state in `.obsidian/plugins/csv-importer/imports/`: `index.json` (per CSV: size, modification time, content hash and the counts of the last import, no row content) and `<hash>.json`, which holds hashes of the last imported values;
   - undo data in `<hash>.undo.json`, which holds the previous note content and may contain row data.
 - [ ] **Files written:** notes, an optional `.base` file and an optional import report note. The CSV is never modified. Nothing outside the vault is accessed, with one user-initiated exception: **Add CSV file...** shows the system file picker (`<input type="file">`, no Node or Electron APIs) and reads only the file the user selects, copying it into the vault. The README discloses it under "Privacy and data".
 - [ ] **Account requirement, paid features and ads:** none.
@@ -103,5 +120,6 @@ The automated review checks more than the locally installed `eslint-plugin-obsid
 - **CSS.** The review reported duplicate properties in `styles.css`. Stylelint now runs in `npm run lint`, so CI and releases catch them.
 - **CSS browser features (0.2.0 review).** The review warned "multicolumn is only partially supported" for `column-gap`, which is fine in grid but is grouped under multi-column. Stylelint now runs `stylelint-no-unsupported-browser-features` with Chrome 120+, which reproduces that warning on the 0.2.0 stylesheet. Use the `gap` shorthand, and avoid partially supported features such as `display: contents` and `scrollbar-width`.
 - **Attestations.** Missing attestations were a recommendation. The Release workflow now attests `main.js` and `styles.css`.
+- **CSS `:has()`.** The review flags `:has()` selectors for their selector invalidation cost. The stylesheet no longer uses them, and Stylelint now rejects `:has()`.
 
-To check a change before releasing, run `npm run lint`, then use **Review branch** in the portal.
+To check a change before releasing, run `npm run lint` and read its warnings, run `npm run quality`, then use **Review branch** in the portal.

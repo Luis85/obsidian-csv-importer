@@ -65,16 +65,18 @@ export class PathIndex {
 		for (const part of folder.split("/").filter((p) => p.length > 0)) {
 			current = current ? `${current}/${part}` : part;
 			if (this.knownFolders.has(current)) continue;
-			if (!this.vault.getAbstract(current)) {
-				try {
-					await this.vault.createFolder(current);
-					this.childMaps.clear();
-				} catch (e) {
-					// Might have been created concurrently.
-					if (!this.vault.getAbstract(current)) throw e;
-				}
-			}
+			if (!this.vault.getAbstract(current)) await this.createFolder(current);
 			this.knownFolders.add(current);
+		}
+	}
+
+	/** Creates one folder; fine when it appeared meanwhile (created concurrently). */
+	private async createFolder(path: string): Promise<void> {
+		try {
+			await this.vault.createFolder(path);
+			this.childMaps.clear();
+		} catch (e) {
+			if (!this.vault.getAbstract(path)) throw e;
 		}
 	}
 

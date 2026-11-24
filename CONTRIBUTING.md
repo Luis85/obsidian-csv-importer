@@ -20,6 +20,9 @@ Copy (or symlink) `main.js`, `manifest.json` and `styles.css` into `<vault>/.obs
 | `npm run typecheck` | `tsc` only |
 | `npm test` | vitest, single run |
 | `npm run test:watch` | vitest in watch mode |
+| `npm run test:mutation` | Mutation testing with Stryker (see below) |
+| `npm run quality` | Code quality with fallow: dead code, duplication, complexity (see below) |
+| `npm run quality:baseline` | Re-saves the fallow baselines |
 | `npm run lint` | ESLint (with `eslint-plugin-obsidianmd`), Stylelint and the API version check |
 | `npm run lint:css` | Stylelint only |
 | `npm run lint:api` | API version check only |
@@ -36,7 +39,7 @@ Modules in `src/`:
 | `main.ts` | Plugin class: commands, ribbon icon, file menu, view registration, wiring |
 | `host.ts` | Interfaces the views and modals use to talk to the plugin (no circular imports) |
 | `types.ts`, `defaults.ts` | Shared types, default settings and config migration (schema version) |
-| `settings.ts` | Settings tab, declarative (`getSettingDefinitions()`), grouped as Reading files, New notes, Re-import, Table view, Imports, Danger zone |
+| `settings.ts` | Settings tab, declarative (`getSettingDefinitions()`), intro and "Open CSV imports" first, then grouped as New notes, Re-import, Reading files, Table view, Danger zone |
 | `configStore.ts` | In-memory per-file configs keyed by vault path |
 | `storage.ts` | Persistence: `data.json`, and under `imports/` the `index.json`, `<hash>.json` (snapshot) and `<hash>.undo.json` per CSV |
 | `core/result.ts`, `core/util.ts` | Outcome reasons and small pure helpers |
@@ -66,18 +69,44 @@ Modules in `src/`:
 | `view/dom.ts` | `renderCallout`, `badge`, `iconButton`, `relPath` and other DOM helpers |
 | `view/ConfirmModal.ts`, `view/shared.ts`, `view/relativeTime.ts` | Small shared UI pieces |
 
-Pure logic (`core/`, `csv/`, and most of `import/`) does not need Obsidian at runtime beyond types, so it is tested without it. UI strings live in `view/labels.ts`, `view/config/copy.ts` and `view/runCopy.ts`; reuse them rather than writing literals, and keep `README.md` labels in step. `docs/UI-SPEC.md` is the design spec for the interface.
+Pure logic (`core/`, `csv/`, and most of `import/`) does not need Obsidian at runtime beyond types, so it is tested without it. UI strings live in `view/labels.ts`, `view/config/copy.ts` and `view/runCopy.ts`; reuse them rather than writing literals, and keep `README.md` labels in step. [docs/UI-SPEC.md](docs/UI-SPEC.md) is the current spec for the interface; [docs/README.md](docs/README.md) lists the other project docs.
 
 ## Testing
 
-Tests are in `tests/` and run with vitest. `tests/mocks/obsidian.ts` is a mock of the parts of the `obsidian` module the code uses (vault, files, `Notice`, and so on); `tests/mocks/setup.ts` wires it in. Add a test with every behavior change. `acceptance.test.ts` and `reimport.test.ts` cover end-to-end imports and re-imports.
+All tests live under `tests/`: unit tests in `tests/unit/` (vitest, `npm test`) and end-to-end tests in `tests/e2e/` (WebdriverIO in real Obsidian, see below). `tests/unit/mocks/obsidian.ts` is a mock of the parts of the `obsidian` module the code uses (vault, files, `Notice`, and so on); `tests/unit/mocks/setup.ts` wires it in. Add a test with every behavior change. `acceptance.test.ts` and `reimport.test.ts` cover end-to-end imports and re-imports.
+
+## Code quality
+
+[fallow](https://fallow.tools) builds one module graph of the project and reports unused files, exports and dependencies, copy-paste duplication, and functions over its complexity thresholds.
+
+```sh
+npm run quality            # fails on findings that are not in the baselines
+npx fallow                 # the full report, baselines ignored
+npx fallow health --hotspots --targets   # where refactoring pays off most
+```
+
+`.fallowrc.jsonc` declares the dev tooling entry points (`ui-preview/`, `scripts/`), packages fallow cannot see being used, and the Obsidian lifecycle methods (`onOpen`, `getViewType`, ...) that Obsidian calls on the plugin's classes. The findings that existed when fallow was added are saved in `.fallow-baselines/` (`dead-code.json`, `dupes.json`, `health.json`), so `npm run quality` fails only on new ones. When you fix existing findings, run `npm run quality:baseline` and commit the smaller baselines. Do not re-save a baseline to get a new finding through: fix it, or add a `// fallow-ignore-next-line <rule>` comment with the reason. `.fallow/` is fallow's local cache and is gitignored by fallow itself.
+
+The release workflow runs `npm run quality` after lint, before tests and build. For now it is **advisory**: new findings show as annotations on the run and mark the step with a warning, but do not stop the release (`continue-on-error`). It becomes a blocker once the plugin has settled: remove `continue-on-error` from that step.
+
+## Mutation testing
+
+[Stryker](https://stryker-mutator.io) changes the code under test in small ways (mutants: a flipped condition, a removed statement, a different constant) and runs the vitest suite against each. A mutant the tests do not notice ("survived") points at behavior no test pins down.
+
+```sh
+npm run test:mutation
+```
+
+`stryker.config.mjs` mutates the pure logic: `src/core/`, `src/csv/`, `src/import/` (without `vaultGateway.ts`, an interface), `src/configStore.ts` and `src/defaults.ts`. The views are not mutated; they are covered by the end-to-end suite. Reports go to `reports/mutation/` (`index.html` to browse survivors, `mutation.json`), gitignored. A full run takes several minutes; to check one file, pass `--mutate src/csv/parser.ts`.
+
+The release workflow runs the suite in its own `mutation` job, next to the release. For now it is **advisory**: the job has `continue-on-error` and the release job does not wait for it, so a low score never stops a release. A score below `thresholds.break` in `stryker.config.mjs` (90 %) marks the job failed as a warning, and `scripts/mutation-summary.mjs` writes the score per file to the run summary. The first full run scored 68.2 %; after a pass of behavior tests and with static mutants (module-level constants) included, it is 93.8 % (about 14 minutes on 4 cores). Remaining survivors are mostly equivalent mutants (redundant guards, optimization-only conditions). To make it a blocker once the plugin has settled, remove `continue-on-error` from the job and add `needs: mutation` to the release job. Raise the threshold when the score goes up; do not lower it to get a run green. The HTML report is uploaded as the `mutation-report` artifact.
 
 ## Lint
 
 `npm run lint` runs three checks, in this order:
 
 1. `eslint .` with `eslint-plugin-obsidianmd` (the rules the community plugin review applies). Typical points: sentence case UI text, no `innerHTML`, no default hotkeys, `vault.process` instead of `vault.modify`, no stray `console.log`.
-2. `stylelint styles.css` (`.stylelintrc.json`), mainly to catch duplicate declarations, which the community directory review reports.
+2. `stylelint styles.css` (`.stylelintrc.json`): duplicate declarations, `:has()` selectors and CSS features not fully supported in Chrome 120 and later, all of which the community directory review reports.
 3. `node scripts/check-api-versions.mjs`. It uses the TypeScript compiler to report every Obsidian API (method or property) whose `@since` is newer than `minAppVersion` in `manifest.json` and is not guarded by `requireApiVersion`. Why: the community directory review checks this, but `eslint-plugin-obsidianmd`'s `no-unsupported-api` rule only checks methods, not plain properties (for example `Plugin.settings`). Run it alone with `npm run lint:api`; `npm run lint:css` runs Stylelint alone.
 
 `minAppVersion` is 1.15.1. Raising it relaxes the API check; lowering it can make the check fail. See [docs/SUBMISSION.md](docs/SUBMISSION.md) for the full checklist.
@@ -94,9 +123,9 @@ Screenshots go to `ui-preview/screenshots/`; `filter` is a substring of a scenar
 
 ## End-to-end tests
 
-`test/e2e/` runs the plugin in real Obsidian with [WebdriverIO](https://webdriver.io) and [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service). The service downloads Obsidian, installs the built plugin (`main.js`, `manifest.json`, `styles.css` from the repository root) into a copy of the fixture vault `test/e2e/vaults/base/`, and drives the app. Every user flow of the README has a spec; `test/e2e/USER-FLOWS.md` maps flows to specs and lists the flows still pending. Unit tests (`npm test`, vitest) are separate and unchanged.
+`tests/e2e/` runs the plugin in real Obsidian with [WebdriverIO](https://webdriver.io) and [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service). The service downloads Obsidian, installs the built plugin (`main.js`, `manifest.json`, `styles.css` from the repository root) into a copy of the fixture vault `tests/e2e/vaults/base/`, and drives the app. Every user flow of the README has a spec; `tests/e2e/USER-FLOWS.md` maps flows to specs and lists the flows still pending. Unit tests (`npm test`, vitest) are separate and unchanged.
 
-How the specs work: functional specs use the plugin's commands, its real dialogs and `app` APIs through `browser.executeObsidian`. UI clicks are used where the UI is under test (badge menus, dialogs, index rows). Elements the specs assert have `data-testid` attributes. Each spec ends by asserting that the plugin logged no errors or warnings. State is reset before every test (`resetEverything` in `test/e2e/support.ts`: fixture files, the plugin's saved data, plugin restart).
+How the specs work: functional specs use the plugin's commands, its real dialogs and `app` APIs through `browser.executeObsidian`. UI clicks are used where the UI is under test (badge menus, dialogs, index rows). Elements the specs assert have `data-testid` attributes. Each spec ends by asserting that the plugin logged no errors or warnings. State is reset before every test (`resetEverything` in `tests/e2e/support.ts`: fixture files, the plugin's saved data, plugin restart).
 
 ```sh
 npm run test:e2e                    # builds first (pretest:e2e), then runs earliest and latest Obsidian
@@ -126,7 +155,7 @@ README images: `npm run screenshots:readme` runs only `readme-screenshots.e2e.ts
 | `owner:table-run` | Table view and import run dialog |
 | `owner:index-settings` | CSV imports index and settings tab |
 
-Use Obsidian CSS variables and the spacing rules in `docs/UI-SPEC.md` section 7. Do not repeat a property in one rule (Stylelint fails on it).
+Use Obsidian CSS variables and the component and CSS rules in [docs/UI-SPEC.md](docs/UI-SPEC.md#7-component-rules) section 7. Do not use `:has()` (Stylelint rejects it). Do not repeat a property in one rule (Stylelint fails on it).
 
 ## Release process
 

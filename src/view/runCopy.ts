@@ -1,11 +1,18 @@
 import type { ImportResult, NoteOutcome, RowFilter } from "../types";
-import { ROW_FILTER_OPS } from "./labels";
+import { IMPORT_SETTINGS, OPEN_BASE, ROW_FILTER_OPS, UNDO_LAST_IMPORT } from "./labels";
+
+/** Shared names (UX review, vocabulary), re-exported for the table view and the run dialog. */
+export { IMPORT_SETTINGS, OPEN_BASE, UNDO_LAST_IMPORT };
 
 /** Copy owned by the table view and the import run dialog (UI-SPEC sections 3 and 4). */
 
-export const CONFIGURE_IMPORT = "Configure";
+/** Header action of the table view. */
+export const IMPORT_ACTION = "Import";
+/** Status line link; its tooltip and aria-label say the full name. */
 export const UNDO = "Undo";
 export const MORE_ACTIONS = "More actions";
+/** Tooltip of the header checkbox: says what row selection is for. */
+export const SELECT_ROWS_HINT = "Select rows to import only those";
 export const FILTER_PLACEHOLDER = "Filter rows…";
 export const FILTER_LABEL = "Filter rows in all columns";
 export const SHOW_MORE = "Show more";
@@ -27,12 +34,46 @@ export function selectRowLabel(n: number): string {
 	return `Select row ${n}`;
 }
 
-export function selectAllLabel(filtered: boolean, count: number): string {
-	return filtered ? `Select all ${count} matching rows` : `Select all ${count} rows`;
+export const FIRST_IMPORT_TITLE = "Ready to import";
+const COLUMNS_CHANGED_TITLE = "Columns changed";
+
+/** Callout title for several unrelated issues: "2 things to check". */
+export function thingsToCheck(n: number): string {
+	return `${n} ${n === 1 ? "thing" : "things"} to check`;
 }
 
-export const FIRST_IMPORT_TITLE = "Ready to import";
-export const COLUMNS_CHANGED_TITLE = "Columns changed";
+/** Titles for the warnings the parser and the importer produce, matched by their wording. */
+const WARNING_TITLES: [RegExp, string][] = [
+	[/^The CSV has new or missing columns/, COLUMNS_CHANGED_TITLE],
+	[/^Unterminated quote/, "Unclosed quote in the file"],
+	[/more values than the header/, "Rows with extra values"],
+	[/blank rows? (was|were) skipped/, "Blank rows skipped"],
+	[/^No key column/, "Notes are matched by file name"],
+	[/share[s]? a key with another row/, "Duplicate keys in the CSV"],
+	[/share[s]? a key with another note/, "Duplicate notes in the target folder"],
+	[/^This import creates or updates \d+ notes/, "Large import"],
+	[/^Row filter:/, "Row filter is on"],
+	[/^Extra property .* is ignored/, "Extra property ignored"],
+	[/^Some notes were skipped because this import did not create them/, "Notes not created by this import"],
+	[/too large to undo completely/, "Undo is incomplete"],
+	[/import history could not be saved/, "Import history not saved"],
+];
+
+/** The title that names one warning; a generic one for wording this list does not know. */
+export function warningTitle(text: string): string {
+	for (const [re, title] of WARNING_TITLES) if (re.test(text)) return title;
+	return "Check before importing";
+}
+
+/**
+ * Title of a callout that lists `items`: the title of the one kind of issue when they are all the same kind,
+ * otherwise "N things to check". UX review finding 2.
+ */
+export function calloutTitle(items: string[]): string {
+	const titles = new Set(items.map(warningTitle));
+	const [only] = titles;
+	return titles.size === 1 && only ? only : thingsToCheck(items.length);
+}
 export const ROW_FILTER_TITLE = "Row filter";
 export const READ_ERROR_TITLE = "Could not read this file";
 export const CHECK_DELIMITER = "Try another delimiter or encoding in the import settings.";
@@ -65,11 +106,9 @@ export const PREVIEW_TITLE = "Import preview";
 export const IMPORTING_TITLE = "Importing";
 export const CHECKING_ROWS = "Checking rows…";
 export const STOP_IMPORT = "Stop import";
-export const CANCEL = "Cancel";
-export const OPEN_BASE = "Open base";
 export const OPEN_FIRST_NOTE = "Open first note";
 export const SAVE_REPORT = "Save report as note";
-export const UNDO_IMPORT = "Undo import";
+export const UNDO_IMPORT = UNDO_LAST_IMPORT;
 export const NOTHING_TO_CHANGE = "Nothing to change.";
 export const NO_DATA_ROWS = "The file has no data rows.";
 
@@ -97,6 +136,30 @@ export function countsLine(r: ImportResult): string {
 	];
 	const text = parts.filter(([n]) => n > 0).map(([n, l]) => `${n} ${l}`).join(" · ");
 	return text || "Nothing to import";
+}
+
+function notes(n: number): string {
+	return `${n} ${n === 1 ? "note" : "notes"}`;
+}
+
+function folderSuffix(folder: string): string {
+	const f = folder.replace(/\/+$/, "");
+	return f ? ` to ${f}/` : "";
+}
+
+/**
+ * One-sentence headline above the counts (UX review finding 15).
+ * Preview: "4 notes will be written to Data/timesheet/. 3 rows need attention."
+ * Done: "4 notes written to Data/timesheet/. 3 rows need attention."
+ * `written` is the number of new and updated notes (in the preview: the ones still checked).
+ */
+export function runHeadline(phase: "preview" | "done" | "stopped", written: number, attention: number, folder: string): string {
+	let first: string;
+	if (written === 0) first = phase === "preview" ? "No notes will be written." : "No notes were written.";
+	else if (phase === "preview") first = `${notes(written)} will be written${folderSuffix(folder)}.`;
+	else first = `${notes(written)} written${folderSuffix(folder)}${phase === "stopped" ? " before the import was stopped" : ""}.`;
+	if (attention <= 0) return first;
+	return `${first} ${attention} ${attention === 1 ? "row needs" : "rows need"} attention.`;
 }
 
 export function moreRows(n: number): string {

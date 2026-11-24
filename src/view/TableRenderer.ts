@@ -1,8 +1,8 @@
-import { setIcon } from "obsidian";
+import { setIcon, setTooltip } from "obsidian";
 import type { ColumnConfig, FileImportConfig, ParsedCsv } from "../types";
 import { convertValue } from "../csv/typeInference";
 import { NO_ROWS, TYPE_BADGES, TYPE_LABELS, noRowsMatch } from "./labels";
-import { SHOW_MORE, filterMatchCount, selectAllLabel, selectRowLabel } from "./runCopy";
+import { SELECT_ROWS_HINT, SHOW_MORE, filterMatchCount, selectRowLabel } from "./runCopy";
 import { conversionOptions } from "./shared";
 
 type SortDir = "asc" | "desc";
@@ -162,8 +162,10 @@ export class TableRenderer {
 		const head = selectTh.createEl("input", {
 			cls: "csv-importer-check",
 			type: "checkbox",
-			attr: { "aria-label": selectAllLabel(this.query !== "", page.entries.length), "data-testid": "csv-select-all" },
+			attr: { "data-testid": "csv-select-all" },
 		});
+		// Says what selection is for before anything is ticked (UX review finding 4); also the aria-label.
+		setTooltip(head, SELECT_ROWS_HINT);
 		head.addEventListener("click", () => this.toggleAll(page));
 		page.headCheck = head;
 		hr.createEl("th", { cls: "csv-importer-rownum", text: "#" });

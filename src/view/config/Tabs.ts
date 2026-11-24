@@ -40,10 +40,6 @@ export class Tabs {
 		this.apply();
 	}
 
-	get selected(): string {
-		return this.current;
-	}
-
 	select(id: string, focus = false): void {
 		if (!this.panels.has(id)) return;
 		this.current = id;

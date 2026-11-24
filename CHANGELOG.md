@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### UI and UX
+Second UI/UX pass with a clearer information architecture; see `docs/archive/UX-REVIEW-2026-11.md`.
+- **One name per concept** across buttons, menus and commands: **Import settings** (was Configure / Configure CSV import), **Undo last import**, **CSV imports**. Command names changed, command IDs did not: **Import current CSV file**, **Open import settings for current CSV file**, **Re-import all CSV imports**.
+- **Import settings** tabs are ordered as you decide: **Properties** (columns, **Extra properties** with its own heading, **Values**: empty cells and number precision), **Notes**, **Rows** (the row filter, moved out of the file tab), **Re-import** (**Match notes by** first), **File format**. The summary says "matched by file name" instead of "no key"; the Preview button is hidden while the preview pane is visible; samples show the converted value once, with the raw value in the tooltip.
+- **Key suggestion** never picks free text (columns whose values are mostly several words), prefers code-like columns, and marks columns with duplicates or empty cells; **Use X** is a real button.
+- **Table view**: callout titles name the problem ("Columns changed", or "2 things to check" when several kinds are merged); the header checkbox explains row selection; **Undo** is a muted link; the more-options menu has **Import settings** and **Open CSV imports**; the phone header row stays compact.
+- **Import preview and report** open with one sentence ("4 notes will be written to Data/timesheet/. 3 rows need attention."). When done, **Open base** (or **Open first note**) is the main button and closes the dialog; **Close** is plain.
+- **CSV imports**: file names are links; changed CSVs get a **Changed** badge and a highlighted **Re-import**; **Scan vault** and **Add CSV file** are under one **Add CSV** menu; a dash when an import owns no notes; no repeated text on phones.
+- **Settings tab** is ordered as the journey (CSV imports, New notes, Re-import, Reading files, Table view, Danger zone), shares descriptions with the import settings, and marks the reset button as destructive.
+
+### Development
+- Code quality: fallow dead-code and duplication findings fixed (30 and 14 to 0), complex functions split into named helpers (94 to 67 above the threshold).
+- All tests are under `tests/`: unit tests in `tests/unit/`, end-to-end tests in `tests/e2e/` (was `test/e2e/`).
+- CSS: `:has()` replaced by a class (flagged by the community directory review) and forbidden by Stylelint.
+- Mutation testing with Stryker (`npm run test:mutation`). The release workflow runs it in an advisory `mutation` job next to the release: a score below 90 % shows as a warning and does not block the release yet. The score went from 68.2 % to 93.8 % with 236 new behavior tests (607 unit tests in total).
+- Code-quality checks with fallow (`npm run quality`): dead code, duplication and complexity. The release workflow reports findings that are not in `.fallow-baselines/` as warnings; it does not block the release yet.
+
 ## 0.3.0
 ### Fixes
 - CSS: replaced `column-gap` (flagged as partially supported multi-column CSS in the 0.2.0 review) with `gap`, and removed other partially supported features; Stylelint now checks browser support.

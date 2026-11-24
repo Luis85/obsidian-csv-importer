@@ -79,26 +79,48 @@ export const NAME = {
 	keepOnEmpty: "Keep values when the CSV cell is empty",
 } as const;
 
-/** Descriptions in the settings tab (defaults for unconfigured files). */
-export const SETTINGS_DESC = {
-	intro: "Defaults for CSV files you have not configured yet. Each file keeps its own settings once you save them.",
-	encoding: "Auto detects UTF-8, UTF-16 and Windows-1252.",
-	delimiter: "Column separator. Automatic detection looks at the file content.",
-	decimal: "Used when reading numbers, for example 0,625 in many European exports.",
-	listSeparator: "Splits cell values of list columns into items.",
-	emptyCells: "How empty cells are written into the properties of a note.",
-	midnight: "Detect a date instead of a date and time when every time in a column is 00:00:00.",
-	targetFolder: "Leave empty to create notes in a folder named like the CSV file, next to it.",
+/**
+ * Descriptions used where the same setting appears in both the settings tab and the import settings dialog
+ * (UX review finding 25: one string per setting). SETTINGS_DESC and CONFIG_DESC point here for those keys.
+ */
+const SHARED_DESC = {
+	encoding: "Text encoding of the file. Auto detects UTF-8, UTF-16 and Windows-1252. Change it if special characters look wrong.",
+	delimiter: "Column separator. Auto detects it from the file content.",
+	hasHeader: "Turn off if the first row already contains data.",
+	decimal: "Used to read numbers, for example 0,625 with a comma.",
+	listSeparator: "Splits the values of columns with the list type.",
+	emptyCells: "Leave the property empty, or omit it from the note when the cell is empty.",
 	fileName: "Use {{Column name}} for cell values, {{row}} for the row number and {{file}} for the CSV name.",
-	body: "Text placed below the properties. Supports the same placeholders.",
+	body: "Text below the properties of each note. Supports the same placeholders as the file name. May be empty.",
 	tags: "Added to every imported note.",
-	sourceLink: "Writes a source property that links back to the CSV file.",
-	createBase: "Create a .base file next to the target folder that shows the imported notes as a table.",
+	sourceLink: "Adds a property that links to the CSV file.",
+	createBase:
+		"Creates a .base file next to the target folder that shows the imported notes as a table. Existing base files are never changed.",
+	protectEdits: "If you changed a CSV property in Obsidian, re-imports keep your value.",
+	keepOnEmpty: "An empty cell does not clear a value that exists in the note.",
+} as const;
+
+/** Descriptions in the settings tab (defaults for CSV files without import settings). */
+export const SETTINGS_DESC = {
+	intro: "Defaults for CSV files you have not set up yet. Each CSV keeps its own import settings.",
+	encoding: SHARED_DESC.encoding,
+	delimiter: SHARED_DESC.delimiter,
+	hasHeader: SHARED_DESC.hasHeader,
+	decimal: SHARED_DESC.decimal,
+	listSeparator: SHARED_DESC.listSeparator,
+	emptyCells: SHARED_DESC.emptyCells,
+	midnight: "Detect a date instead of a date and time when every time in a column is 00:00:00.",
+	targetFolder: "Where new notes are created. Leave empty to use a folder named like the CSV file, next to it.",
+	fileName: SHARED_DESC.fileName,
+	body: SHARED_DESC.body,
+	tags: SHARED_DESC.tags,
+	sourceLink: SHARED_DESC.sourceLink,
+	createBase: SHARED_DESC.createBase,
 	conflict: "Update properties keeps properties you added in Obsidian and the note body. Replace whole note overwrites the note completely.",
-	protectEdits: "When updating, a CSV property you changed in Obsidian keeps your value.",
-	keepOnEmpty: "When updating, an empty cell does not clear a value in the note.",
+	protectEdits: SHARED_DESC.protectEdits,
+	keepOnEmpty: SHARED_DESC.keepOnEmpty,
 	pageSize: "Maximum number of rows rendered in the table before showing more.",
-	imports: "See every CSV with saved import settings, and re-import, configure or undo from one list.",
+	imports: "Every CSV with import settings in one list: import, re-import, change import settings or undo.",
 	reset: "Removes the saved import settings of every CSV file. Imported notes are not affected.",
 } as const;
 
@@ -106,21 +128,21 @@ export const SETTINGS_DESC = {
 export const CONFIG_DESC = {
 	targetFolder:
 		"Leave empty to use the default folder shown as placeholder. Placeholders like {{Column}} create subfolders per row, for example Projects/{{Client}}.",
-	fileName: "Use {{Column name}} for cell values, {{row}} for the row number and {{file}} for the CSV name. The note body is set in the Notes tab of the import settings.",
+	fileName: `${SHARED_DESC.fileName} The note body is set in the Notes tab of the import settings.`,
 	key: "On re-import, the note whose property matches this column is updated, even if renamed. Pick a unique column such as an ID. The column is always written to the notes.",
-	protectEdits: "If you changed a CSV property in Obsidian, re-imports keep your value.",
-	keepOnEmpty: "An empty cell does not clear a value that exists in the note.",
-	encoding: "Text encoding of the file. Change it if special characters look wrong.",
-	delimiter: "Auto detects the delimiter from the file content.",
-	hasHeader: "Turn off if the first row already contains data.",
-	decimal: "Used to read numbers, for example 0,625 with a comma.",
-	listSeparator: "Splits the values of columns with the list type.",
-	emptyCells: "Leave the property empty, or omit it from the note when the cell is empty.",
+	protectEdits: SHARED_DESC.protectEdits,
+	keepOnEmpty: SHARED_DESC.keepOnEmpty,
+	encoding: SHARED_DESC.encoding,
+	delimiter: SHARED_DESC.delimiter,
+	hasHeader: SHARED_DESC.hasHeader,
+	decimal: SHARED_DESC.decimal,
+	listSeparator: SHARED_DESC.listSeparator,
+	emptyCells: SHARED_DESC.emptyCells,
 	precision: "Decimal places for numbers, 0 to 10. Leave empty to keep the source precision.",
-	body: "Text of each note. Supports the same placeholders as the file name. May be empty.",
-	tags: "Added to every note.",
-	sourceLink: "Adds a property that links to the CSV file.",
-	createBase: "Creates a .base file next to the target folder that shows the imported notes as a table. Existing base files are never changed.",
+	body: SHARED_DESC.body,
+	tags: SHARED_DESC.tags,
+	sourceLink: SHARED_DESC.sourceLink,
+	createBase: SHARED_DESC.createBase,
 	adopt: "Off: notes in the target folder that this CSV did not create are never changed.",
 } as const;
 
@@ -142,9 +164,6 @@ export function delimiterLabel(d: string): string {
 		default: return d;
 	}
 }
-
-export const EXTRA_PROPERTIES_HELP =
-	"Written to the notes only, the CSV is not changed. Defaults fill new notes and empty properties; values you set in Obsidian are kept.";
 
 export const ROW_FILTER_OPS: Record<RowFilterOp, string> = {
 	equals: "equals",
@@ -189,7 +208,9 @@ export const IGNORE_UNITS = "Ignore units (\u20ac, $, %)";
 export const IMPORT_NOW = "Import now";
 export const SAVE = "Save";
 export const CANCEL = "Cancel";
-export const CONFIGURE = "Configure";
+/** The per-CSV configuration and its dialog (UX review §2 vocabulary). */
+export const IMPORT_SETTINGS = "Import settings";
+export const UNDO_LAST_IMPORT = "Undo last import";
 export const CLOSE = "Close";
 
 /** Key matching. */
@@ -202,15 +223,8 @@ export function suggestedKey(column: string): string {
 export const FILTER_ROWS = "Filter rows";
 export const FILTER_ROWS_WHERE = "Import rows where";
 
-/** Run list row: "timesheet 3.md \u00b7 row 3". Pass the file name only (see relPath() for folder-relative paths). */
-export function runRowLabel(name: string, row: number): string {
-	return `${name} \u00b7 row ${row}`;
-}
-
-/** Index empty state. The hint is the full sentence; the title is the heading above it. */
+/** Index empty state: the heading above the hint. */
 export const NO_IMPORTS_TITLE = "No imports yet";
-export const NO_IMPORTS_HINT = "Open a CSV file and choose Import to set one up.";
-export const NO_IMPORTS_YET = `${NO_IMPORTS_TITLE}. ${NO_IMPORTS_HINT}`;
 
 /** Source link toggle (was "Add link to the CSV file" / "Add source link"). */
 export const LINK_NOTES_TO_CSV = "Link notes to the CSV";
@@ -226,30 +240,36 @@ export const REIMPORT_BUTTON = "Re-import";
 export const REIMPORT_ALL = "Re-import all";
 export const CSV_MISSING = "CSV missing";
 export const OPEN_CSV_IMPORTS = "Open CSV imports";
-export const RESET_ALL_SETTINGS = "Reset all import settings\u2026";
+export const RESET_ALL_SETTINGS = "Reset all import settings";
+/** Warning button of the reset row; it opens a confirmation. */
+export const RESET_ALL_BUTTON = "Reset…";
 /** Settings tab section headings (spec section 6). */
 export const SETTINGS_HEADINGS = {
 	reading: "Reading files",
 	notes: "New notes",
 	reimport: "Re-import",
 	table: "Table view",
-	imports: "Imports",
+	/** Unused since the "Open CSV imports" row moved to the top of the tab (kept for a stable export). */
+	imports: "CSV imports",
 	danger: "Danger zone",
 } as const;
-/** Tab names of the import settings dialog (spec section 2). */
-export const CONFIG_TABS = {
-	columns: "Columns",
-	notes: "Notes",
-	reimport: "Re-import",
-	file: "File & rows",
-} as const;
 
-/** Imports index: scan, add from outside, changed CSV files, note counts. */
+/** CSV imports view: scan, add from outside, changed CSV files, note counts. */
+export const CSV_IMPORTS = "CSV imports";
+/** Title of the scan dialog. */
 export const SCAN_VAULT = "Scan vault";
+/** Title of the add-from-device dialog (with an ellipsis; the dialog strips it). */
 export const ADD_CSV_FILE = "Add CSV file...";
+/** Toolbar menu button that groups the two ways to add a CSV, and its items. */
+export const ADD_CSV = "Add CSV";
+export const ADD_CSV_SCAN = "Scan vault for CSV files...";
+export const ADD_CSV_FROM_DEVICE = "Copy a file from your device...";
+export const REMOVE_FROM_IMPORTS = "Remove from CSV imports...";
+export const DELETE_IMPORTED_NOTES = "Delete imported notes...";
+export const OPEN_BASE = "Open base";
 export const REIMPORT_CHANGED = "Re-import changed";
 export const CHANGED_BADGE = "Changed";
 export const changedLine = (n: number): string => `${n} CSV ${n === 1 ? "file" : "files"} changed since ${n === 1 ? "its" : "their"} last import`;
 export const editedLine = (n: number): string => `${n} edited since import`;
 export const NO_NEW_CSV_TITLE = "No new CSV files found";
-export const NO_NEW_CSV_HINT = "Every CSV file in the vault is already in the index.";
+export const NO_NEW_CSV_HINT = "Every CSV file in the vault is already in CSV imports.";

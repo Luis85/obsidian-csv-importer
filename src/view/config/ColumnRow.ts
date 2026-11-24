@@ -1,4 +1,3 @@
-import { setIcon } from "obsidian";
 import type { ColumnConfig, FrontmatterValue, PropertyType } from "../../types";
 import { convertValue, hasTimezoneOffsets } from "../../csv/typeInference";
 import { applyValueTemplate, formatValue } from "../../import/noteBuilder";
@@ -6,7 +5,8 @@ import { COLUMN_OPTIONS, IGNORE_UNITS, TYPE_LABELS, VALUE_TEMPLATE } from "../la
 import { LINK_TEMPLATE, conversionOptions } from "../shared";
 import { insertAtCursor, renderChipRow } from "./chips";
 import type { ConfigDraft } from "./ConfigDraft";
-import { OPTIONS_CLOSE, OPTIONS_OPEN, RESULT } from "./copy";
+import { RESULT } from "./copy";
+import { buildPropertyRowParts, syncPropertyInputs } from "./propertyRow";
 
 let rowCounter = 0;
 
@@ -76,6 +76,12 @@ function convertedSample(draft: ConfigDraft, col: ColumnConfig): string {
 	return Array.isArray(v) ? JSON.stringify(v) : formatValue(v);
 }
 
+/** Tooltip of a sample: the full value, and the raw cell before it when the conversion changed it. */
+function sampleTitle(raw: string, converted: string): string {
+	if (raw === "") return "";
+	return raw === converted ? raw : `${raw} → ${converted}`;
+}
+
 /**
  * One column of the CSV: include checkbox, source name, property input, type dropdown, an options button and the sample.
  * The options (value template, ignore units) expand inline below the row. On narrow layouts CSS turns the row into
@@ -104,30 +110,13 @@ export function renderColumnRow(list: HTMLElement, col: ColumnConfig, draft: Con
 	for (const [value, label] of Object.entries(TYPE_LABELS)) sel.createEl("option", { value, text: label });
 	sel.value = col.type;
 
-	const optBtn = main.createEl("button", {
-		cls: "clickable-icon csv-importer-col-options-btn",
-		attr: { type: "button", "aria-expanded": "false", "aria-controls": id, "aria-label": `${COLUMN_OPTIONS} for ${col.source}`, title: COLUMN_OPTIONS },
+	const { optDot, sampleEl, sampleAfter, summary, summaryText, opts, narrowProp } = buildPropertyRowParts(row, main, {
+		id,
+		optionsLabel: `${COLUMN_OPTIONS} for ${col.source}`,
+		sampleAttr: { "data-testid": "config-col-sample" },
+		propertyAttr: { "aria-label": `Property name for ${col.source}` },
+		property: col.property,
 	});
-	setIcon(optBtn, "sliders-horizontal");
-	const optDot = optBtn.createSpan({ cls: "csv-importer-options-dot" });
-
-	const sampleEl = main.createDiv({ cls: "csv-importer-col-sample" });
-	const sampleBefore = sampleEl.createSpan({ cls: "csv-importer-col-before" });
-	const sampleArrow = sampleEl.createSpan({ cls: "csv-importer-col-arrow", text: "→" });
-	const sampleAfter = sampleEl.createSpan({ cls: "csv-importer-col-after" });
-
-	// Second line on narrow layouts; tapping it opens the options.
-	const summary = row.createEl("button", { cls: "csv-importer-col-summary", attr: { type: "button", "aria-expanded": "false", "aria-controls": id } });
-	const summaryText = summary.createSpan({ cls: "csv-importer-col-summary-text" });
-	setIcon(summary.createSpan({ cls: "csv-importer-col-summary-icon" }), "chevron-right");
-
-	const opts = row.createDiv({ cls: "csv-importer-col-options csv-importer-hidden", attr: { id } });
-
-	// Property name, repeated here for the narrow layout where the grid input is hidden.
-	const narrowProp = opts.createDiv({ cls: "csv-importer-opt csv-importer-opt-prop" });
-	narrowProp.createEl("label", { text: "Property name" });
-	const prop2 = narrowProp.createEl("input", { type: "text", cls: "csv-importer-prop-input", attr: { "aria-label": `Property name for ${col.source}` } });
-	prop2.value = col.property;
 
 	const tplField = opts.createDiv({ cls: "csv-importer-opt" });
 	const tplId = `${id}-tpl`;
@@ -149,26 +138,14 @@ export function renderColumnRow(list: HTMLElement, col: ColumnConfig, draft: Con
 
 	const note = opts.createDiv({ cls: "csv-importer-col-note" });
 
-	// Options always start collapsed; the dot on the options button marks columns that have options set.
-	let open = false;
-	const setOpen = (v: boolean): void => {
-		open = v;
-		opts.toggleClass("csv-importer-hidden", !open);
-		row.toggleClass("is-open", open);
-		for (const b of [optBtn, summary]) b.setAttr("aria-expanded", String(open));
-		optBtn.setAttr("title", open ? OPTIONS_CLOSE : OPTIONS_OPEN);
-	};
-
 	const sample = firstSample(draft, col);
 	function refresh(): void {
 		const out = convertedSample(draft, col);
-		const same = sample === out;
-		sampleBefore.setText(sample);
-		sampleArrow.toggleClass("csv-importer-hidden", sample === "" || same);
-		sampleAfter.toggleClass("csv-importer-hidden", sample === "" || same);
-		sampleAfter.setText(out);
-		sampleEl.setAttr("title", sample === "" ? "" : same ? sample : `${sample} → ${out}`);
-		summaryText.setText(`→ ${col.property || col.source}${sample === "" ? "" : ` · ${same ? sample : `${sample} → ${out}`}`}`);
+		const shown = sample === "" ? "" : out;
+		sampleAfter.setText(shown);
+		sampleEl.setAttr("title", sampleTitle(sample, out));
+		summary.setAttr("title", sampleTitle(sample, out));
+		summaryText.setText(`→ ${col.property || col.source}${shown === "" ? "" : ` · ${shown}`}`);
 		result.setText(sample === "" ? "" : `${RESULT}: ${out}`);
 		const hasOptions = !!col.valueTemplate || (col.type === "number" && !!col.stripUnits);
 		optDot.toggleClass("csv-importer-hidden", !hasOptions);
@@ -178,16 +155,12 @@ export function renderColumnRow(list: HTMLElement, col: ColumnConfig, draft: Con
 		note.toggleClass("csv-importer-hidden", !tz);
 	}
 	refresh();
-	setOpen(open);
 
-	const onProp = (src: HTMLInputElement, other: HTMLInputElement): void => {
-		col.property = src.value;
-		other.value = src.value;
+	syncPropertyInputs(prop, narrowProp, (value) => {
+		col.property = value;
 		refresh();
 		draft.emitPreviewDebounced();
-	};
-	prop.addEventListener("input", () => onProp(prop, prop2));
-	prop2.addEventListener("input", () => onProp(prop2, prop));
+	});
 
 	sel.addEventListener("change", () => {
 		col.type = sel.value as PropertyType;
@@ -204,6 +177,4 @@ export function renderColumnRow(list: HTMLElement, col: ColumnConfig, draft: Con
 		refresh();
 		draft.emit("preview");
 	});
-	optBtn.addEventListener("click", () => setOpen(!open));
-	summary.addEventListener("click", () => setOpen(!open));
 }

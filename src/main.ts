@@ -12,6 +12,7 @@ import type { CsvEncoding, FileImportConfig, ImportResult, PluginData, PluginSet
 import { CsvView, VIEW_TYPE_CSV } from "./view/CsvView";
 import { ImportConfigModal } from "./view/ImportConfigModal";
 import { ImportIndexView, VIEW_TYPE_IMPORT_INDEX } from "./view/ImportIndexView";
+import { IMPORT_BUTTON, IMPORT_SETTINGS, OPEN_CSV_IMPORTS, REIMPORT_BUTTON, UNDO_LAST_IMPORT } from "./view/labels";
 
 /**
  * Plugin entry point: loads settings, registers the view, commands, menus and vault events, and hands the host
@@ -47,7 +48,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 		}
 
 		this.registerView(VIEW_TYPE_IMPORT_INDEX, (leaf) => new ImportIndexView(leaf, this));
-		this.addRibbonIcon("table-properties", "Open CSV imports", () => void this.openImportIndex());
+		this.addRibbonIcon("table-properties", OPEN_CSV_IMPORTS, () => void this.openImportIndex());
 
 		this.addSettingTab(new CsvImporterSettingTab(this.app, this, this));
 		registerVaultEvents(this, this.store, this.storage);
@@ -59,12 +60,12 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 		const svc = this.service;
 		this.addCommand({
 			id: "open-import-index",
-			name: "Open CSV imports",
+			name: OPEN_CSV_IMPORTS,
 			callback: () => void this.openImportIndex(),
 		});
 		this.addCommand({
 			id: "import-current-csv",
-			name: "Import rows from current CSV file",
+			name: "Import current CSV file",
 			checkCallback: (checking) => {
 				const file = svc.getActiveCsvFile();
 				if (!file) return false;
@@ -74,7 +75,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 		});
 		this.addCommand({
 			id: "reimport-all-csv",
-			name: "Re-import all configured CSV files",
+			name: "Re-import all CSV imports",
 			callback: () => void svc.reimportAll(),
 		});
 		this.addCommand({
@@ -89,7 +90,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 		});
 		this.addCommand({
 			id: "configure-current-csv",
-			name: "Configure import for current CSV file",
+			name: "Open import settings for current CSV file",
 			checkCallback: (checking) => {
 				const file = svc.getActiveCsvFile();
 				if (!file) return false;
@@ -104,22 +105,23 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
 				if (!isCsv(file)) return;
+				const imported = (this.store.get(file.path)?.lastImport ?? null) !== null;
 				menu.addItem((item) =>
 					item
-						.setTitle("Import rows as notes")
-						.setIcon("table")
+						.setTitle(imported ? REIMPORT_BUTTON : IMPORT_BUTTON)
+						.setIcon(imported ? "refresh-cw" : "file-plus")
 						.onClick(() => void svc.importFromDisk(file)),
 				);
 				menu.addItem((item) =>
 					item
-						.setTitle("Configure CSV import")
-						.setIcon("settings")
+						.setTitle(IMPORT_SETTINGS)
+						.setIcon("sliders-horizontal")
 						.onClick(() => void this.openConfig(file)),
 				);
 				if (svc.canUndo(file)) {
 					menu.addItem((item) =>
 						item
-							.setTitle("Undo last CSV import")
+							.setTitle(UNDO_LAST_IMPORT)
 							.setIcon("undo-2")
 							.onClick(() => void svc.undoLastImport(file)),
 					);
@@ -145,7 +147,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 			const text = await this.service.readCsv(file);
 			new ImportConfigModal(this.app, this, file, text).open();
 		} catch (e) {
-			console.error("CSV Importer: could not open configuration", e);
+			console.error("CSV Importer: could not open the import settings", e);
 			new Notice(`Could not read ${file.name}.`);
 		}
 	}

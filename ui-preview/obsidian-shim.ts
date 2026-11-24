@@ -540,11 +540,9 @@ export class BaseComponent {
 }
 export class ValueComponent extends BaseComponent {}
 
-export class TextComponent extends ValueComponent {
-	inputEl: HTMLInputElement;
-	constructor(public containerEl: HTMLElement) {
+export class AbstractTextComponent<T extends HTMLInputElement | HTMLTextAreaElement> extends ValueComponent {
+	constructor(public inputEl: T) {
 		super();
-		this.inputEl = containerEl.createEl("input", { attr: { type: "text", spellcheck: "false" } });
 	}
 	getValue() {
 		return this.inputEl.value;
@@ -560,6 +558,11 @@ export class TextComponent extends ValueComponent {
 	onChange(cb: (v: string) => any): this {
 		this.inputEl.addEventListener("input", () => cb(this.inputEl.value));
 		return this;
+	}
+}
+export class TextComponent extends AbstractTextComponent<HTMLInputElement> {
+	constructor(public containerEl: HTMLElement) {
+		super(containerEl.createEl("input", { attr: { type: "text", spellcheck: "false" } }));
 	}
 	onChanged() {}
 }
@@ -570,26 +573,9 @@ export class SearchComponent extends TextComponent {
 	}
 	clearButtonEl = document.createElement("div");
 }
-export class TextAreaComponent extends ValueComponent {
-	inputEl: HTMLTextAreaElement;
+export class TextAreaComponent extends AbstractTextComponent<HTMLTextAreaElement> {
 	constructor(public containerEl: HTMLElement) {
-		super();
-		this.inputEl = containerEl.createEl("textarea");
-	}
-	getValue() {
-		return this.inputEl.value;
-	}
-	setValue(v: string): this {
-		this.inputEl.value = v ?? "";
-		return this;
-	}
-	setPlaceholder(p: string): this {
-		this.inputEl.placeholder = p;
-		return this;
-	}
-	onChange(cb: (v: string) => any): this {
-		this.inputEl.addEventListener("input", () => cb(this.inputEl.value));
-		return this;
+		super(containerEl.createEl("textarea"));
 	}
 }
 export class ToggleComponent extends ValueComponent {
@@ -1018,6 +1004,8 @@ export class View extends Component {
 	}
 	onOpen(): Promise<void> | void {}
 	onClose(): Promise<void> | void {}
+	/** The real one adds the default "more options" items (close, split, ...); the harness adds none. */
+	onPaneMenu(_menu: Menu, _source: string): void {}
 	addAction(icon: string, title: string, cb: (e: MouseEvent) => any): HTMLElement {
 		const el = this.actionsEl.createDiv({ cls: "clickable-icon view-action", attr: { "aria-label": title, role: "button" } });
 		setIcon(el, icon);
