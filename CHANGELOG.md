@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 0.4.0
 ### UI and UX
 Second UI/UX pass with a clearer information architecture; see `docs/archive/UX-REVIEW-2026-11.md`.
 - **One name per concept** across buttons, menus and commands: **Import settings** (was Configure / Configure CSV import), **Undo last import**, **CSV imports**. Command names changed, command IDs did not: **Import current CSV file**, **Open import settings for current CSV file**, **Re-import all CSV imports**.
