@@ -251,9 +251,16 @@ function importedTable() {
 	return { host, ...mountTableView(host, timesheetEn) };
 }
 
+/** Table view of the English timesheet, and run dialog controls for it. */
+function timesheetRun() {
+	const host = new FakeHost(timesheetEn);
+	const { app, file } = mountTableView(host, timesheetEn);
+	return { app, ctl: runControls(file) };
+}
+
 /** Done state of the run dialog for `ctl`. */
-async function mountDone(ctl) {
-	new ImportRunModal(new App(), ctl).open();
+async function mountDone(ctl, app = new App()) {
+	new ImportRunModal(app, ctl).open();
 	const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
 	cta.click();
 	await waitFor(() => document.querySelector(".modal-title")?.textContent?.startsWith("Import finished"));
@@ -310,9 +317,7 @@ const tableRunScenarios = {
 	"e2-run-many": {
 		title: "Import run dialog, preview with many rows (groups open/closed)",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { file } = mountTableView(host, timesheetEn);
-			const ctl = runControls(file);
+			const { ctl } = timesheetRun();
 			ctl.preview = async () => tally(manyRows(30), { dryRun: true, warnings: [RUN_WARNING] });
 			new ImportRunModal(new App(), ctl).open();
 			await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
@@ -322,9 +327,7 @@ const tableRunScenarios = {
 	"e3-run-progress": {
 		title: "Import run dialog, mid-progress",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { file } = mountTableView(host, timesheetEn);
-			const ctl = runControls(file);
+			const { ctl } = timesheetRun();
 			ctl.execute = ({ onProgress }) => {
 				onProgress(3, 8);
 				return new Promise(() => {});
@@ -338,24 +341,16 @@ const tableRunScenarios = {
 	"f2-run-done-many": {
 		title: "Import run dialog, done state with many rows",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { file } = mountTableView(host, timesheetEn);
-			const ctl = runControls(file);
+			const { ctl } = timesheetRun();
 			ctl.preview = async () => tally(manyRows(30), { dryRun: true });
 			ctl.execute = async () => ({ undoable: true, result: tally(manyRows(30)) });
-			new ImportRunModal(new App(), ctl).open();
-			const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
-			cta.click();
-			await waitFor(() => document.querySelector(".modal-title")?.textContent?.startsWith("Import finished"));
-			await sleep(200);
+			await mountDone(ctl);
 		},
 	},
 	"f4-run-done-no-base": {
 		title: "Import run dialog, done state without a base: Open first note is the CTA",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { file } = mountTableView(host, timesheetEn);
-			const ctl = runControls(file);
+			const { ctl } = timesheetRun();
 			ctl.basePath = () => null;
 			await mountDone(ctl);
 		},
@@ -363,9 +358,7 @@ const tableRunScenarios = {
 	"f5-run-done-clean": {
 		title: "Import run dialog, done state: all new, no warnings, no base",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { file } = mountTableView(host, timesheetEn);
-			const ctl = runControls(file);
+			const { ctl } = timesheetRun();
 			const rows = ROWS_PREVIEW.slice(0, 2).concat([3, 4, 5, 6].map((n) => ({ row: n, path: `Data/timesheet/timesheet ${n}.md`, outcome: "created" })));
 			ctl.preview = async () => tally(rows, { dryRun: true });
 			ctl.execute = async () => ({ undoable: true, result: tally(rows) });
@@ -492,13 +485,8 @@ export const scenarios = {
 	"f-run-done": {
 		title: "Import run dialog, done state",
 		async mount() {
-			const host = new FakeHost(timesheetEn);
-			const { app, file } = mountTableView(host, timesheetEn);
-			new ImportRunModal(app, runControls(file)).open();
-			const cta = await waitFor(() => document.querySelector(".csv-importer-run-buttons .mod-cta"));
-			cta.click();
-			await waitFor(() => document.querySelector(".modal-title")?.textContent?.startsWith("Import finished"));
-			await sleep(200);
+			const { app, ctl } = timesheetRun();
+			await mountDone(ctl, app);
 		},
 	},
 	"g-settings": {
