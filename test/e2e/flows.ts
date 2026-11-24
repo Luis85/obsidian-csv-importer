@@ -175,6 +175,12 @@ export async function openIndex(): Promise<void> {
 	await waitForViewType("csv-importer-index");
 }
 
+/** Opens the index toolbar's Add CSV menu and picks "Scan vault for CSV files..." or "Copy a file from your device...". */
+export async function chooseAddCsv(item: "scan" | "device"): Promise<void> {
+	await browser.$(`${INDEX} [data-testid=csv-index-add]`).click();
+	await clickMenuItem(item === "scan" ? "Scan vault for CSV files..." : "Copy a file from your device...");
+}
+
 /** The index row whose text contains a CSV file name (looked up again on every call: the index re-renders). */
 export async function indexRow(name: string): Promise<WebdriverIO.Element> {
 	let found: WebdriverIO.Element | undefined;

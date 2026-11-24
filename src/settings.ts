@@ -4,6 +4,7 @@ import { confirmDialog } from "./view/ConfirmModal";
 import type { PluginSettings } from "./types";
 import {
 	CONFLICT_OPTIONS,
+	CSV_IMPORTS,
 	DECIMAL_OPTIONS,
 	DELIMITER_OPTIONS,
 	EMPTY_VALUE_OPTIONS,
@@ -12,6 +13,7 @@ import {
 	NAME,
 	OPEN_CSV_IMPORTS,
 	PAGE_SIZE_ERROR,
+	RESET_ALL_BUTTON,
 	RESET_ALL_SETTINGS,
 	SETTINGS_DESC,
 	SETTINGS_HEADINGS,
@@ -66,7 +68,7 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 		const reading: SettingDefinitionItem[] = [
 			dropdown("defaultEncoding", NAME.encoding, ENCODING_LABELS, SETTINGS_DESC.encoding),
 			dropdown("defaultDelimiter", NAME.delimiter, DELIMITER_OPTIONS, SETTINGS_DESC.delimiter),
-			toggle("defaultHasHeader", NAME.hasHeader),
+			toggle("defaultHasHeader", NAME.hasHeader, SETTINGS_DESC.hasHeader),
 			dropdown("defaultDecimalSeparator", NAME.decimal, DECIMAL_OPTIONS, SETTINGS_DESC.decimal),
 			{
 				name: NAME.listSeparator,
@@ -100,23 +102,32 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 				render: (setting) => this.pageSizeControl(setting),
 			},
 		];
-		const result: SettingDefinitionItem[] = [
-			{ name: "", desc: SETTINGS_DESC.intro, searchable: false },
-			group(SETTINGS_HEADINGS.reading, reading),
-			group(SETTINGS_HEADINGS.notes, notes),
-			group(SETTINGS_HEADINGS.reimport, reimport),
-			group(SETTINGS_HEADINGS.table, table),
-		];
+		// Ordered by the user's journey: what new notes look like, how re-imports behave, then the rarely touched
+		// file format, the table view and the danger zone. The route to CSV imports sits right under the intro.
+		const result: SettingDefinitionItem[] = [{ name: "", desc: SETTINGS_DESC.intro, searchable: false }];
 		if (this.host.openImportIndex) {
-			result.push(
-				group(SETTINGS_HEADINGS.imports, [
-					{ name: OPEN_CSV_IMPORTS, desc: SETTINGS_DESC.imports, action: () => void this.host.openImportIndex?.() },
-				]),
-			);
+			result.push({
+				name: CSV_IMPORTS,
+				aliases: [OPEN_CSV_IMPORTS],
+				desc: SETTINGS_DESC.imports,
+				render: (setting) => {
+					setting.addButton((b) => b.setButtonText(OPEN_CSV_IMPORTS).onClick(() => void this.host.openImportIndex?.()));
+				},
+			});
 		}
 		result.push(
+			group(SETTINGS_HEADINGS.notes, notes),
+			group(SETTINGS_HEADINGS.reimport, reimport),
+			group(SETTINGS_HEADINGS.reading, reading),
+			group(SETTINGS_HEADINGS.table, table),
 			group(SETTINGS_HEADINGS.danger, [
-				{ name: RESET_ALL_SETTINGS, desc: SETTINGS_DESC.reset, action: () => this.confirmReset() },
+				{
+					name: RESET_ALL_SETTINGS,
+					desc: SETTINGS_DESC.reset,
+					render: (setting) => {
+						setting.addButton((b) => b.setButtonText(RESET_ALL_BUTTON).setDestructive().onClick(() => this.confirmReset()));
+					},
+				},
 			]),
 		);
 		return result;

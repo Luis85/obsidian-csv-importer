@@ -53,6 +53,8 @@ describe("CSV imports index", function () {
 		await openIndex();
 		const row = await rowFor("timesheet.csv");
 		await expect(row).toHaveText(expect.stringContaining("Never imported"));
+		// No notes yet: a muted dash, not "0".
+		await expect((await rowFor("timesheet.csv")).$("[data-testid=csv-index-count]")).toHaveElementClass("mod-none");
 		await expect(row.$("[data-testid=csv-index-primary]")).toHaveText("Import");
 		await row.$("[data-testid=csv-index-primary]").click();
 		await waitForModal(/import preview/i);
@@ -97,13 +99,13 @@ describe("CSV imports index", function () {
 		await waitForNoModal();
 	});
 
-	it("offers Configure, Open base, Undo last import, Delete imported notes and Remove from index in the row menu", async function () {
+	it("offers Import settings, Open base, Undo last import, Delete imported notes and Remove from CSV imports in the row menu", async function () {
 		await importViaDialog(CSV);
 		await openIndex();
 		await openRowMenu("timesheet.csv");
-		expect(await menuItems()).toEqual(["Configure", "Open base", "Undo last import", "Delete imported notes...", "Remove from index..."]);
+		expect(await menuItems()).toEqual(["Import settings", "Open base", "Undo last import", "Delete imported notes...", "Remove from CSV imports..."]);
 		await shot(SPEC, "row-menu", true);
-		await clickMenuItem("Configure");
+		await clickMenuItem("Import settings");
 		await waitForModal("Columns");
 		await clickButton("Cancel");
 		await waitForNoModal();
@@ -143,12 +145,12 @@ describe("CSV imports index", function () {
 		await expect(await rowFor("timesheet.csv")).toBeDisplayed();
 	});
 
-	it("removes a CSV from the index but keeps its notes", async function () {
+	it("removes a CSV from CSV imports but keeps its notes", async function () {
 		await importViaDialog(CSV);
 		await openIndex();
 		await openRowMenu("timesheet.csv");
-		await clickMenuItem("Remove from index...");
-		await waitForModal("Remove from index?");
+		await clickMenuItem("Remove from CSV imports...");
+		await waitForModal("Remove from CSV imports?");
 		await clickButton("Remove");
 		await browser.waitUntil(async () => (await browser.$$(`${INDEX} [data-testid=csv-index-row]`).length) === 0, { timeoutMsg: "row stayed" });
 		expect(await listNotes(NOTES_DIR)).toHaveLength(6);

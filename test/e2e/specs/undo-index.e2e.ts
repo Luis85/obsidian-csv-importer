@@ -53,16 +53,16 @@ describe("undo and imports index", function () {
 		await browser.waitUntil(async () => !(await browser.$("[data-testid=csv-view] .csv-importer-link-btn").isExisting()), { timeoutMsg: "Undo link stayed" });
 	});
 
-	it("offers Undo last CSV import in the file menu once an import can be undone", async function () {
+	it("offers Undo last import in the file menu once an import can be undone", async function () {
 		const titles = () =>
 			browser.executeObsidian(({ app, obsidian }) => {
 				const menu = new obsidian.Menu();
 				app.workspace.trigger("file-menu", menu, app.vault.getAbstractFileByPath("Data/timesheet.csv"), "file-explorer");
 				return (menu as unknown as { items: { titleEl?: HTMLElement }[] }).items.map((i) => i.titleEl?.textContent ?? "");
 			});
-		expect(await titles()).not.toContain("Undo last CSV import");
+		expect(await titles()).not.toContain("Undo last import");
 		await importViaDialog(CSV);
-		expect(await titles()).toContain("Undo last CSV import");
+		expect(await titles()).toContain("Undo last import");
 	});
 
 	it("moves created notes to the trash and tells so in a notice", async function () {

@@ -9,8 +9,8 @@ import { AddCsvModal } from "./AddCsvModal";
 import { ScanVaultModal } from "./ScanVaultModal";
 import { badge, iconButton, renderCallout } from "./dom";
 import {
-	ADD_CSV_FILE, CHANGED_BADGE, CONFIGURE, CSV_MISSING, IMPORT_BUTTON, NO_IMPORTS_TITLE, REIMPORT_ALL, REIMPORT_BUTTON, REIMPORT_CHANGED, SCAN_VAULT,
-	changedLine, editedLine,
+	ADD_CSV, ADD_CSV_FROM_DEVICE, ADD_CSV_SCAN, CHANGED_BADGE, CSV_IMPORTS, CSV_MISSING, DELETE_IMPORTED_NOTES, IMPORT_BUTTON, IMPORT_SETTINGS,
+	NO_IMPORTS_TITLE, OPEN_BASE, REIMPORT_ALL, REIMPORT_BUTTON, REIMPORT_CHANGED, REMOVE_FROM_IMPORTS, UNDO_LAST_IMPORT, changedLine, editedLine,
 } from "./labels";
 
 export const VIEW_TYPE_IMPORT_INDEX = "csv-importer-index";
@@ -54,7 +54,7 @@ export class ImportIndexView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "CSV imports";
+		return CSV_IMPORTS;
 	}
 
 	override getIcon(): string {
@@ -119,10 +119,14 @@ export class ImportIndexView extends ItemView {
 			this.renderList();
 		});
 		this.searchEl = search;
-		const scan = tools.createEl("button", { cls: "csv-importer-index-scan", text: SCAN_VAULT, attr: { type: "button", "data-testid": "csv-index-scan" } });
-		scan.addEventListener("click", () => new ScanVaultModal(this.app, this.host, () => void this.refresh()).open());
-		const add = tools.createEl("button", { cls: "csv-importer-index-add", text: ADD_CSV_FILE, attr: { type: "button", "data-testid": "csv-index-add" } });
-		add.addEventListener("click", () => new AddCsvModal(this.app, this.host, () => void this.refresh()).open());
+		// One menu button for both ways to add a CSV (scan the vault, copy a file from the device).
+		const add = tools.createEl("button", {
+			cls: "csv-importer-index-add",
+			attr: { type: "button", "aria-haspopup": "menu", "data-testid": "csv-index-add" },
+		});
+		add.createSpan({ text: ADD_CSV });
+		setIcon(add.createSpan({ cls: "csv-importer-index-add-chevron" }), "chevron-down");
+		add.addEventListener("click", () => this.openAddMenu(add));
 		const all = tools.createEl("button", { cls: "csv-importer-index-all", text: REIMPORT_ALL, attr: { type: "button" } });
 		all.addEventListener("click", () => void this.guard(() => this.host.reimportAll()));
 		this.reimportAllBtn = all;
@@ -164,9 +168,7 @@ export class ImportIndexView extends ItemView {
 			hint.appendText("Open a CSV file and choose ");
 			hint.createEl("strong", { text: IMPORT_BUTTON });
 			hint.appendText(" to set one up, or use ");
-			hint.createEl("strong", { text: SCAN_VAULT });
-			hint.appendText(" or ");
-			hint.createEl("strong", { text: ADD_CSV_FILE });
+			hint.createEl("strong", { text: ADD_CSV });
 			hint.appendText(".");
 			return;
 		}
@@ -194,8 +196,9 @@ export class ImportIndexView extends ItemView {
 		const main = row.createDiv({ cls: "csv-importer-index-main" });
 		const nameLine = main.createDiv({ cls: "csv-importer-index-nameline" });
 		const tip = item.targetFolder ? `${item.csvPath}\n\u2192 ${item.targetFolder}` : item.csvPath;
+		// Styled as a link, not a button: the row's real buttons are Import/Re-import and the menu.
 		const name = nameLine.createEl("button", {
-			cls: "csv-importer-index-name clickable-icon-reset",
+			cls: "csv-importer-index-name",
 			text: item.fileName,
 			attr: { type: "button", "aria-label": `Open ${item.csvPath}`, title: tip },
 		});
@@ -223,15 +226,20 @@ export class ImportIndexView extends ItemView {
 		const lastText = item.lastImport ? relativeTime(item.lastImport) : "Never imported";
 		const last = row.createDiv({ cls: "csv-importer-index-last", text: lastText });
 		if (item.lastImport) last.setAttribute("title", new Date(item.lastImport).toLocaleString());
-		const count = row.createDiv({ cls: "csv-importer-index-count", text: "..." });
+		const count = row.createDiv({ cls: "csv-importer-index-count", text: "...", attr: { "data-testid": "csv-index-count" } });
 
 		const summary = row.createDiv({ cls: "csv-importer-index-summary" });
 		let countText = "...";
 		let editedText = "";
 		const renderSummary = (): void => {
-			count.setText(countText);
+			// No notes: a muted dash in the column, and nothing in the phone summary line.
+			const none = countText === "0";
+			count.setText(none ? "\u2014" : countText);
+			count.toggleClass("mod-none", none);
+			if (none) count.setAttr("aria-label", "No notes");
+			else count.removeAttribute("aria-label");
 			const parts = [dir || "Vault root", lastText];
-			if (countText !== "...") parts.push(`${countText} ${countText === "1" ? "note" : "notes"}`);
+			if (countText !== "..." && !none) parts.push(`${countText} ${countText === "1" ? "note" : "notes"}`);
 			if (resultText) parts.push(resultText);
 			if (editedText) parts.push(editedText);
 			if (changedText) parts.push(changedText);
@@ -285,7 +293,7 @@ export class ImportIndexView extends ItemView {
 			if (cfg) {
 				iconButton(actions, {
 					icon: cfg.icon,
-					label: `${cfg.label} ${item.fileName}`,
+					label: `${cfg.label} for ${item.fileName}`,
 					cls: "csv-importer-index-configure",
 					onClick: () => void this.guard(cfg.run),
 				});
@@ -302,18 +310,18 @@ export class ImportIndexView extends ItemView {
 	private actionsFor(item: ImportSummary): RowAction[] {
 		const actions: RowAction[] = [];
 		if (item.exists) {
-			actions.push({ id: "configure", label: CONFIGURE, icon: "sliders-horizontal", run: () => this.host.configureImport(item.csvPath) });
+			actions.push({ id: "configure", label: IMPORT_SETTINGS, icon: "sliders-horizontal", run: () => this.host.configureImport(item.csvPath) });
 		}
 		const base = item.basePath;
 		if (base) {
-			actions.push({ id: "base", label: "Open base", icon: "layout-list", run: () => this.openBaseFile(base) });
+			actions.push({ id: "base", label: OPEN_BASE, icon: "layout-list", run: () => this.openBaseFile(base) });
 		}
 		if (item.hasUndo) {
-			actions.push({ id: "undo", label: "Undo last import", icon: "undo-2", run: () => this.host.undoImport(item.csvPath) });
+			actions.push({ id: "undo", label: UNDO_LAST_IMPORT, icon: "undo-2", run: () => this.host.undoImport(item.csvPath) });
 		}
 		actions.push({
 			id: "delete",
-			label: "Delete imported notes...",
+			label: DELETE_IMPORTED_NOTES,
 			icon: "trash-2",
 			menuOnly: true,
 			warning: true,
@@ -321,7 +329,7 @@ export class ImportIndexView extends ItemView {
 		});
 		actions.push({
 			id: "remove",
-			label: "Remove from index...",
+			label: REMOVE_FROM_IMPORTS,
 			icon: "x-circle",
 			menuOnly: true,
 			warning: true,
@@ -339,6 +347,25 @@ export class ImportIndexView extends ItemView {
 			menu.addItem((i) => i.setTitle(a.label).setIcon(a.icon).setWarning(a.warning === true).onClick(() => void this.guard(a.run)));
 		}
 		menu.showAtMouseEvent(ev);
+	}
+
+	/** The Add CSV menu, shown below its button. */
+	private openAddMenu(button: HTMLElement): void {
+		const menu = new Menu();
+		menu.addItem((i) =>
+			i
+				.setTitle(ADD_CSV_SCAN)
+				.setIcon("search")
+				.onClick(() => new ScanVaultModal(this.app, this.host, () => void this.refresh()).open()),
+		);
+		menu.addItem((i) =>
+			i
+				.setTitle(ADD_CSV_FROM_DEVICE)
+				.setIcon("upload")
+				.onClick(() => new AddCsvModal(this.app, this.host, () => void this.refresh()).open()),
+		);
+		const r = button.getBoundingClientRect();
+		menu.showAtPosition({ x: r.left, y: r.bottom, width: r.width, overlap: true }, button.doc);
 	}
 
 	private openCsv(item: ImportSummary): void {

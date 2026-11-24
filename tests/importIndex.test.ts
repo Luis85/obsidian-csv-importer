@@ -114,7 +114,7 @@ describe("removeFromIndex", () => {
 		await t.storage.saveSnapshot("Data/hours.csv", { "Data/hours/Entry 1.md": { a: "1" } });
 		await t.storage.saveUndo("Data/hours.csv", { csvPath: "Data/hours.csv", timestamp: 1, created: ["Data/hours/Entry 1.md"], modified: [] });
 		expect(await t.service.removeFromIndex("Data/hours.csv")).toBe(true);
-		expect(confirms.calls[0]).toContain("Remove hours.csv from the index? Its import settings and import history are deleted. Imported notes stay.");
+		expect(confirms.calls[0]).toContain("Remove hours.csv from CSV imports? Its import settings and import history are deleted. Imported notes stay.");
 		expect(t.store.has("Data/hours.csv")).toBe(false);
 		expect(t.storage.hasUndo("Data/hours.csv")).toBe(false);
 		expect(await t.storage.loadSnapshot("Data/hours.csv")).toEqual({});

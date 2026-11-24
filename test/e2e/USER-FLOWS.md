@@ -8,11 +8,11 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | --- | --- | --- |
 | Plugin loads, five commands registered | smoke | is enabled and has registered its commands |
 | Settings tab, declarative definitions | smoke | registers a declarative settings tab with definitions |
-| Settings tab sections and Imports/Danger zone rows | smoke, settings-tab | shows its sections in the settings tab; opens the CSV imports index from its Imports section |
+| Settings tab sections (journey order), CSV imports and Danger zone rows | smoke, settings-tab | shows its sections in the settings tab; opens CSV imports from the row under the intro |
 | Reset all import settings (confirm) | settings-tab | resets all import settings after a confirmation |
 | Settings defaults apply to unconfigured CSV | settings-defaults | applies a default target folder from the settings tab |
 | Ribbon icon opens the index | smoke | opens the CSV imports index from the ribbon icon |
-| File-menu entries (Import rows, Configure, Undo) | smoke, undo-index | offers the plugin's entries in the file menu; offers Undo last CSV import in the file menu |
+| File-menu entries (Import, Import settings, Undo last import) | smoke, undo-index | offers the plugin's entries in the file menu; offers Undo last import in the file menu |
 | Quick start: open CSV as table with type badges | table-view | opens a .csv file in the plugin's view |
 | Table view: filter box | table-view | filters the rows with the filter box |
 | Table view: badge menu, change type | table-view | changes a column's type from the badge menu |
@@ -68,12 +68,12 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Index: Re-import, last import, note count | index-flows | shows last import and note count |
 | Index: filter box, open CSV from name | index-flows | filters the list and opens a CSV |
 | Index: Re-import all | index-flows | re-imports every listed CSV |
-| Index: row menu (Configure, Open base, Undo) | index-flows | offers ... in the row menu; opens the base; undoes the last import |
+| Index: row menu (Import settings, Open base, Undo last import) | index-flows | offers ... in the row menu; opens the base; undoes the last import |
 | Index: Delete imported notes (+ base option) | index-flows | deletes the imported notes and, when ticked, the base |
-| Index: Remove from index | index-flows | removes a CSV from the index but keeps its notes |
+| Index: Remove from CSV imports | index-flows | removes a CSV from CSV imports but keeps its notes |
 | Index: CSV missing | index-flows | marks a CSV that no longer exists |
-| Index: Scan vault (list, add, re-scan, empty state) | index-scan | lists CSV files that are not in the index; adds the checked files with default settings; shows an empty state |
-| Index: Add CSV file from outside the vault | index-add-outside | copies the picked file's bytes ...; asks what to do when the file exists |
+| Index: Add CSV > Scan vault (list, add, re-scan, empty state) | index-scan | lists CSV files that are not in the index; adds the checked files with default settings; shows an empty state |
+| Index: Add CSV > Copy a file from your device | index-add-outside | copies the picked file's bytes ...; asks what to do when the file exists |
 | Index: Changed badge, banner, Re-import changed | index-changed | marks a modified CSV as Changed live; does not mark a CSV that was only touched; treats an import without a recorded fingerprint as changed |
 | Index: last import counts, edited since import | index-counts | shows the counts of the last import; counts notes edited since the import |
 | Index: empty state | smoke | opens the CSV imports index from the ribbon icon |

@@ -54,7 +54,7 @@ describe("plugin loads, commands, ribbon, file menu, settings tab", function () 
 				return (menu as unknown as { items: { titleEl?: HTMLElement }[] }).items.map((i) => i.titleEl?.textContent ?? "").filter(Boolean);
 			}, path);
 		const csv = await titlesFor(CSV);
-		expect(csv).toEqual(expect.arrayContaining(["Import rows as notes", "Configure CSV import"]));
+		expect(csv).toEqual(expect.arrayContaining(["Import", "Import settings"]));
 		await browser.executeObsidian(async ({ app }) => {
 			await app.vault.create("Plain.md", "hello");
 		});
@@ -71,9 +71,16 @@ describe("plugin loads, commands, ribbon, file menu, settings tab", function () 
 			browser.executeObsidian(({ app }) => (app as unknown as { setting: { activeTab?: { containerEl: HTMLElement } } }).setting.activeTab?.containerEl.textContent ?? "");
 		await browser.waitUntil(async () => (await read()).includes("Danger zone"), { timeoutMsg: "settings tab not rendered" });
 		const text = await read();
-		for (const heading of ["Reading files", "New notes", "Re-import", "Table view", "Imports", "Danger zone"]) {
+		for (const heading of ["New notes", "Re-import", "Reading files", "Table view", "Danger zone"]) {
 			expect(text).toContain(heading);
 		}
+		// Ordered by the user's journey, with the route to CSV imports under the intro.
+		const at = (s: string) => text.indexOf(s);
+		expect(at("Defaults for CSV files")).toBeLessThan(at("Open CSV imports"));
+		expect(at("Open CSV imports")).toBeLessThan(at("New notes"));
+		expect(at("New notes")).toBeLessThan(at("Reading files"));
+		expect(at("Reading files")).toBeLessThan(at("Table view"));
+		expect(at("Table view")).toBeLessThan(at("Danger zone"));
 		expect(text).toContain("Open CSV imports");
 		expect(text).toContain("Reset all import settings");
 		await shot(SPEC, "settings-tab", true);

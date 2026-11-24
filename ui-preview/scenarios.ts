@@ -461,6 +461,23 @@ export const scenarios = {
 			await mountIndex(long);
 		},
 	},
+	"h-index-changed": {
+		title: "CSV imports index view, one CSV changed since its last import (badge, CTA, callout)",
+		async mount() {
+			const items = INDEX_ITEMS.map((i) => ({ ...i, changed: false, modifiedAt: i.exists ? LAST_IMPORT : null, lastRun: null }));
+			items[0] = { ...items[0], changed: true, modifiedAt: Date.now() - 20 * 60e3, lastRun: { created: 6, updated: 2, unchanged: 0, skipped: 0, failed: 0 } };
+			items[1] = { ...items[1], lastRun: { created: 0, updated: 3, unchanged: 211, skipped: 0, failed: 0 } };
+			await mountIndex(items);
+		},
+	},
+	"h-index-add-menu": {
+		title: "CSV imports index view, Add CSV menu open",
+		async mount() {
+			await mountIndex(INDEX_ITEMS);
+			document.querySelector("[data-testid=csv-index-add]")?.click();
+			await sleep(150);
+		},
+	},
 	// --- end owner:index-settings scenarios ---
 };
 

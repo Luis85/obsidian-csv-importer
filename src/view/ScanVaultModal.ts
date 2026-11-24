@@ -50,7 +50,7 @@ export class ScanVaultModal extends Modal {
 		}
 		el.createEl("p", {
 			cls: "csv-importer-scan-intro",
-			text: `${plural(this.files.length, "CSV file is", "CSV files are")} not in the index yet. Checked files get default import settings. Nothing is imported.`,
+			text: `${plural(this.files.length, "CSV file is", "CSV files are")} not in CSV imports yet. Checked files get default import settings. Nothing is imported.`,
 		});
 		const bar = el.createDiv({ cls: "csv-importer-scan-bar" });
 		const all = bar.createEl("button", { cls: "csv-importer-scan-link", text: "Select all", attr: { type: "button" } });
@@ -118,7 +118,7 @@ export class ScanVaultModal extends Modal {
 	private updateAdd(): void {
 		if (!this.addBtn) return;
 		const n = this.checked.size;
-		this.addBtn.setText(n === 0 ? "Add to index" : `Add ${n} to index`);
+		this.addBtn.setText(n === 0 ? "Add to CSV imports" : `Add ${n} to CSV imports`);
 		this.addBtn.disabled = n === 0;
 	}
 
@@ -126,12 +126,12 @@ export class ScanVaultModal extends Modal {
 		if (this.addBtn) this.addBtn.disabled = true;
 		try {
 			const n = await this.host.addToIndex([...this.checked]);
-			new Notice(`Added ${plural(n, "CSV file", "CSV files")} to the index.`);
+			new Notice(`Added ${plural(n, "CSV file", "CSV files")} to CSV imports.`);
 			this.close();
 			this.onAdded();
 		} catch (e) {
 			console.error("CSV Importer: could not add CSV files to the index", e);
-			new Notice("Could not add the CSV files to the index.");
+			new Notice("Could not add the CSV files to CSV imports.");
 			if (this.addBtn) this.addBtn.disabled = false;
 		}
 	}
