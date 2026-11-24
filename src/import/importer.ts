@@ -38,6 +38,18 @@ export const HISTORY_NOT_SAVED_WARNING =
 const CONFLICT_COPY = /\(conflicted copy|\.sync-conflict-|conflict\)/i;
 const isConflictCopy = (f: TFile): boolean => CONFLICT_COPY.test(f.basename ?? f.path);
 
+/** A frontmatter value as a key: scalars only (lists, objects and empty values are no key). */
+function scalarKey(v: unknown): string | null {
+	if (v === undefined || v === null || Array.isArray(v) || typeof v === "object") return null;
+	return formatValue(v as FrontmatterValue);
+}
+
+/** Updating by file name only (no key column) is risky once notes were imported before. */
+function needsKeyWarning(config: FileImportConfig, snapshot: ImportSnapshot): boolean {
+	if (effectiveKeyColumns(config).length > 0) return false;
+	return (config.conflict === "update" || config.conflict === "overwrite") && Object.keys(snapshot).length > 0;
+}
+
 const now = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 let channel: MessageChannel | null = null;
@@ -105,9 +117,8 @@ class KeyIndex {
 				for (const file of this.vault.listMarkdown(folder)) {
 					if (seen.has(file.path)) continue;
 					seen.add(file.path);
-					const v: unknown = this.vault.frontmatter(file)?.[property];
-					if (v === undefined || v === null || Array.isArray(v) || typeof v === "object") continue;
-					this.add(formatValue(v as FrontmatterValue), file, false);
+					const key = scalarKey(this.vault.frontmatter(file)?.[property]);
+					if (key !== null) this.add(key, file, false);
 				}
 			}
 		} catch (e) {
@@ -169,10 +180,7 @@ class NoteWriter {
 		this.paths = new PathIndex(vault);
 		this.keys = new KeyIndex(vault, notes.find((n) => n.key)?.key?.property ?? null, notes, this.paths);
 		this.planWarnings(notes);
-		const hadPreviousImport = Object.keys(this.snapshot).length > 0;
-		if (effectiveKeyColumns(config).length === 0 && (config.conflict === "update" || config.conflict === "overwrite") && hadPreviousImport) {
-			this.result.warnings.push(KEY_WARNING);
-		}
+		if (needsKeyWarning(config, this.snapshot)) this.result.warnings.push(KEY_WARNING);
 	}
 
 	private planWarnings(notes: PlannedNote[]): void {
@@ -192,6 +200,11 @@ class NoteWriter {
 		if (inVault) w.push(DUPLICATE_NOTES_IN_VAULT_WARNING(inVault.count, inVault.example));
 		if (notes.length > LARGE_IMPORT_THRESHOLD) w.push(LARGE_IMPORT_WARNING(notes.length));
 		for (const name of extraPropertyConflicts(this.config)) w.push(EXTRA_PROPERTY_CONFLICT_WARNING(name));
+	}
+
+	/** After the run: warns when notes were skipped as not created by this import and none was updated or unchanged. */
+	warnIfOnlyNotOwned(): void {
+		if (this.skippedNotOwned > 0 && this.result.updated + this.result.unchanged === 0) this.result.warnings.push(NOT_OWNED_WARNING);
 	}
 
 	get written(): number {
@@ -313,45 +326,60 @@ class NoteWriter {
 
 	/** Plans and performs the write of one note. Throws on vault errors; the caller records them. */
 	private async writeOne(note: PlannedNote, path: string): Promise<void> {
-		let keyMatch: TFile | null = null;
-		if (note.key) {
-			if (this.seenKeys.has(note.key.value)) {
-				this.skip(note, path, ROW_REASON.duplicateKey);
-				this.result.errors.push({ row: note.row, message: `duplicate key "${note.key.value}"` });
-				return;
-			}
+		if (this.skipIfDuplicateKey(note, path)) return;
+		const keyMatch = this.ownedKeyMatch(note);
+		if (!keyMatch && this.paths.isClaimed(path)) {
+			// another row of this run already wrote this name
+			await this.createNote(note, this.paths.free(path));
+			return;
+		}
+		const existing = keyMatch ?? this.existingAt(path);
+		if (!existing) await this.createNote(note, path);
+		else await this.writeExisting(note, existing, keyMatch !== null, path);
+	}
+
+	/** Skips a row whose key an earlier row of this run had, else remembers its key. Returns true when skipped. */
+	private skipIfDuplicateKey(note: PlannedNote, path: string): boolean {
+		if (!note.key) return false;
+		if (!this.seenKeys.has(note.key.value)) {
 			this.seenKeys.add(note.key.value);
-			// Only a note this import owns counts as the existing note for this key; foreign notes sharing
-			// the key (hand-made, or created by another CSV) never shadow it.
-			const owned = this.keys.candidates(note.key.value).filter((f) => this.owns(f, note));
-			keyMatch = owned.find((f) => !isConflictCopy(f)) ?? owned[0] ?? null;
+			return false;
 		}
+		this.skip(note, path, ROW_REASON.duplicateKey);
+		this.result.errors.push({ row: note.row, message: `duplicate key "${note.key.value}"` });
+		return true;
+	}
 
-		let existing: TFile | null = keyMatch;
-		if (!existing) {
-			if (this.paths.isClaimed(path)) {
-				// another row of this run already wrote this name
-				await this.createNote(note, this.paths.free(path));
-				return;
-			}
-			const atPath = this.paths.lookup(path);
-			if (atPath && !isFile(atPath)) throw new Error(`"${path}" exists and is a folder`);
-			existing = atPath;
-		}
+	/**
+	 * The existing note for the row's key. Only a note this import owns counts; foreign notes sharing the key
+	 * (hand-made, or created by another CSV) never shadow it. Sync conflict copies come last.
+	 */
+	private ownedKeyMatch(note: PlannedNote): TFile | null {
+		if (!note.key) return null;
+		const owned = this.keys.candidates(note.key.value).filter((f) => this.owns(f, note));
+		return owned.find((f) => !isConflictCopy(f)) ?? owned[0] ?? null;
+	}
 
-		if (!existing) {
-			await this.createNote(note, path);
-		} else if (!this.owns(existing, note)) {
+	/** The note at `path`, or null. Throws when a folder is there. */
+	private existingAt(path: string): TFile | null {
+		const atPath = this.paths.lookup(path);
+		if (atPath && !isFile(atPath)) throw new Error(`"${path}" exists and is a folder`);
+		return atPath;
+	}
+
+	/** Writes a row whose note exists: only when this import owns it and it is not another record's note. */
+	private async writeExisting(note: PlannedNote, existing: TFile, keyMatched: boolean, path: string): Promise<void> {
+		if (!this.owns(existing, note)) {
 			if (this.config.conflict === "rename") await this.createCopy(note, path);
 			else {
 				this.skippedNotOwned++;
 				this.skip(note, existing.path, ROW_REASON.notOwned);
 			}
-		} else if (!keyMatch && hasOtherKey(this.vault.frontmatter(existing), note.key)) {
+		} else if (!keyMatched && hasOtherKey(this.vault.frontmatter(existing), note.key)) {
 			if (this.config.conflict === "rename") await this.createCopy(note, path);
 			else this.skip(note, existing.path, ROW_REASON.fileNameTaken);
 		} else {
-			await this.resolveConflict(note, existing, keyMatch !== null, path);
+			await this.resolveConflict(note, existing, keyMatched, path);
 		}
 	}
 
@@ -388,26 +416,23 @@ export function writeNotes(app: App, notes: PlannedNote[], config: FileImportCon
 	return writeNotesWith(new ObsidianVaultGateway(app), notes, config, opts);
 }
 
-/** `writeNotes` over any vault gateway. */
-// fallow-ignore-next-line unused-export -- test seam: runs the importer against a fake VaultGateway
-export async function writeNotesWith(
-	vault: VaultGateway,
-	notes: PlannedNote[],
-	config: FileImportConfig,
-	opts: WriteOptions = {},
-): Promise<WriteOutput> {
-	const dryRun = opts.dryRun === true;
-	const writer = new NoteWriter(vault, notes, config, opts);
-	const { result, snapshot } = writer;
+/** Persists snapshot and undo data while the import runs (never in a dry run or without `opts.onCheckpoint`). */
+function checkpointerFor(writer: NoteWriter, opts: WriteOptions, dryRun: boolean): Checkpointer {
 	const onCheckpoint = opts.onCheckpoint;
-	const checkpointer = new Checkpointer(dryRun || !onCheckpoint ? undefined : () => onCheckpoint(snapshot, writer.undo.manifest));
-	const total = notes.length;
+	return new Checkpointer(dryRun || !onCheckpoint ? undefined : () => onCheckpoint(writer.snapshot, writer.undo.manifest));
+}
 
+/**
+ * Writes the notes in order, reporting progress and yielding to the UI after each time slice, until done or
+ * `opts.shouldStop` asks to stop (the result is then marked cancelled). Returns the number of rows handled.
+ */
+async function writeAll(writer: NoteWriter, notes: PlannedNote[], checkpointer: Checkpointer, opts: WriteOptions): Promise<number> {
+	const total = notes.length;
 	let lastYield = now();
 	let done = 0;
 	for (let i = 0; i < total; i++) {
 		if (opts.shouldStop?.()) {
-			result.cancelled = true;
+			writer.result.cancelled = true;
 			break;
 		}
 		const written0 = writer.written;
@@ -422,10 +447,26 @@ export async function writeNotesWith(
 			lastYield = now();
 		}
 	}
-	if (writer.skippedNotOwned > 0 && result.updated + result.unchanged === 0) result.warnings.push(NOT_OWNED_WARNING);
+	return done;
+}
+
+/** `writeNotes` over any vault gateway. */
+// fallow-ignore-next-line unused-export -- test seam: runs the importer against a fake VaultGateway
+export async function writeNotesWith(
+	vault: VaultGateway,
+	notes: PlannedNote[],
+	config: FileImportConfig,
+	opts: WriteOptions = {},
+): Promise<WriteOutput> {
+	const dryRun = opts.dryRun === true;
+	const writer = new NoteWriter(vault, notes, config, opts);
+	const { result, snapshot } = writer;
+	const checkpointer = checkpointerFor(writer, opts, dryRun);
+	const done = await writeAll(writer, notes, checkpointer, opts);
+	writer.warnIfOnlyNotOwned();
 	if (result.cancelled) await checkpointer.flush();
 	await checkpointer.settled();
-	opts.onProgress?.(done, total);
+	opts.onProgress?.(done, notes.length);
 	if (writer.undo.finish() && !dryRun) result.warnings.push(UNDO_TRUNCATED_WARNING);
 	return { result, snapshot: dryRun ? { ...(opts.snapshot ?? {}) } : snapshot, undo: writer.undo.manifest };
 }
