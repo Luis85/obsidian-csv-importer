@@ -17,13 +17,14 @@ Sources, checked 2026-11-23:
 
 1. **Check that `main` is green.** CI (`.github/workflows/ci.yml`) must pass on Node 20, 22 and 24: `npm run lint`, `npm test`, `npm run build`. `npm run lint` runs ESLint (`eslint-plugin-obsidianmd`), Stylelint (`styles.css`) and the API version check.
 2. **Check the repository root.** It must contain `README.md`, `LICENSE` (MIT) and `manifest.json`. The directory reads `manifest.json` from the **default branch**, so it must be committed there.
-3. **Publish a release** with the Release workflow (see [CONTRIBUTING.md](../CONTRIBUTING.md#release-process)): `version=current|patch|minor|major|x.y.z`. Leave **prerelease** off: the community directory ignores pre-releases (BRAT still installs them).
+3. **Publish a release** with the Release workflow (see [CONTRIBUTING.md](../CONTRIBUTING.md#release-process)): `version=current|patch|minor|major|x.y.z`. Run it on `main` (the workflow refuses other branches) with an explicit version, for the first public release `version=1.0.0`. Leave **prerelease** off: the community directory ignores pre-releases.
+   - The `e2e` job runs the end-to-end tests first (desktop and mobile emulation); the release waits for it and stops when it fails.
    - The `release` job runs, in order: `npm run lint`, **Code quality (advisory)** (`npm run quality`, fallow), `npm test`, `npm run build`, then attests, commits, tags and publishes. Lint, tests and build block the release; the quality step does not.
    - The `mutation` job (**Mutation tests (advisory)**, Stryker) runs next to it and never blocks it. See [Quality gates](#quality-gates-advisory).
    - The tag equals the manifest `version`, with no `v` prefix. The workflow fails if they differ.
    - The assets are `main.js`, `manifest.json` and `styles.css`, uploaded individually.
    - `main.js` and `styles.css` get build-provenance attestations. The directory shows these as a passed check. Missing attestations are only a recommendation, not a blocker.
-   - Versions are semver `x.y.z`. The docs suggest `1.0.0` for a first public release. Earlier `0.x` releases (0.1.0, 0.2.0) were BRAT betas.
+   - Versions are semver `x.y.z`. The docs suggest `1.0.0` for a first public release. The `0.x` releases (0.1.0 to 0.4.1) were early releases on GitHub before the directory listing.
 4. **Claim the plugin in the portal.**
    1. Sign in at [community.obsidian.md](https://community.obsidian.md) with your Obsidian account.
    2. Connect GitHub with the repository owner account (`luis85`). The link is read-only and only verifies ownership.
@@ -63,7 +64,7 @@ Manifest (`manifest.json`):
 - [ ] `minAppVersion` is the oldest Obsidian version that works: 1.15.1. No code uses an unguarded API newer than that (`npm run lint` checks this).
 - [ ] `isDesktopOnly` is `false`. That's correct because the plugin uses no Node or Electron APIs.
 - [ ] `fundingUrl` is left out, because the plugin takes no donations. It may only point to donation services.
-- [ ] `versions.json` maps each released version to its `minAppVersion`. 0.1.0 maps to 1.6.6, which was historically correct, and 0.2.0 maps to 1.15.1. The Release workflow adds the entry.
+- [ ] `versions.json` maps each released version to its `minAppVersion`. 0.1.0 maps to 1.6.6, which was historically correct; 0.2.0 to 0.4.1 map to 1.15.1. The Release workflow adds the entry.
 
 Code and repository:
 
@@ -79,7 +80,7 @@ Code and repository:
 - [ ] Listeners are registered with `registerEvent` and `registerDomEvent`, so none leak.
 - [ ] Only documented APIs are used (no `metadataTypeManager`, no file-explorer internals). Before submitting, search `src/` for `as unknown as`. The known uses are typed key access to the plugin's own settings (`settings.ts`) and the plugin's custom workspace event `csv-importer:changed` (`obsidian/events.ts`); anything else needs a reason.
 - [ ] There is no `console.log` noise.
-- [ ] The code is not obfuscated, and `main.js` stays well under 5 MB (about 165 KB in November 2026).
+- [ ] The code is not obfuscated, and `main.js` stays well under 5 MB (about 175 KB in November 2026).
 - [ ] `LICENSE` is MIT, which GitHub recognizes. The repository is not a fork and is public, open source code.
 
 Styles (`styles.css`, checked by `npm run lint` through Stylelint, `.stylelintrc.json`):

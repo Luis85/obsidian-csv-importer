@@ -8,6 +8,7 @@ Project documents for CSV Importer. User documentation is the [README](../README
 | --- | --- |
 | [UI-SPEC.md](UI-SPEC.md) | Current UI spec: places and vocabulary, import settings tabs, table view, run dialog, CSV imports view, settings tab, component and CSS rules. The single source of truth for the UI's structure. |
 | [SUBMISSION.md](SUBMISSION.md) | How to publish to the Obsidian community directory, the requirements checklist (manifest, code, CSS, advisory quality gates, README disclosures) and lessons from earlier reviews. |
+| [REVIEW-1.0.md](REVIEW-1.0.md) | Release review before 1.0.0: data safety, compliance and release pipeline, product and docs, with a status per finding. |
 | [REVIEW-2026-11.md](REVIEW-2026-11.md) | Product review of November 2026 with a status per finding, and the open backlog. |
 | [RESEARCH.md](RESEARCH.md) | User needs research and competitor comparison (November 2026). The evidence is a snapshot; the "how we address it" column is kept current. |
 | [images/](images) | Screenshots used by the README, generated with `npm run screenshots:readme`. |

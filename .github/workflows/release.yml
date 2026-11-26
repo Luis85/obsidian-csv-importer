@@ -140,11 +140,10 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - run: npm run lint
-      # Code quality (fallow), advisory for now: new dead code, duplication or complexity (not in .fallow-baselines/)
-      # is reported as annotations and marks this step with a warning, but does not stop the release.
-      # To make it a blocker once the plugin has settled, remove `continue-on-error`.
-      - name: Code quality (advisory)
-        continue-on-error: true
+      # Code quality (fallow): new dead code, duplication or complexity (not in .fallow-baselines/) is reported as
+      # annotations and stops the release. Fix the finding, or re-save the baselines (npm run quality:baseline) when
+      # it is accepted.
+      - name: Code quality
         run: npm run quality -- --format github-annotations --fail-on-issues
       - run: npm test
       - run: npm run build
