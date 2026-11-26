@@ -1,7 +1,8 @@
 // Summarizes a Stryker JSON report (reports/mutation/mutation.json) for CI.
 // Prints the mutation score per file and overall, appends a table to $GITHUB_STEP_SUMMARY when set, and emits a
 // GitHub `::warning::` when the score is below `thresholds.break` (or `thresholds.low` when break is unset).
-// Always exits 0: the score is advisory until the plugin has settled (see CONTRIBUTING.md, "Mutation testing").
+// Always exits 0: Stryker itself fails the job below `thresholds.break`, which blocks the release (see CONTRIBUTING.md,
+// "Mutation testing").
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 
 const file = process.argv[2] ?? "reports/mutation/mutation.json";
@@ -29,7 +30,7 @@ const limit = report.thresholds?.break ?? report.thresholds?.low ?? 0;
 const lines = [
 	`### Mutation score: ${all.pct.toFixed(2)} %`,
 	"",
-	`${all.detected} of ${all.valid} mutants detected, ${all.survived} survived, ${all.noCoverage} not covered. Advisory threshold: ${limit} %.`,
+	`${all.detected} of ${all.valid} mutants detected, ${all.survived} survived, ${all.noCoverage} not covered. Threshold: ${limit} %.`,
 	"",
 	"| File | Score | Survived | No coverage |",
 	"| --- | ---: | ---: | ---: |",
@@ -39,5 +40,5 @@ const lines = [
 console.log(lines.join("\n"));
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
 if (all.pct < limit) {
-	console.log(`::warning title=Mutation score::Mutation score ${all.pct.toFixed(2)} % is below the advisory threshold of ${limit} %. Not blocking the release yet.`);
+	console.log(`::warning title=Mutation score::Mutation score ${all.pct.toFixed(2)} % is below the threshold of ${limit} %. The release is blocked.`);
 }

@@ -34,6 +34,7 @@ First release for the Obsidian community directory. Findings of the review befor
 - Releases run only on `main`, need CHANGELOG notes for the version, run the end-to-end tests first, and can finish a failed run with `version=current`.
 - GitHub Actions pinned by commit SHA, kept current by Dependabot.
 - `check-api-versions` also reports overrides of base-class members newer than `minAppVersion`.
+- Quality gates block releases: the fallow check and the mutation tests (score 92.9 %, threshold 90 %).
 - `version-bump.mjs` removed; `npm version` uses `scripts/prepare-release.mjs`. `package.json` has `repository`, `bugs` and `homepage`.
 
 ## 0.4.1

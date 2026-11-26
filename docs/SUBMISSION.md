@@ -19,8 +19,8 @@ Sources, checked 2026-11-23:
 2. **Check the repository root.** It must contain `README.md`, `LICENSE` (MIT) and `manifest.json`. The directory reads `manifest.json` from the **default branch**, so it must be committed there.
 3. **Publish a release** with the Release workflow (see [CONTRIBUTING.md](../CONTRIBUTING.md#release-process)): `version=current|patch|minor|major|x.y.z`. Run it on `main` (the workflow refuses other branches) with an explicit version, for the first public release `version=1.0.0`. Leave **prerelease** off: the community directory ignores pre-releases.
    - The `e2e` job runs the end-to-end tests first (desktop and mobile emulation); the release waits for it and stops when it fails.
-   - The `release` job runs, in order: `npm run lint`, **Code quality (advisory)** (`npm run quality`, fallow), `npm test`, `npm run build`, then attests, commits, tags and publishes. Lint, tests and build block the release; the quality step does not.
-   - The `mutation` job (**Mutation tests (advisory)**, Stryker) runs next to it and never blocks it. See [Quality gates](#quality-gates-advisory).
+   - The `mutation` job (**Mutation tests**, Stryker) runs next to `e2e`; the release waits for both. See [Quality gates](#quality-gates).
+   - The `release` job runs, in order: `npm run lint`, **Code quality** (`npm run quality`, fallow), `npm test`, `npm run build`, then attests, commits, tags and publishes. Every step blocks the release.
    - The tag equals the manifest `version`, with no `v` prefix. The workflow fails if they differ.
    - The assets are `main.js`, `manifest.json` and `styles.css`, uploaded individually.
    - `main.js` and `styles.css` get build-provenance attestations. The directory shows these as a passed check. Missing attestations are only a recommendation, not a blocker.
@@ -90,14 +90,13 @@ Styles (`styles.css`, checked by `npm run lint` through Stylelint, `.stylelintrc
 - [ ] No duplicate properties or selectors in a rule, no shorthand that overrides an earlier longhand, no unknown properties, units or pseudo-classes.
 - [ ] Only features fully supported in Chrome 120 and later (`stylelint-no-unsupported-browser-features`, partial support counts as an error). Use `gap`, not `column-gap`; avoid `display: contents` and `scrollbar-width`.
 
-## Quality gates (advisory)
+## Quality gates
 
-The Release workflow runs two code-quality checks that are **advisory** for now: they report, but never stop a release. The community directory does not run them, so they do not affect the scorecard. Look at them before a release anyway, because they catch dead code and untested behavior.
+The Release workflow runs two code-quality checks, and since 1.0 both **block** the release. The community directory does not run them, so they do not affect the scorecard.
 
-- [ ] **Code quality (fallow).** The **Code quality (advisory)** step of the `release` job runs `npm run quality` with `continue-on-error`. Findings that are not in `.fallow-baselines/` appear as annotations and mark the step with a warning. Run `npm run quality` locally before releasing.
-- [ ] **Mutation tests (Stryker).** The `mutation` job runs `npm run test:mutation` with `continue-on-error`, and the `release` job does not wait for it. A score below `thresholds.break` in `stryker.config.mjs` (90 %; the last full run scored 93.8 %) marks the job failed as a warning. The score per file is in the run summary, and the HTML report is the `mutation-report` artifact.
-
-To make either one blocking later, follow the steps in [CONTRIBUTING.md](../CONTRIBUTING.md#code-quality) and [Mutation testing](../CONTRIBUTING.md#mutation-testing), then update this section.
+- [ ] **Code quality (fallow).** The **Code quality** step of the `release` job runs `npm run quality`. Findings that are not in `.fallow-baselines/` appear as annotations and fail the step. Run `npm run quality` locally before releasing. Re-save the baselines (`npm run quality:baseline`) only for a finding you accept.
+- [ ] **Mutation tests (Stryker).** The `mutation` job runs `npm run test:mutation`, and the `release` job waits for it. A score below `thresholds.break` in `stryker.config.mjs` (90 %; the run before 1.0.0 scored 92.9 %) fails it. The score per file is in the run summary, and the HTML report is the `mutation-report` artifact.
+- [ ] **End-to-end tests.** The `e2e` job (`e2e.yml`, desktop on the earliest and latest supported Obsidian, and mobile emulation) runs before the release, and the release waits for it.
 
 ## README disclosures (Developer policies)
 

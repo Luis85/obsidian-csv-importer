@@ -16,6 +16,12 @@ Status as of 2026-11-26. **Done** means it is on the branch for 1.0.0. The [earl
   - registered listeners and declarative settings;
   - the MIT license and no committed build output.
 
+## Checks at the end
+
+- Lint, the type checks, 644 unit tests, the build and fallow pass.
+- End-to-end tests pass: 50 desktop specs (Obsidian 1.15.1 and latest) and 3 mobile emulation specs, locally and in CI.
+- The mutation score is 92.9 % (3,659 of 3,937 mutants detected); the threshold is 90 %.
+
 ## Blocking
 
 | # | Finding | Change | Status |
@@ -74,4 +80,4 @@ The earlier [open backlog](REVIEW-2026-11.md#open-backlog) still applies:
 - more than one row filter condition;
 - a link from "Imported 3 days ago" to the run history.
 
-None of these blocks 1.0. The quality gates are covered in [SUBMISSION.md](SUBMISSION.md#quality-gates).
+None of these blocks 1.0. The quality gates from that backlog (fallow and mutation tests) now block releases; see [SUBMISSION.md](SUBMISSION.md#quality-gates).

@@ -2,14 +2,14 @@ name: Release
 
 # Three ways to release:
 # 1. Fully automated: run this workflow manually (Actions tab, `gh workflow run release.yml -f version=minor`,
-#    or an agent via the GitHub API). It bumps the version, commits, tags, checks code quality (fallow, advisory), builds,
-#    tests and publishes. Mutation tests run next to it in the advisory `mutation` job.
+#    or an agent via the GitHub API). It bumps the version, commits, tags, checks code quality (fallow), builds,
+#    tests and publishes.
 # 2. Push a tag equal to the manifest.json version (e.g. `git push origin 1.2.3`).
 # 3. Publish a release in the GitHub UI with a new tag equal to the manifest.json version.
 # A manual run only works on the default branch (the community directory reads manifest.json from there) and needs a
 # CHANGELOG.md section for the version ("## Unreleased" is renamed). If a run failed after the tag was pushed, run it
 # again with version=current: it publishes the existing tag instead of bumping again.
-# The end-to-end tests (e2e.yml) run first and block the release.
+# The end-to-end tests (e2e.yml) and the mutation tests run first and block the release.
 on:
   workflow_dispatch:
     inputs:
@@ -41,15 +41,12 @@ jobs:
     permissions:
       contents: read
 
-  # Advisory for now: runs next to the release and never blocks it (continue-on-error, and `release` does not
-  # `need` it). A score below `thresholds.break` in stryker.config.mjs marks this job failed as a warning.
-  # To make it a blocker once the plugin has settled: remove `continue-on-error` here and add `needs: mutation`
-  # to the release job.
+  # Blocks the release: a score below `thresholds.break` in stryker.config.mjs (90 %) fails this job, and the
+  # release job needs it.
   mutation:
-    name: Mutation tests (advisory)
+    name: Mutation tests
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    continue-on-error: true
     permissions:
       contents: read
     steps:
@@ -79,7 +76,7 @@ jobs:
           if-no-files-found: ignore
 
   release:
-    needs: e2e
+    needs: [e2e, mutation]
     runs-on: ubuntu-latest
     permissions:
       contents: write
