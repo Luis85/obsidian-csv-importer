@@ -64,7 +64,9 @@ class RecordSplitter {
 	/** Outside quotes. Returns the index of the last character consumed. */
 	plainChar(i: number): number {
 		const ch = this.text[i];
-		if (ch === '"' && !this.started) {
+		// A quote opens a quoted field at its start, also after spaces (`a, "b,c"`, as hand-written CSV often has).
+		if (ch === '"' && this.atFieldStart()) {
+			this.field = "";
 			this.inQuotes = true;
 			this.quoteStartRecord = this.records.length;
 			this.quoted = true;
@@ -79,6 +81,11 @@ class RecordSplitter {
 			this.started = true;
 		}
 		return i;
+	}
+
+	/** Nothing but spaces read in this field yet (a quote here opens a quoted field). */
+	private atFieldStart(): boolean {
+		return !this.started || (!this.quoted && /^[ ]+$/.test(this.field));
 	}
 
 	endField(): void {

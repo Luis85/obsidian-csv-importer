@@ -87,3 +87,14 @@ describe("claims and free names", () => {
 		expect(() => index.free("x.md")).toThrow("No free file name found");
 	});
 });
+
+describe("Unicode normalization", () => {
+	it("matches a decomposed name in the vault (as macOS or a sync tool writes it) with the composed one", async () => {
+		const decomposed = "d/Café.md";
+		const { index } = await vault([decomposed], ["d"]);
+		expect(index.lookup("d/Café.md")?.path).toBe(decomposed);
+		expect(index.isTaken("d/café.md")).toBe(true);
+		index.claim("d/X́.md");
+		expect(index.isClaimed("d/x́".normalize("NFC") + ".md")).toBe(true);
+	});
+});

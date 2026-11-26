@@ -382,9 +382,15 @@ export function inferColumnType(values: string[], opts: InferenceOptions): Prope
 	return inferFrom(values.length, (i) => values[i] ?? "", opts).type;
 }
 
+/** Headers of columns whose values look like numbers but are labels: "1.10" is not 1.1 (version, release, build). */
+const VERSION_HEADER_RE = /^(?:ver|version|release|build)(?:[\s_-]*(?:no|nr|number|id))?$|(?:^|[\s_-])version$/i;
+
 function inferColumn(parsed: ParsedCsv, index: number, opts: InferenceOptions): Inferred {
 	const rows = parsed.rows;
-	return inferFrom(rows.length, (i) => rows[i]?.[index] ?? "", opts);
+	const inferred = inferFrom(rows.length, (i) => rows[i]?.[index] ?? "", opts);
+	// Converting would drop trailing zeros ("1.10" -> 1.1, "2.0" -> 2) and so change the value.
+	if (inferred.type === "number" && VERSION_HEADER_RE.test((parsed.headers[index] ?? "").trim())) return { type: "text", stripUnits: false };
+	return inferred;
 }
 
 function inferredFields(inf: Inferred): { type: PropertyType; stripUnits?: true } {

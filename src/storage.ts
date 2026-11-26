@@ -163,6 +163,8 @@ export class ImportStorage {
 	private cache = new Map<string, Loaded>();
 	private ready: Promise<void> | null = null;
 	private writes = new Map<string, { tail: Promise<void>; queued: Promise<void> | null }>();
+	/** Note renames seen while an import runs, one list per running import (see trackNoteMoves). */
+	private readonly moveTrackers = new Set<{ from: string; to: string }[]>();
 	/** CSVs whose snapshot or undo file existed but could not be read, until that part is saved again. */
 	private unreadable = new Map<string, Set<StatePart>>();
 
@@ -547,8 +549,27 @@ export class ImportStorage {
 		}
 	}
 
+	/**
+	 * Starts recording note renames for an import that holds its own copy of the snapshot and undo manifest while it
+	 * runs. `apply` moves the renamed notes in that copy (in place), so saving it does not bring back old paths.
+	 */
+	trackNoteMoves(): { apply(snapshot: ImportSnapshot, undo: UndoManifest): void; stop(): void } {
+		const moves: { from: string; to: string }[] = [];
+		this.moveTrackers.add(moves);
+		return {
+			apply: (snapshot, undo) => {
+				for (const m of moves) {
+					rekeyEntry(snapshot, m.from, m.to);
+					rekeyUndo(undo, m.from, m.to);
+				}
+			},
+			stop: () => void this.moveTrackers.delete(moves),
+		};
+	}
+
 	/** Re-keys snapshot entries and undo references after a note was renamed or moved. */
 	async renameNote(oldNotePath: string, newNotePath: string): Promise<void> {
+		for (const moves of this.moveTrackers) moves.push({ from: oldNotePath, to: newNotePath });
 		await this.init();
 		const move: NoteMove = { from: oldNotePath, to: newNotePath, fromDir: parentOf(oldNotePath), toDir: parentOf(newNotePath) };
 		const pending: Promise<void>[] = [];

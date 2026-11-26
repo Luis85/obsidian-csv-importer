@@ -5,6 +5,7 @@ import {
 	convertValue,
 	formatNumber,
 	hasTimezoneOffsets,
+	inferenceOptionsOf,
 	inferColumnType,
 	parseExcelSerial,
 	parseNumber,
@@ -15,6 +16,8 @@ import {
 	suggestKeyColumn,
 	toPropertyName,
 } from "../../src/csv/typeInference";
+import { parseCsv } from "../../src/csv/parser";
+import { cfg } from "./helpers/harness";
 import { createDefaultFileConfig, DEFAULT_SETTINGS } from "../../src/defaults";
 import type { ColumnConfig, ParsedCsv } from "../../src/types";
 
@@ -458,5 +461,20 @@ describe("stripNumberUnits grouping", () => {
 		expect(stripNumberUnits("12 EUR")).toBe("12");
 		expect(stripNumberUnits("usd 12")).toBe("12");
 		expect(stripNumberUnits("12 EURO")).toBe("12 EURO");
+	});
+});
+
+describe("version-like columns", () => {
+	const typeOf = (header: string, values: string[]) =>
+		buildColumnConfigs(parseCsv(`${header}\n${values.join("\n")}\n`, { delimiter: ",", hasHeader: true }), inferenceOptionsOf(cfg(), true))[0]?.type;
+
+	it("stay text when the header names a version, so 1.10 is not imported as 1.1", () => {
+		for (const h of ["Version", "version", "App version", "app_version", "ver", "Release", "build", "Build number"]) {
+			expect(typeOf(h, ["1.10", "1.2"]), h).toBe("text");
+		}
+	});
+
+	it("other numeric columns are still numbers", () => {
+		for (const h of ["Price", "Versions count", "Hours", "Conversion", "v"]) expect(typeOf(h, ["1.10", "1.2"]), h).toBe("number");
 	});
 });

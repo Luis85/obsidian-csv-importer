@@ -1,10 +1,12 @@
 // Computes the next version and writes it to package.json, package-lock.json, manifest.json and
 // versions.json; renames a "## Unreleased" CHANGELOG heading to the new version.
 // Usage: node scripts/prepare-release.mjs <current|patch|minor|major|x.y.z>
+// Without an argument inside `npm version` (the "version" script), it uses the version npm just set.
 // Prints the resulting version on stdout.
 import { existsSync, readFileSync, writeFileSync } from "fs";
 
-const input = (process.argv[2] || "current").trim();
+const fromNpm = process.env.npm_lifecycle_event === "version" ? process.env.npm_package_version : undefined;
+const input = (process.argv[2] || fromNpm || "current").trim();
 const readJson = (p) => JSON.parse(readFileSync(p, "utf8"));
 const writeJson = (p, v, indent) => writeFileSync(p, JSON.stringify(v, null, indent) + "\n");
 

@@ -125,3 +125,28 @@ describe("an undo that was interrupted", () => {
 		expect(t.fm(NOTE).role).toBe("Mine");
 	});
 });
+
+describe("an edit the metadata cache has not caught up with", () => {
+	it("is still recognized when the note is updated", async () => {
+		const t = setup({ conflict: "update" });
+		await t.run("id,role,x\n1,Dev,a\n");
+		const stale = t.app.metadataCache.getFileCache;
+		const cached = { frontmatter: t.fm(NOTE) };
+		t.app.metadataCache.getFileCache = () => cached; // still shows role: Dev
+		await t.editInBases(NOTE, (fm) => {
+			fm.role = "Mine";
+		});
+		const r = await t.run("id,role,x\n1,Lead,b\n");
+		t.app.metadataCache.getFileCache = stale;
+		expect(r.result.rows[0]).toMatchObject({ outcome: "updated", preserved: ["role"], changed: ["x"] });
+		expect(t.fm(NOTE)).toMatchObject({ role: "Mine", x: "b" });
+	});
+});
+
+describe("long note paths", () => {
+	it("are named in a preview warning", async () => {
+		const t = setup({ fileNameTemplate: "{{name}}", keyColumn: "" });
+		const r = await t.run(`name\n${"x".repeat(220)}\nshort\n`, true);
+		expect(r.result.warnings.some((w) => w.startsWith("1 note path is longer than 200 characters"))).toBe(true);
+	});
+});

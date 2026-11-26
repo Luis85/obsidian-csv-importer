@@ -24,7 +24,7 @@ import { triggerCsvChanged } from "./events";
 import { isCsv } from "./vaultEvents";
 
 /** Above this size the import asks before it reads the whole file (parsing and planning block the window). */
-export const LARGE_FILE_BYTES = 50 * 1024 * 1024;
+const LARGE_FILE_BYTES = 50 * 1024 * 1024;
 /** Above this many characters a notice says the import is being prepared, as the dialog takes a moment to appear. */
 const BUSY_NOTICE_CHARS = 2_000_000;
 
@@ -35,6 +35,14 @@ function formatMegabytes(bytes: number): string {
 /** Gives the window a chance to paint (a notice) before a long synchronous step. */
 function nextFrame(): Promise<void> {
 	return new Promise((resolve) => window.setTimeout(resolve, 30));
+}
+
+/** For a large text, shows "Preparing the import..." and lets it paint; the caller hides it. Null for small texts. */
+async function busyNotice(file: TFile, text: string): Promise<Notice | null> {
+	if (text.length <= BUSY_NOTICE_CHARS) return null;
+	const notice = new Notice(`Preparing the import of ${file.name}...`, 0);
+	await nextFrame();
+	return notice;
 }
 
 function hasChanges(u: UndoManifest): boolean {
@@ -100,19 +108,8 @@ export class ImportService {
 	async runImportDialog(file: TFile, text: string, runOpts: ImportFileOptions = {}): Promise<ImportResult> {
 		let busy: Notice | null = null;
 		try {
-			if (file.stat.size > LARGE_FILE_BYTES) {
-				const ok = await confirmDialog(
-					this.app,
-					"Import a large CSV file?",
-					`${file.name} is ${formatMegabytes(file.stat.size)}. Preparing the import reads the whole file and can make Obsidian unresponsive for a while.`,
-					"Continue",
-				);
-				if (!ok) return emptyResult(true);
-			}
-			if (text.length > BUSY_NOTICE_CHARS) {
-				busy = new Notice(`Preparing the import of ${file.name}...`, 0);
-				await nextFrame();
-			}
+			if (!(await this.confirmLargeFile(file))) return emptyResult(true);
+			busy = await busyNotice(file, text);
 			await this.storage.init();
 			const fingerprint = makeFingerprint(await this.app.vault.readBinary(file), file.stat);
 			const cfg = this.getFileConfig(file);
@@ -140,10 +137,13 @@ export class ImportService {
 					const toWrite = pickedRows ? filterNotesByRows(allNotes, pickedRows) : notes;
 					const partial = pickedRows !== undefined || runOpts.rows !== undefined;
 					const snap = await this.storage.loadSnapshot(file.path);
+					// Notes renamed while the import runs keep their new path in the state the import saves.
+					const moves = this.storage.trackNoteMoves();
 					const out = await writeNotes(this.app, toWrite, cfg, {
 						snapshot: snap,
 						warnings,
 						onCheckpoint: async (s, u) => {
+							moves.apply(s, u);
 							try {
 								await this.storage.saveSnapshot(file.path, s);
 								if (hasChanges(u)) await this.storage.saveUndo(file.path, { ...u, csvPath: file.path });
@@ -152,7 +152,8 @@ export class ImportService {
 							}
 						},
 						...writeOpts,
-					});
+					}).finally(() => moves.stop());
+					moves.apply(out.snapshot, out.undo);
 					const undo: UndoManifest = { ...out.undo, csvPath: file.path };
 					if (cfg.createBase && staticFolder && (out.result.created > 0 || out.result.updated > 0)) {
 						const created = await createBaseFile(this.app, staticFolder, cfg, file.basename);
@@ -181,6 +182,17 @@ export class ImportService {
 			new Notice(`Import failed: ${errorMessage(e)}`, 10000);
 			return { ...emptyResult(true), failed: 1, errors: [{ row: 0, message: errorMessage(e) }] };
 		}
+	}
+
+	/** Asks before importing a file over LARGE_FILE_BYTES; true for smaller files. */
+	private async confirmLargeFile(file: TFile): Promise<boolean> {
+		if (file.stat.size <= LARGE_FILE_BYTES) return true;
+		return confirmDialog(
+			this.app,
+			"Import a large CSV file?",
+			`${file.name} is ${formatMegabytes(file.stat.size)}. Preparing the import reads the whole file and can make Obsidian unresponsive for a while.`,
+			"Continue",
+		);
 	}
 
 	/** The one place that saves state after a write: snapshot, undo manifest, then the file config. */

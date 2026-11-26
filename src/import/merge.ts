@@ -114,15 +114,24 @@ function keepsCurrentOnEmpty(k: string, p: FrontmatterValue, c: unknown, input: 
 	return isEmpty(p) && !isEmpty(c) && (input.keepValuesOnEmpty || !hasOwn(input.planned, k));
 }
 
+/**
+ * Snapshot entry of a key whose current value rule 1 keeps: the previous entry, else the hash of an empty value for
+ * an omitted key of a note that has a snapshot (up to 0.4.0 omitted properties got no entry, so the import never
+ * wrote the value the note holds now).
+ */
+function keptEntry(k: string, prev: string | undefined, input: MergeInput): string | undefined {
+	if (prev !== undefined) return prev;
+	return input.snapshot !== undefined && !hasOwn(input.planned, k) ? valueHash(null) : undefined;
+}
+
 /** Managed key: the rules 1 to 3 of mergeFrontmatter. */
 function mergeManaged(k: string, input: MergeInput, res: MergeResult): void {
 	const p = plannedValue(input.planned, k);
 	const c = input.existing[k];
 	const prev = input.snapshot?.[k];
 	if (keepsCurrentOnEmpty(k, p, c, input)) {
-		if (prev !== undefined) res.snapshot[k] = prev;
-		// Up to 0.4.0 an omitted property got no snapshot entry, so the import never wrote the value it holds now.
-		else if (input.snapshot !== undefined && !hasOwn(input.planned, k)) res.snapshot[k] = valueHash(null);
+		const kept = keptEntry(k, prev, input);
+		if (kept !== undefined) res.snapshot[k] = kept;
 		return;
 	}
 	const ph = valueHash(p);

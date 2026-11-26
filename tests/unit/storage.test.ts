@@ -158,3 +158,22 @@ describe("ImportStorage: damaged and newer state files", () => {
 		expect(JSON.parse(app.vault.adapter.data.get(file)!).snapshot).toEqual({ "z.md": { k: "3" } });
 	});
 });
+
+describe("ImportStorage.trackNoteMoves", () => {
+	it("moves notes renamed while an import runs in the import's own copy, until stopped", async () => {
+		const app = new MockApp();
+		const storage = new ImportStorage(app as unknown as App, "plugins/csv");
+		const tracker = storage.trackNoteMoves();
+		await storage.renameNote("n/1.md", "m/1.md");
+		const snapshot = { "n/1.md": { k: "1" }, "n/2.md": { k: "2" } };
+		const undo = { csvPath: "a.csv", timestamp: 1, created: ["n/1.md"], modified: [], writtenHashes: { "n/1.md": "h" } };
+		tracker.apply(snapshot, undo);
+		expect(Object.keys(snapshot).sort()).toEqual(["m/1.md", "n/2.md"]);
+		expect(undo.created).toEqual(["m/1.md"]);
+		expect(undo.writtenHashes).toEqual({ "m/1.md": "h" });
+		tracker.stop();
+		await storage.renameNote("n/2.md", "m/2.md");
+		tracker.apply(snapshot, undo);
+		expect(snapshot).toHaveProperty("n/2.md");
+	});
+});

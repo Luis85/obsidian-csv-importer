@@ -9,7 +9,7 @@ type SortDir = "asc" | "desc";
 
 const LONG_CELL = 40;
 /** Most rows the table puts in the DOM ("Show more" stops there), so a huge CSV stays responsive. */
-export const MAX_SHOWN_ROWS = 5000;
+const MAX_SHOWN_ROWS = 5000;
 
 interface Entry {
 	row: string[];
@@ -41,7 +41,8 @@ export interface TableRendererHooks {
 	/** Sorting changed: render the table again. */
 	requestRender(): void;
 	/** The type badge of a column was activated. */
-	openTypeMenu(ev: MouseEvent, columnIndex: number): void;
+	/** Opens the column menu at a position; `returnFocus` gets the focus back when it closes (keyboard use). */
+	openTypeMenu(at: { x: number; y: number }, columnIndex: number, returnFocus?: HTMLElement): void;
 	/** The set of selected rows changed (rows are not re-rendered). */
 	selectionChanged(): void;
 }
@@ -174,6 +175,7 @@ export class TableRenderer {
 		});
 		// Says what selection is for before anything is ticked (UX review finding 4); also the aria-label.
 		setTooltip(head, SELECT_ROWS_HINT);
+		head.setAttr("aria-label", SELECT_ROWS_HINT);
 		head.addEventListener("click", () => this.toggleAll(page));
 		page.headCheck = head;
 		hr.createEl("th", { cls: "csv-importer-rownum", text: "#" });
@@ -221,14 +223,15 @@ export class TableRenderer {
 		setIcon(badge.createSpan({ cls: "csv-importer-badge-chevron" }), "chevron-down");
 		badge.addEventListener("click", (ev: MouseEvent) => {
 			ev.stopPropagation();
-			this.hooks.openTypeMenu(ev, i);
+			this.hooks.openTypeMenu({ x: ev.clientX, y: ev.clientY }, i);
 		});
 		badge.addEventListener("keydown", (ev: KeyboardEvent) => {
 			if (ev.key === "Enter" || ev.key === " ") {
 				ev.preventDefault();
 				ev.stopPropagation();
+				// Opened from the keyboard: below the badge, and focus goes back to it when the menu closes.
 				const r = badge.getBoundingClientRect();
-				this.hooks.openTypeMenu(new MouseEvent("click", { clientX: r.left, clientY: r.bottom }), i);
+				this.hooks.openTypeMenu({ x: r.left, y: r.bottom }, i, badge);
 			}
 		});
 	}

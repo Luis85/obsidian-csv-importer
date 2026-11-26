@@ -29,6 +29,29 @@ export const DUPLICATE_NOTES_IN_VAULT_WARNING = (n: number, example: string): st
 	`${plural(n, "note in the target folder shares", "notes in the target folder share")} a key with another note (e.g. "${example}"), for example sync conflict copies. Check them before importing.`;
 export const LARGE_IMPORT_WARNING = (n: number): string =>
 	`This import creates or updates ${n} notes. Very large numbers of notes can slow down the vault and Bases.`;
+/** Vault-relative note paths longer than this may not fit Windows' 260-character limit once the vault folder is added. */
+const LONG_PATH_CHARS = 200;
+const LONG_PATHS_WARNING = (n: number, example: string): string =>
+	`${n === 1 ? "1 note path is" : `${n} note paths are`} longer than ${LONG_PATH_CHARS} characters (for example "${example}"). Windows and some sync tools cannot store such long paths; choose a shorter file name or folder.`;
+/** The distinct key values of the planned notes, how many rows repeat one, and the first repeated value. */
+function keyStats(notes: PlannedNote[]): { seen: Set<string>; dupes: number; example: string } {
+	const seen = new Set<string>();
+	let dupes = 0;
+	let example = "";
+	for (const n of notes) {
+		if (!n.key) continue;
+		if (seen.has(n.key.value)) {
+			dupes++;
+			example ||= n.key.value;
+		} else seen.add(n.key.value);
+	}
+	return { seen, dupes, example };
+}
+
+function longPathWarning(notes: PlannedNote[]): string | null {
+	const long = notes.filter((n) => n.path.length > LONG_PATH_CHARS);
+	return long.length > 0 ? LONG_PATHS_WARNING(long.length, long[0]!.path) : null;
+}
 export const ROW_FILTER_WARNING = (matching: number, total: number): string => `Row filter: ${matching} of ${total} rows are imported.`;
 export const EXTRA_PROPERTY_CONFLICT_WARNING = (name: string): string =>
 	`Extra property "${name}" has the same name as a CSV column and is ignored.`;
@@ -204,20 +227,13 @@ class NoteWriter {
 
 	private planWarnings(notes: PlannedNote[]): void {
 		const w = this.result.warnings;
-		const seen = new Set<string>();
-		let dupes = 0;
-		let example = "";
-		for (const n of notes) {
-			if (!n.key) continue;
-			if (seen.has(n.key.value)) {
-				dupes++;
-				example ||= n.key.value;
-			} else seen.add(n.key.value);
-		}
-		if (dupes > 0) w.push(DUPLICATE_KEYS_IN_CSV_WARNING(dupes, example));
-		const inVault = this.keys.duplicates(seen);
+		const keys = keyStats(notes);
+		if (keys.dupes > 0) w.push(DUPLICATE_KEYS_IN_CSV_WARNING(keys.dupes, keys.example));
+		const inVault = this.keys.duplicates(keys.seen);
 		if (inVault) w.push(DUPLICATE_NOTES_IN_VAULT_WARNING(inVault.count, inVault.example));
 		if (notes.length > LARGE_IMPORT_THRESHOLD) w.push(LARGE_IMPORT_WARNING(notes.length));
+		const longPaths = longPathWarning(notes);
+		if (longPaths) w.push(longPaths);
 		for (const name of extraPropertyConflicts(this.config)) w.push(EXTRA_PROPERTY_CONFLICT_WARNING(name));
 	}
 
@@ -297,29 +313,33 @@ class NoteWriter {
 
 	private async update(note: PlannedNote, existing: TFile): Promise<void> {
 		this.paths.claim(existing.path);
-		const merged = mergeFrontmatter({
-			existing: this.vault.frontmatter(existing) ?? {},
-			planned: note.frontmatter,
-			managed: Object.keys(note.types),
-			snapshot: this.snapshot[existing.path],
-			protectEdits: this.config.protectEdits,
-			keepValuesOnEmpty: this.config.keepValuesOnEmpty,
-			fillOnly: note.fillOnly,
-		});
-		const changed = Object.keys(merged.set);
-		const preserved = merged.preserved.length > 0 ? merged.preserved : undefined;
-		if (changed.length === 0) {
-			if (!this.dryRun) this.snapshot[existing.path] = merged.snapshot;
-			this.record({ row: note.row, path: existing.path, outcome: "unchanged", preserved });
-			return;
-		}
-		if (!this.dryRun) {
+		const mergeWith = (current: Record<string, unknown>) =>
+			mergeFrontmatter({
+				existing: current,
+				planned: note.frontmatter,
+				managed: Object.keys(note.types),
+				snapshot: this.snapshot[existing.path],
+				protectEdits: this.config.protectEdits,
+				keepValuesOnEmpty: this.config.keepValuesOnEmpty,
+				fillOnly: note.fillOnly,
+			});
+		let merged = mergeWith(this.vault.frontmatter(existing) ?? {});
+		if (Object.keys(merged.set).length > 0 && !this.dryRun) {
 			await this.undo.remember(existing, () => this.vault.read(existing));
 			await this.vault.processFrontMatter(existing, (fm) => {
+				// The metadata cache can lag behind an edit made a moment ago (or a sync): decide again on the note's
+				// frontmatter as it is now, so a fresh edit is still recognized and kept.
+				merged = mergeWith(fm);
 				for (const [k, v] of Object.entries(merged.set)) fm[k] = v;
 			});
 			this.undo.written(existing.path, await this.vault.read(existing));
-			this.snapshot[existing.path] = merged.snapshot;
+		}
+		const changed = Object.keys(merged.set);
+		const preserved = merged.preserved.length > 0 ? merged.preserved : undefined;
+		if (!this.dryRun) this.snapshot[existing.path] = merged.snapshot;
+		if (changed.length === 0) {
+			this.record({ row: note.row, path: existing.path, outcome: "unchanged", preserved });
+			return;
 		}
 		this.record({ row: note.row, path: existing.path, outcome: "updated", changed, preserved });
 	}

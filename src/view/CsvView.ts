@@ -44,7 +44,7 @@ export class CsvView extends TextFileView {
 		pageSize: () => this.host.settings.pageSize || 200,
 		lowerRows: (parsed) => this.lowerRows(parsed),
 		requestRender: () => this.renderBody(),
-		openTypeMenu: (ev, index) => this.openTypeMenu(ev, index),
+		openTypeMenu: (at, index, returnFocus) => this.openTypeMenu(at, index, returnFocus),
 		selectionChanged: () => this.updateSelectionUi(),
 	});
 	private model: { cfg: FileImportConfig; parsed: ParsedCsv | null; columns: ColumnConfig[]; error: string | null } | null = null;
@@ -386,8 +386,7 @@ export class CsvView extends TextFileView {
 		const { cfg, parsed, columns, error } = m;
 		if (error) return; // the error callout above the table explains it
 		if (!parsed || parsed.headers.length === 0 || parsed.rows.length === 0) {
-			const headerOnly = parsed !== null && cfg.hasHeader && parsed.headers.length > 0;
-			body.createDiv({ cls: "csv-importer-empty", text: headerOnly ? HEADER_ONLY : NO_ROWS });
+			body.createDiv({ cls: "csv-importer-empty", text: emptyText(parsed, cfg) });
 			return;
 		}
 		this.table.render(body, parsed, columns, cfg);
@@ -483,7 +482,7 @@ export class CsvView extends TextFileView {
 		);
 	}
 
-	private openTypeMenu(ev: MouseEvent, index: number): void {
+	private openTypeMenu(at: { x: number; y: number }, index: number, returnFocus?: HTMLElement): void {
 		const col = this.model?.columns[index];
 		if (!col) return;
 		const menu = new Menu();
@@ -512,7 +511,8 @@ export class CsvView extends TextFileView {
 				.setIcon(col.include ? "eye-off" : "eye")
 				.onClick(() => void this.updateColumn(index, (c) => (c.include = !c.include))),
 		);
-		menu.showAtMouseEvent(ev);
+		if (returnFocus) menu.onHide(() => returnFocus.isConnected && returnFocus.focus());
+		menu.showAtPosition(at);
 	}
 
 	private async updateColumn(index: number, mutate: (c: ColumnConfig) => void): Promise<void> {
@@ -534,4 +534,9 @@ export class CsvView extends TextFileView {
 		// render() rebuilds the header: put keyboard focus back on the badge that was used.
 		this.contentEl.querySelector<HTMLElement>(`.csv-importer-badge[data-col="${index}"]`)?.focus();
 	}
+}
+
+/** Why the table is empty: only a header row, or no rows at all. */
+function emptyText(parsed: ParsedCsv | null, cfg: FileImportConfig): string {
+	return parsed !== null && cfg.hasHeader && parsed.headers.length > 0 ? HEADER_ONLY : NO_ROWS;
 }
