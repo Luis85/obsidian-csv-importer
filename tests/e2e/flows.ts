@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { browser } from "@wdio/globals";
 import {
-	ARTIFACTS, PLUGIN_ID, openFile, runCommand, setColorScheme, waitForModal, waitForViewType,
+	ARTIFACTS, PLUGIN_ID, clickPastNotices, dismissNotices, openFile, runCommand, setColorScheme, waitForModal, waitForViewType,
 } from "./support";
 
 /**
@@ -169,15 +169,19 @@ export async function setWindowSize(width: number, height: number): Promise<void
 
 export const INDEX = "[data-testid=csv-index]";
 
-/** Opens the CSV imports index through its command. */
+/**
+ * Opens the CSV imports index through its command, with no notice left over its toolbar (see dismissNotices: the
+ * notices of earlier steps, such as "Created <base>." after an import, cover Add CSV and Re-import all on CI's window).
+ */
 export async function openIndex(): Promise<void> {
+	await dismissNotices();
 	await runCommand("open-import-index");
 	await waitForViewType("csv-importer-index");
 }
 
 /** Opens the index toolbar's Add CSV menu and picks "Scan vault for CSV files..." or "Copy a file from your device...". */
 export async function chooseAddCsv(item: "scan" | "device"): Promise<void> {
-	await browser.$(`${INDEX} [data-testid=csv-index-add]`).click();
+	await clickPastNotices(browser.$(`${INDEX} [data-testid=csv-index-add]`));
 	await clickMenuItem(item === "scan" ? "Scan vault for CSV files..." : "Copy a file from your device...");
 }
 

@@ -149,6 +149,10 @@ Outputs, all gitignored: `reports/e2e/screenshots/<spec>/<step>.png` (key steps 
 
 In CI, `reports/e2e/logs/wdio-<worker>.log` also lists every WebDriver command with its result (`logLevel` is `info` when `CI` is set). Locally, set `E2E_LOG_LEVEL=info` for the same log.
 
+**Notices and top-right controls.** Obsidian stacks notices at the top right of the window and moves the stack whenever one comes or goes. On a wide window (as on CI) they cover the right end of a view's toolbar or header, and a click that lands on a notice only dismisses it. WebDriver's "clickable" check looks at one moment and cannot rule that out while the stack moves. Notices also outlive a test unless they are cleared. So `resetEverything` and `closeAllModals` dismiss notices, `openIndex` does too, and a click on a control at the top right (the CSV imports toolbar and row menus, the table view's **Import settings**, a tab's **More options**) goes through `clickPastNotices`. A failure report whose JSON lists a notice, or a WebDriver log line "element click intercepted ... Other element would receive the click: `<div class="notice">`", points here.
+
+**Files with decomposed (NFD) names.** Write them to disk with Node's `fs` inside the test, as `fixtures.e2e.ts` does, not as vault fixtures: the vault adapter normalizes paths to NFC, so a fixture written through it under an NFD name appears twice in the vault.
+
 Add a `trace(...)` call (`src/core/trace.ts`) when you add a user action or a step that can fail: it costs little, holds no row content, and makes the next failure readable. Users get the same trace through **Save diagnostics report**.
 
 Limitations: Obsidian downloads come from GitHub (`raw.githubusercontent.com` and `github.com` release assets), so the first run needs network access; later runs use `.obsidian-cache/`. Mobile emulation is the desktop app in a phone-sized window, not the real mobile app. The functional import and undo specs run on desktop only. Beta versions need an Obsidian account and are not used.

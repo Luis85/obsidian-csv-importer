@@ -2,8 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { chooseOption, countsLine, openConfigTab, openCsv, openPreview, shot, writeVault } from "../flows";
 import {
-	CSV, clickButton, findNoteByFrontmatter, importViaDialog, installConsoleSpy, listNotes, pluginProblems, readVaultFile, resetEverything,
-	waitForFrontmatter, waitForNoModal,
+	CSV, clickButton, clickPastNotices, findNoteByFrontmatter, importViaDialog, installConsoleSpy, listNotes, pluginProblems, readVaultFile, resetEverything, waitForFrontmatter, waitForNoModal,
 } from "../support";
 
 const SPEC = "encoding-drift-warnings";
@@ -35,7 +34,7 @@ describe("encodings, changed columns and parser warnings", function () {
 
 	it("lets the encoding be set by hand on the File format tab", async function () {
 		await openCsv("Data/windows-1252.csv");
-		await browser.$("[data-testid=csv-configure]").click();
+		await clickPastNotices(browser.$("[data-testid=csv-configure]"));
 		await browser.$("[data-testid=import-config-modal]").waitForDisplayed();
 		await openConfigTab("file");
 		await chooseOption("[data-testid=import-config-modal]", "Encoding", "UTF-16 LE");

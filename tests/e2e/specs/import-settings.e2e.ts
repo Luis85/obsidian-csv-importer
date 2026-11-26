@@ -2,8 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { chooseOption, clickMenuItem, openConfigDialog, openConfigTab, openCsv, setting, shot } from "../flows";
 import {
-	CSV, NOTES_DIR, PLUGIN_ID, clickButton, findNoteByFrontmatter, importAndReadFirstNote, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything,
-	runImportAndClose, waitForFrontmatter, waitForModal, waitForNoModal, readVaultFile,
+	CSV, NOTES_DIR, PLUGIN_ID, clickButton, clickPastNotices, findNoteByFrontmatter, importAndReadFirstNote, importViaDialog, installConsoleSpy, listNotes, pluginProblems, readVaultFile, resetEverything, runImportAndClose, waitForFrontmatter, waitForModal, waitForNoModal,
 } from "../support";
 
 const SPEC = "import-settings";
@@ -33,7 +32,7 @@ describe("import settings dialog", function () {
 	});
 
 	it("opens from the Configure button with a summary line and five tabs", async function () {
-		await browser.$("[data-testid=csv-configure]").click();
+		await clickPastNotices(browser.$("[data-testid=csv-configure]"));
 		await waitForModal("Properties");
 		const summary = await browser.$(`${MODAL} [data-testid=config-summary]`).getText();
 		expect(summary).toContain("6 rows");
@@ -153,7 +152,7 @@ describe("import settings dialog", function () {
 	});
 
 	it("adds an ID extra property from the Add property menu", async function () {
-		await browser.$("[data-testid=csv-configure]").click();
+		await clickPastNotices(browser.$("[data-testid=csv-configure]"));
 		await browser.$(MODAL).waitForDisplayed();
 		await browser.$(`${MODAL} .csv-importer-extra-add button`).click();
 		await clickMenuItem("ID (unique per note)");
@@ -168,7 +167,7 @@ describe("import settings dialog", function () {
 	});
 
 	it("filters rows from the Rows tab", async function () {
-		await browser.$("[data-testid=csv-configure]").click();
+		await clickPastNotices(browser.$("[data-testid=csv-configure]"));
 		await browser.$(MODAL).waitForDisplayed();
 		await openConfigTab("rows");
 		await (await setting(MODAL, "Filter rows")).$("input[type=checkbox], .checkbox-container").click();

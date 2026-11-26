@@ -102,6 +102,31 @@ export const noticeTexts = () =>
 		[document, activeDocument].flatMap((doc) => [...doc.querySelectorAll(".notice")].map((el) => el.textContent ?? "")),
 	);
 
+/**
+ * Dismisses every notice, as a user clicks one away, and waits until they are gone. Obsidian stacks notices at the top
+ * right and moves the stack whenever one comes or goes; on a wide window they cover the right end of a view's
+ * toolbar (CSV imports: Add CSV, Re-import all). A click that lands on a notice only dismisses it, and a
+ * point-in-time "clickable" check cannot rule that out while the stack moves (CI: "element click intercepted ...
+ * Other element would receive the click: <div class="notice">"). Call it before using such a toolbar.
+ */
+export async function dismissNotices(): Promise<void> {
+	await browser.waitUntil(
+		() =>
+			browser.execute(() => {
+				const shown = [...document.querySelectorAll<HTMLElement>(".notice")];
+				for (const notice of shown) notice.click();
+				return shown.length === 0;
+			}),
+		{ timeout: 5000, interval: 200, timeoutMsg: "notices would not go away" },
+	);
+}
+
+/** Clicks a control at the top right of the window (toolbar, view header, row menu) after dismissing notices. */
+export async function clickPastNotices(target: { click(): Promise<unknown> }): Promise<void> {
+	await dismissNotices();
+	await target.click();
+}
+
 /** Waits until Obsidian shows a notice that contains `text`. */
 export const expectNotice = (text: string) =>
 	browser.waitUntil(async () => (await noticeTexts()).some((shown) => shown.includes(text)), {
@@ -195,26 +220,20 @@ export async function resetEverything(): Promise<void> {
 export async function closeAllModals(): Promise<void> {
 	// Escape closes the topmost dialog, as it does for a user; stacked dialogs need one press each. Escape only
 	// reaches Obsidian while its window has keyboard focus, which CI's virtual display does not always give it, so
-	// the other attempts click the topmost dialog's close button (×) or dispatch Escape inside the page instead.
+	// every other attempt clicks the topmost dialog's close button (×) instead. Notices are dismissed first: on a
+	// phone-sized window the × sits under the notice stack, and a click on a notice only dismisses that notice.
+	await dismissNotices();
 	let attempt = 0;
 	await browser.waitUntil(
 		async () => {
 			const open = await browser.$$(".modal-container").getElements();
 			const top = open[open.length - 1];
 			if (!top) return true;
-			const kind = attempt++ % 3;
-			if (kind === 0) {
+			if (attempt++ % 2 === 0) {
 				await browser.keys("Escape");
-			} else if (kind === 1) {
+			} else {
 				const close = top.$(".modal-close-button");
 				if (await close.isExisting()) await close.click();
-			} else {
-				// Neither reached it (seen with mobile emulation on CI): dispatch Escape inside the page, which needs no
-				// window focus and no clickable close button.
-				await browser.execute(() => {
-					const target = document.activeElement ?? document.body;
-					target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
-				});
 			}
 			return false;
 		},

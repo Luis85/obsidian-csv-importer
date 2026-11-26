@@ -3,15 +3,14 @@ import { obsidianPage } from "wdio-obsidian-service";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { INDEX, clickMenuItem, indexRow, menuItems, openConfigDialog, openCsv, openIndex, shot, vaultExists } from "../flows";
 import {
-	CSV, CSV_DE, NOTES_DIR, PLUGIN_ID, activeViewType, clickButton, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything,
-	waitForModal, waitForNoModal,
+	CSV, CSV_DE, NOTES_DIR, PLUGIN_ID, activeViewType, clickButton, clickPastNotices, importViaDialog, installConsoleSpy, listNotes, pluginProblems, resetEverything, waitForModal, waitForNoModal,
 } from "../support";
 
 const SPEC = "index";
 
 const openRowMenu = async (name: string) => {
 	const row = await indexRow(name);
-	await row.$(".csv-importer-index-more").click();
+	await clickPastNotices(row.$(".csv-importer-index-more"));
 };
 
 describe("CSV imports index", function () {
@@ -68,13 +67,12 @@ describe("CSV imports index", function () {
 		await importViaDialog(CSV);
 		await importViaDialog(CSV_DE);
 		await openIndex();
-		// The button is disabled and hidden until the list has loaded; clicking earlier does nothing. The notices of
-		// the two imports can still cover it, so wait until a click would reach it.
+		// The button is disabled until the list has loaded; clicking earlier does nothing. (openIndex has dismissed the
+		// "Created <base>." notices of the two imports, which cover this button on CI's window.)
 		await indexRow("timesheet-de.csv");
 		const all = browser.$(`${INDEX} .csv-importer-index-all`);
 		await all.waitForEnabled();
-		await all.waitForClickable({ timeout: 15000 });
-		await all.click();
+		await clickPastNotices(all);
 		await waitForModal(/import preview/i);
 	}
 
