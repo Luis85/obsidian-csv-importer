@@ -87,7 +87,7 @@ npx fallow health --hotspots --targets   # where refactoring pays off most
 
 `.fallowrc.jsonc` declares the dev tooling entry points (`ui-preview/`, `scripts/`), packages fallow cannot see being used, and the Obsidian lifecycle methods (`onOpen`, `getViewType`, ...) that Obsidian calls on the plugin's classes. The findings that existed when fallow was added are saved in `.fallow-baselines/` (`dead-code.json`, `dupes.json`, `health.json`), so `npm run quality` fails only on new ones. When you fix existing findings, run `npm run quality:baseline` and commit the smaller baselines. Do not re-save a baseline to get a new finding through: fix it, or add a `// fallow-ignore-next-line <rule>` comment with the reason. `.fallow/` is fallow's local cache and is gitignored by fallow itself.
 
-The release workflow runs `npm run quality` after lint, before tests and build. For now it is **advisory**: new findings show as annotations on the run and mark the step with a warning, but do not stop the release (`continue-on-error`). It becomes a blocker once the plugin has settled: remove `continue-on-error` from that step.
+The release workflow runs `npm run quality` after lint, before tests and build. Since 1.0 it **blocks** the release: new findings show as annotations on the run and fail the step. Fix them, or, when a finding is accepted, re-save the baselines with `npm run quality:baseline` and commit them.
 
 ## Mutation testing
 
@@ -99,7 +99,7 @@ npm run test:mutation
 
 `stryker.config.mjs` mutates the pure logic: `src/core/`, `src/csv/`, `src/import/` (without `vaultGateway.ts`, an interface), `src/configStore.ts` and `src/defaults.ts`. The views are not mutated; they are covered by the end-to-end suite. Reports go to `reports/mutation/` (`index.html` to browse survivors, `mutation.json`), gitignored. A full run takes several minutes; to check one file, pass `--mutate src/csv/parser.ts`.
 
-The release workflow runs the suite in its own `mutation` job, next to the release. For now it is **advisory**: the job has `continue-on-error` and the release job does not wait for it, so a low score never stops a release. A score below `thresholds.break` in `stryker.config.mjs` (90 %) marks the job failed as a warning, and `scripts/mutation-summary.mjs` writes the score per file to the run summary. The first full run scored 68.2 %; after a pass of behavior tests and with static mutants (module-level constants) included, it is 93.8 % (about 14 minutes on 4 cores). Remaining survivors are mostly equivalent mutants (redundant guards, optimization-only conditions). To make it a blocker once the plugin has settled, remove `continue-on-error` from the job and add `needs: mutation` to the release job. Raise the threshold when the score goes up; do not lower it to get a run green. The HTML report is uploaded as the `mutation-report` artifact.
+The release workflow runs the suite in its own `mutation` job, next to the release. Since 1.0 it **blocks** the release: the release job waits for it, and a score below `thresholds.break` in `stryker.config.mjs` (90 %) fails it. `scripts/mutation-summary.mjs` writes the score per file to the run summary. The first full run scored 68.2 %; after a pass of behavior tests and with static mutants (module-level constants) included, it was 93.8 %, and 92.9 % before 1.0.0 (about 22 minutes on 4 cores). Remaining survivors are mostly equivalent mutants (redundant guards, optimization-only conditions). Raise the threshold when the score goes up; do not lower it to get a run green. The HTML report is uploaded as the `mutation-report` artifact.
 
 ## Lint
 
@@ -161,13 +161,15 @@ Use Obsidian CSS variables and the component and CSS rules in [docs/UI-SPEC.md](
 
 Releases are automated by the [release workflow](.github/workflows/release.yml).
 
-1. Add your changes under a `## Unreleased` heading in `CHANGELOG.md`. The workflow renames it to the version and uses it as release notes.
-2. Run the **Release** workflow from the Actions tab, or `gh workflow run release.yml -f version=minor`. The `version` input is one of `current` (release the version already in `manifest.json`), `patch`, `minor`, `major` or an explicit `x.y.z`.
-3. The workflow bumps `package.json`, `manifest.json` and `versions.json`, runs lint, tests and build, creates build provenance attestations for `main.js` and `styles.css`, commits `Release x.y.z`, pushes the tag (no `v` prefix) and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`. BRAT picks it up automatically.
+1. Add your changes under a `## Unreleased` heading in `CHANGELOG.md`. The workflow renames it to the version and uses it as release notes. A release without notes for its version fails.
+2. Run the **Release** workflow on `main` from the Actions tab, or `gh workflow run release.yml --ref main -f version=minor`. The `version` input is one of `current` (release the version already in `manifest.json`), `patch`, `minor`, `major` or an explicit `x.y.z`. Prefer an explicit `x.y.z` (for example `1.0.0`): if a run fails halfway, running it again cannot bump twice.
+3. The workflow first runs the end-to-end tests (`e2e.yml`, desktop and mobile emulation) and the mutation tests; a failure of either stops the release. It then bumps `package.json`, `manifest.json` and `versions.json`, runs lint, tests and build, creates build provenance attestations for `main.js` and `styles.css`, commits `Release x.y.z`, pushes the tag (no `v` prefix) and publishes a GitHub release with `main.js`, `manifest.json` and `styles.css`.
 
 Notes:
 
-- Run the workflow from a branch. The selected ref must be a branch, not a tag; the workflow pushes the release commit to it. The workflow file must exist on the default branch to be run manually.
+- Run the workflow on the default branch (`main`); it refuses any other ref. The community directory reads `manifest.json` from the default branch, so a release from another branch would not be picked up. The workflow pushes the release commit to `main`.
+- **A run failed after the tag was pushed** (for example while publishing the GitHub release): run the workflow again with `version=current`. When the tag points to the current commit of `main`, it skips the bump and the tag and only publishes the release.
+- GitHub Actions are pinned by commit SHA; Dependabot (`.github/dependabot.yml`) opens pull requests to update them.
 - If the branch is protected, allow `github-actions[bot]` to push.
 - Alternatives that do not bump the version: push a tag equal to the `manifest.json` version (`git push origin 1.2.3`), or publish a release in the GitHub UI with such a tag. Both build and attach the files.
 - To publish to the community directory (community.obsidian.md), see [docs/SUBMISSION.md](docs/SUBMISSION.md).

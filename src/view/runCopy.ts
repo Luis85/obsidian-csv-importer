@@ -16,6 +16,11 @@ export const SELECT_ROWS_HINT = "Select rows to import only those";
 export const FILTER_PLACEHOLDER = "Filter rows…";
 export const FILTER_LABEL = "Filter rows in all columns";
 export const SHOW_MORE = "Show more";
+
+/** Shown instead of "Show more" once the table holds MAX_SHOWN_ROWS rows. */
+export function shownRowsCap(shown: number, total: number): string {
+	return `Showing the first ${shown.toLocaleString()} of ${total.toLocaleString()} rows. Use the filter to find other rows; the import always includes every row.`;
+}
 export const CLEAR_SELECTION = "Clear selection";
 export const CHANGED_SINCE_IMPORT = "Changed since last import";
 export const RE_IMPORT = "Re-import";

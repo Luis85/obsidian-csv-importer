@@ -1,3 +1,7 @@
 tests/e2e/vaults/** text eol=lf
 tests/e2e/vaults/**/windows-1252.csv binary
 tests/e2e/vaults/**/utf-16.csv binary
+# Fixtures whose exact bytes are the test: CRLF line endings, a byte order mark, an empty file.
+tests/e2e/vaults/**/excel-export.csv binary
+tests/e2e/vaults/**/empty.csv binary
+examples/excel-export.csv binary

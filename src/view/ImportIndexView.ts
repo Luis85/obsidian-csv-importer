@@ -63,11 +63,13 @@ export class ImportIndexView extends ItemView {
 
 	override async onOpen(): Promise<void> {
 		const { vault, workspace } = this.app;
-		this.registerEvent(vault.on("rename", () => this.refreshSoon()));
-		this.registerEvent(vault.on("delete", () => this.refreshSoon()));
-		this.registerEvent(vault.on("create", (f) => f instanceof TFile && f.extension === "base" && this.refreshSoon()));
+		// Only files that can change a row: CSVs, base files, and notes inside an import's folder (folders included,
+		// as a folder rename or delete moves its notes). Bulk undo or delete elsewhere in the vault does not redraw.
+		this.registerEvent(vault.on("rename", (f, oldPath) => (this.affects(f.path) || this.affects(oldPath)) && this.refreshSoon()));
+		this.registerEvent(vault.on("delete", (f) => this.affects(f.path) && this.refreshSoon()));
+		this.registerEvent(vault.on("create", (f) => f instanceof TFile && /^(base|csv)$/i.test(f.extension) && this.refreshSoon()));
 		this.registerEvent(vault.on("modify", (f) => f instanceof TFile && f.extension.toLowerCase() === "csv" && this.refreshSoon()));
-		this.registerEvent(this.app.metadataCache.on("resolved", () => this.recheckEditedSoon()));
+		this.registerEvent(this.app.metadataCache.on("changed", (f) => this.inImportFolder(f.path) && this.recheckEditedSoon()));
 		onCsvChanged(this, () => this.refreshSoon());
 		this.registerEvent(
 			workspace.on("active-leaf-change", (leaf) => {
@@ -76,6 +78,19 @@ export class ImportIndexView extends ItemView {
 		);
 		this.buildShell();
 		await this.refresh();
+	}
+
+	/** Whether a created, renamed or deleted path may change what the list shows. */
+	private affects(path: string): boolean {
+		const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+		if (ext === "csv" || ext === "base") return true;
+		const contains = (p: string): boolean => p === path || p.startsWith(path + "/");
+		return this.inImportFolder(path) || this.items.some((i) => contains(i.csvPath) || contains(i.targetFolder));
+	}
+
+	/** Whether a path is inside the (fixed part of the) target folder of a listed import. */
+	private inImportFolder(path: string): boolean {
+		return this.items.some((i) => i.targetFolder === "" || path.startsWith(i.targetFolder + "/"));
 	}
 
 	override onClose(): Promise<void> {

@@ -12,7 +12,7 @@
         "count": 1
       },
       "crap_high": {
-        "count": 3
+        "count": 5
       }
     },
     "src/main.ts": {
@@ -190,27 +190,26 @@
   },
   "runtime_coverage_findings": [],
   "target_keys": [
-    "src/import/importer.ts:high impact",
-    "src/view/ImportRunModal.ts:high impact",
     "src/main.ts:hidden coupling",
-    "src/view/ImportConfigModal.ts:hidden coupling",
     "src/import/noteBuilder.ts:high impact",
-    "src/view/CsvView.ts:high impact",
-    "src/csv/typeInference.ts:high impact",
+    "src/view/ImportRunModal.ts:high impact",
     "src/defaults.ts:hidden coupling",
+    "src/import/importer.ts:high impact",
+    "src/view/ImportConfigModal.ts:hidden coupling",
+    "src/csv/typeInference.ts:high impact",
     "src/view/ImportIndexView.ts:untested risk",
-    "src/csv/parser.ts:high impact",
-    "src/core/util.ts:high impact",
-    "src/view/config/ColumnRow.ts:untested risk",
-    "src/storage.ts:hidden coupling",
+    "src/view/CsvView.ts:high impact",
     "src/import/merge.ts:high impact",
+    "src/csv/parser.ts:high impact",
+    "src/view/config/ColumnRow.ts:untested risk",
     "src/view/TableRenderer.ts:untested risk",
-    "src/settings.ts:hidden coupling",
-    "src/obsidian/importService.ts:high impact",
-    "src/view/config/Tabs.ts:untested risk",
-    "scripts/check-api-versions.mjs:untested risk",
+    "src/storage.ts:hidden coupling",
     "tests/e2e/support.ts:high impact",
     "src/import/fingerprint.ts:high impact",
+    "src/core/util.ts:high impact",
+    "src/settings.ts:hidden coupling",
+    "scripts/check-api-versions.mjs:untested risk",
+    "src/view/config/Tabs.ts:untested risk",
     "src/import/templates.ts:high impact",
     "src/import/folders.ts:high impact",
     "ui-preview/obsidian-shim.ts:untested risk"

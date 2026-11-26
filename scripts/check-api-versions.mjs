@@ -1,6 +1,7 @@
 // Type-aware check: reports every use of an Obsidian API (method OR property) whose @since is newer than
 // manifest.json minAppVersion and that is not guarded. Complements eslint-plugin-obsidianmd's
-// no-unsupported-api, which (0.6.0) skips plain properties such as Plugin.settings.
+// no-unsupported-api, which (0.6.0) skips plain properties such as Plugin.settings. Also reports class members that
+// override a newer base-class member (for example `override getSettingDefinitions()`).
 // Usage: node scripts/check-api-versions.mjs   (exit 1 when unguarded newer APIs are found)
 import fs from "node:fs";
 import path from "node:path";
@@ -46,19 +47,46 @@ function guarded(node, version) {
 	return false;
 }
 
+/** The Obsidian base-class members a class member overrides (`override getSettingDefinitions()`, `override settings`). */
+function overriddenMembers(member) {
+	const cls = member.parent;
+	if (!member.name || !ts.isClassLike(cls)) return [];
+	const name = member.name.getText();
+	const out = [];
+	for (const clause of cls.heritageClauses ?? []) {
+		for (const t of clause.types) {
+			const prop = checker.getTypeAtLocation(t).getProperty(name);
+			if (prop) out.push(prop);
+		}
+	}
+	return out;
+}
+
+/** Overriding a newer method or property only works on Obsidian versions that call or read it. */
+function checkOverride(sf, node) {
+	const member = ts.isMethodDeclaration(node) || ts.isPropertyDeclaration(node) || ts.isGetAccessor(node);
+	if (!member || !ts.isClassLike(node.parent)) return;
+	for (const base of overriddenMembers(node)) {
+		const since = sinceOf(base);
+		if (since && newer(since)) report(sf, node.name, `override ${node.name.getText()}`, since);
+	}
+}
+
 const problems = [];
+const report = (sf, node, text, since) => {
+	const { line } = sf.getLineAndCharacterOfPosition(node.getStart());
+	problems.push(`${path.relative(".", sf.fileName)}:${line + 1}  ${text}  requires ${since} (minAppVersion ${manifest.minAppVersion})`);
+};
 for (const sf of program.getSourceFiles()) {
 	if (sf.isDeclarationFile || !isSrc(sf.fileName)) continue;
 	const visit = (node) => {
+		checkOverride(sf, node);
 		if (ts.isPropertyAccessExpression(node)) {
 			const sym = checker.getSymbolAtLocation(node.name);
 			if (sym) {
 				const target = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
 				const since = sinceOf(target);
-				if (since && newer(since) && !guarded(node, since)) {
-					const { line } = sf.getLineAndCharacterOfPosition(node.getStart());
-					problems.push(`${path.relative(".", sf.fileName)}:${line + 1}  ${node.getText()}  requires ${since} (minAppVersion ${manifest.minAppVersion})`);
-				}
+				if (since && newer(since) && !guarded(node, since)) report(sf, node, node.getText(), since);
 			}
 		}
 		ts.forEachChild(node, visit);

@@ -195,18 +195,26 @@ export async function resetEverything(): Promise<void> {
 export async function closeAllModals(): Promise<void> {
 	// Escape closes the topmost dialog, as it does for a user; stacked dialogs need one press each. Escape only
 	// reaches Obsidian while its window has keyboard focus, which CI's virtual display does not always give it, so
-	// every other attempt clicks the topmost dialog's close button (×) instead.
+	// the other attempts click the topmost dialog's close button (×) or dispatch Escape inside the page instead.
 	let attempt = 0;
 	await browser.waitUntil(
 		async () => {
 			const open = await browser.$$(".modal-container").getElements();
 			const top = open[open.length - 1];
 			if (!top) return true;
-			if (attempt++ % 2 === 0) {
+			const kind = attempt++ % 3;
+			if (kind === 0) {
 				await browser.keys("Escape");
-			} else {
+			} else if (kind === 1) {
 				const close = top.$(".modal-close-button");
 				if (await close.isExisting()) await close.click();
+			} else {
+				// Neither reached it (seen with mobile emulation on CI): dispatch Escape inside the page, which needs no
+				// window focus and no clickable close button.
+				await browser.execute(() => {
+					const target = document.activeElement ?? document.body;
+					target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+				});
 			}
 			return false;
 		},

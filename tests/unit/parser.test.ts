@@ -23,9 +23,9 @@ describe("parseCsv", () => {
 		}
 	});
 
-	it("keeps CRLF inside quotes", () => {
+	it("turns CRLF inside quotes into LF, as the note gets it", () => {
 		const r = parseCsv('a\r\n"x\r\ny"\r\n', { delimiter: ",", hasHeader: true });
-		expect(r.rows).toEqual([["x\r\ny"]]);
+		expect(r.rows).toEqual([["x\ny"]]);
 	});
 
 	it("strips a BOM", () => {

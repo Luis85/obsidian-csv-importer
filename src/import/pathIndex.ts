@@ -4,13 +4,21 @@ import type { VaultGateway } from "./vaultGateway";
 import type { TAbstractFile } from "obsidian";
 
 /**
+ * The form names are compared in: case-insensitive, and with composed Unicode (NFC), so "é" typed as one character
+ * and as "e" plus an accent (as macOS and some sync tools write names) are the same name.
+ */
+function fold(name: string): string {
+	return name.normalize("NFC").toLowerCase();
+}
+
+/**
  * Case-insensitive view of the vault paths an import touches: existence lookups, the casing of existing
  * folders, free file names and the paths this run has already claimed.
  */
 export class PathIndex {
 	private readonly childMaps = new Map<string, Map<string, TAbstractFile>>();
 	private readonly knownFolders = new Set<string>();
-	/** Lower-cased paths written or merged by this run. */
+	/** Paths written or merged by this run, folded (see fold). */
 	private readonly claimed = new Set<string>();
 
 	constructor(private readonly vault: VaultGateway) {}
@@ -22,7 +30,7 @@ export class PathIndex {
 		if (!children) return null;
 		m = new Map();
 		for (const c of children) {
-			const k = c.name.toLowerCase();
+			const k = fold(c.name);
 			if (!m.has(k)) m.set(k, c);
 		}
 		this.childMaps.set(folderPath, m);
@@ -34,7 +42,7 @@ export class PathIndex {
 		const exact = this.vault.getAbstract(path);
 		if (exact) return exact;
 		const i = path.lastIndexOf("/");
-		return this.childMap(i < 0 ? "" : path.slice(0, i))?.get(path.slice(i + 1).toLowerCase()) ?? null;
+		return this.childMap(i < 0 ? "" : path.slice(0, i))?.get(fold(path.slice(i + 1))) ?? null;
 	}
 
 	/** Folder path with the casing of the folders that already exist. */
@@ -82,11 +90,11 @@ export class PathIndex {
 
 	/** Marks a path as written or merged by this run. */
 	claim(path: string): void {
-		this.claimed.add(path.toLowerCase());
+		this.claimed.add(fold(path));
 	}
 
 	isClaimed(path: string): boolean {
-		return this.claimed.has(path.toLowerCase());
+		return this.claimed.has(fold(path));
 	}
 
 	/** True when something exists at the path or this run has claimed it. */
@@ -108,6 +116,6 @@ export class PathIndex {
 
 	/** Records a file this run created so later lookups in its folder see it without rebuilding the map. */
 	added(file: TAbstractFile): void {
-		this.childMaps.get(parentOf(file.path))?.set(file.name.toLowerCase(), file);
+		this.childMaps.get(parentOf(file.path))?.set(fold(file.name), file);
 	}
 }

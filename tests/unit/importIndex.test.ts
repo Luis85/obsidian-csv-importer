@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
 import { ConfigStore } from "../../src/configStore";
-import { ImportService } from "../../src/obsidian/importService";
+import { ImportService, readFailureText } from "../../src/obsidian/importService";
 import { ImportStorage } from "../../src/storage";
 import { DEFAULT_SETTINGS } from "../../src/defaults";
 import { relativeTime } from "../../src/view/relativeTime";
@@ -161,5 +161,53 @@ describe("relativeTime", () => {
 		expect(relativeTime(now - 2 * 3600_000, now)).toBe("2 hours ago");
 		expect(relativeTime(now - 60_000, now)).toBe("1 minute ago");
 		expect(relativeTime(now - 3 * 86400_000, now)).toBe("3 days ago");
+	});
+});
+
+describe("reimportAll", () => {
+	async function three() {
+		const t = make();
+		for (const n of ["a", "b", "c"]) {
+			await put(t.app, `Data/${n}.csv`);
+			await t.store.set(`Data/${n}.csv`, cfg());
+		}
+		const opened: string[] = [];
+		const results: Record<string, { dryRun: boolean; cancelled: boolean }> = {};
+		vi.spyOn(t.service, "importFromDisk").mockImplementation(async (f) => {
+			opened.push(f.name);
+			return { ...(results[f.name] ?? { dryRun: false, cancelled: false }) } as never;
+		});
+		return { ...t, opened, results };
+	}
+
+	it("goes through every CSV without asking when each one is imported", async () => {
+		const t = await three();
+		await t.service.reimportAll();
+		expect(t.opened).toEqual(["a.csv", "b.csv", "c.csv"]);
+		expect(confirms.calls).toEqual([]);
+	});
+
+	it("asks after a dialog closed without importing, and stops when told to", async () => {
+		const t = await three();
+		t.results["a.csv"] = { dryRun: true, cancelled: false };
+		confirms.answer = false;
+		await t.service.reimportAll();
+		expect(t.opened).toEqual(["a.csv"]);
+		expect(confirms.calls).toEqual(["Continue with the next CSV file?|2 CSV files are still waiting to be re-imported, starting with b.csv."]);
+	});
+
+	it("goes on after a stopped import when told to", async () => {
+		const t = await three();
+		t.results["b.csv"] = { dryRun: false, cancelled: true };
+		await t.service.reimportAll();
+		expect(t.opened).toEqual(["a.csv", "b.csv", "c.csv"]);
+		expect(confirms.calls).toEqual(["Continue with the next CSV file?|c.csv is still waiting to be re-imported."]);
+	});
+});
+
+describe("readFailureText", () => {
+	it("names the reason when there is one", () => {
+		expect(readFailureText("a.csv", new Error("EBUSY: resource busy or locked."))).toBe("Could not read a.csv: EBUSY: resource busy or locked.");
+		expect(readFailureText("a.csv", new Error(""))).toBe("Could not read a.csv.");
 	});
 });

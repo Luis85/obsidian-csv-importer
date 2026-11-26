@@ -96,7 +96,10 @@ export interface UndoOutcome {
 	changed: string[];
 }
 
-/** Reverts an import: trashes created notes, restores modified ones. Notes edited since the import are skipped. */
+/**
+ * Reverts an import: trashes created notes, restores modified ones. Notes edited since the import are skipped; a note
+ * that already holds its previous content counts as restored, so an undo that was interrupted can be run again.
+ */
 export function applyUndo(app: App, manifest: UndoManifest): Promise<UndoOutcome> {
 	return applyUndoWith(new ObsidianVaultGateway(app), manifest);
 }
@@ -130,11 +133,12 @@ export async function applyUndoWith(vault: VaultGateway, manifest: UndoManifest)
 		try {
 			const f = vault.getFile(m.path);
 			if (!f) continue;
-			if (!(await unchanged(f))) {
+			if (await unchanged(f)) await vault.process(f, () => m.content);
+			else if ((await vault.read(f)) !== m.content) {
 				out.changed.push(m.path);
 				continue;
 			}
-			await vault.process(f, () => m.content);
+			// else: already holds its previous content (an earlier undo of this manifest was cut off).
 			out.restored++;
 		} catch (e) {
 			out.failed++;

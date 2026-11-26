@@ -1080,6 +1080,13 @@ button.csv-importer-hidden:not(.clickable-icon) {
 	padding: var(--size-4-3) 0;
 }
 
+.csv-importer-more-cap {
+	max-width: 40em;
+	text-align: center;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
 .csv-importer-empty {
 	padding: var(--size-4-8) var(--size-4-4);
 	text-align: center;

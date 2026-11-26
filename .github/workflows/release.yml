@@ -2,10 +2,14 @@ name: Release
 
 # Three ways to release:
 # 1. Fully automated: run this workflow manually (Actions tab, `gh workflow run release.yml -f version=minor`,
-#    or an agent via the GitHub API). It bumps the version, commits, tags, checks code quality (fallow, advisory), builds,
-#    tests and publishes. Mutation tests run next to it in the advisory `mutation` job.
+#    or an agent via the GitHub API). It bumps the version, commits, tags, checks code quality (fallow), builds,
+#    tests and publishes.
 # 2. Push a tag equal to the manifest.json version (e.g. `git push origin 1.2.3`).
 # 3. Publish a release in the GitHub UI with a new tag equal to the manifest.json version.
+# A manual run only works on the default branch (the community directory reads manifest.json from there) and needs a
+# CHANGELOG.md section for the version ("## Unreleased" is renamed). If a run failed after the tag was pushed, run it
+# again with version=current: it publishes the existing tag instead of bumping again.
+# The end-to-end tests (e2e.yml) and the mutation tests run first and block the release.
 on:
   workflow_dispatch:
     inputs:
@@ -14,7 +18,7 @@ on:
         required: true
         default: patch
       prerelease:
-        description: "Mark as pre-release (BRAT still installs it; the community store ignores it)"
+        description: "Mark as pre-release (the community directory ignores it)"
         type: boolean
         default: false
   push:
@@ -31,23 +35,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Advisory for now: runs next to the release and never blocks it (continue-on-error, and `release` does not
-  # `need` it). A score below `thresholds.break` in stryker.config.mjs marks this job failed as a warning.
-  # To make it a blocker once the plugin has settled: remove `continue-on-error` here and add `needs: mutation`
-  # to the release job.
+  e2e:
+    name: End-to-end tests
+    uses: ./.github/workflows/e2e.yml
+    permissions:
+      contents: read
+
+  # Blocks the release: a score below `thresholds.break` in stryker.config.mjs (90 %) fails this job, and the
+  # release job needs it.
   mutation:
-    name: Mutation tests (advisory)
+    name: Mutation tests
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    continue-on-error: true
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.event.release.tag_name || github.ref }}
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -62,25 +69,26 @@ jobs:
 
       - name: Upload mutation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mutation-report
           path: reports/mutation/
           if-no-files-found: ignore
 
   release:
+    needs: [e2e, mutation]
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.event.release.tag_name || github.ref }}
           fetch-depth: 0
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -93,16 +101,24 @@ jobs:
         env:
           VERSION_INPUT: ${{ inputs.version }}
           REF_TYPE: ${{ github.ref_type }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          if [ "$REF_TYPE" != "branch" ]; then
-            echo "Run this workflow from a branch (selected ref '$GITHUB_REF_NAME' is a $REF_TYPE)." >&2
+          if [ "$REF_TYPE" != "branch" ] || [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
+            echo "Run this workflow from the default branch '$DEFAULT_BRANCH' (selected: $REF_TYPE '$GITHUB_REF_NAME'). The community directory reads manifest.json from there." >&2
             exit 1
           fi
           version="$(node scripts/prepare-release.mjs "$VERSION_INPUT")"
           if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
-            echo "Tag $version already exists. Choose another version." >&2
-            exit 1
+            # Resume a run that failed after pushing the tag: same version, tag on the current commit.
+            if [ "$VERSION_INPUT" = "current" ] && [ "$(git rev-parse "refs/tags/$version^{commit}")" = "$(git rev-parse HEAD)" ]; then
+              echo "Tag $version exists on this commit: publishing it again."
+              echo "resume=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "Tag $version already exists. Choose another version, or run with version=current to finish a failed release of the commit the tag points to." >&2
+              exit 1
+            fi
           fi
+          node scripts/release-notes.mjs "$version" --require > /dev/null
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Resolve tag
@@ -121,24 +137,23 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - run: npm run lint
-      # Code quality (fallow), advisory for now: new dead code, duplication or complexity (not in .fallow-baselines/)
-      # is reported as annotations and marks this step with a warning, but does not stop the release.
-      # To make it a blocker once the plugin has settled, remove `continue-on-error`.
-      - name: Code quality (advisory)
-        continue-on-error: true
+      # Code quality (fallow): new dead code, duplication or complexity (not in .fallow-baselines/) is reported as
+      # annotations and stops the release. Fix the finding, or re-save the baselines (npm run quality:baseline) when
+      # it is accepted.
+      - name: Code quality
         run: npm run quality -- --format github-annotations --fail-on-issues
       - run: npm test
       - run: npm run build
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-path: |
             main.js
             styles.css
 
       - name: Commit and tag (manual run)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && steps.bump.outputs.resume != 'true'
         env:
           tag: ${{ steps.tag.outputs.tag }}
         run: |

@@ -1,6 +1,6 @@
 // Mutation testing with Stryker (https://stryker-mutator.io). Run with `npm run test:mutation`.
 // Mutates the pure logic (no Obsidian at runtime) that the vitest suite in `tests/unit/` covers.
-// The release workflow runs this in an advisory job: below `thresholds.break` the job fails as a warning, the release goes on.
+// The release workflow runs this in the `mutation` job, which the release waits for: below `thresholds.break` it fails.
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
 	testRunner: "vitest",
@@ -17,7 +17,7 @@ export default {
 	tempDirName: ".stryker-tmp",
 	incremental: false,
 	timeoutMS: 10000,
-	// Full run 2026-11 with static mutants: 93.8 % (first run, before the test pass: 68.2 %). `break` sits a few points below,
-	// so a real drop shows as a warning in the advisory release job; raise it as the score improves.
+	// Full runs 2026-11 with static mutants: 93.8 %, 92.9 % before 1.0.0 (first run, before the test pass: 68.2 %). `break` sits a
+	// few points below, so only a real drop blocks a release; raise it as the score improves.
 	thresholds: { high: 95, low: 85, break: 90 },
 };

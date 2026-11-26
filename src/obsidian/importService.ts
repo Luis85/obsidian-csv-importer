@@ -6,8 +6,8 @@ import { parseCsv } from "../csv/parser";
 import { detectHeaderDrift, prepareConfig } from "../csv/typeInference";
 import { emptyResult } from "../core/result";
 import { errorMessage, plural } from "../core/util";
-import { ROW_FILTER_WARNING, HISTORY_NOT_SAVED_WARNING, applyUndo, applyUndoToSnapshot, writeNotes } from "../import/importer";
-import { valueHash } from "../import/merge";
+import { ROW_FILTER_WARNING, HISTORY_NOT_SAVED_WARNING, HISTORY_UNREADABLE_WARNING, applyUndo, applyUndoToSnapshot, writeNotes } from "../import/importer";
+import { matchesHash, valueHash } from "../import/merge";
 import { checkChanged, hashBytes, lastRunOf, makeFingerprint } from "../import/fingerprint";
 import { sanitizeFileName } from "../import/folders";
 import { countMatching, filterNotesByRows, planNotes, resolveTargetFolder, staticPrefix } from "../import/noteBuilder";
@@ -22,6 +22,28 @@ import type { ImportRunControls } from "../view/ImportRunModal";
 import { basePath, createBaseFile, openBase } from "./baseFiles";
 import { triggerCsvChanged } from "./events";
 import { isCsv } from "./vaultEvents";
+
+/** Above this size the import asks before it reads the whole file (parsing and planning block the window). */
+const LARGE_FILE_BYTES = 50 * 1024 * 1024;
+/** Above this many characters a notice says the import is being prepared, as the dialog takes a moment to appear. */
+const BUSY_NOTICE_CHARS = 2_000_000;
+
+function formatMegabytes(bytes: number): string {
+	return `${Math.round(bytes / (1024 * 1024)).toLocaleString()} MB`;
+}
+
+/** Gives the window a chance to paint (a notice) before a long synchronous step. */
+function nextFrame(): Promise<void> {
+	return new Promise((resolve) => window.setTimeout(resolve, 30));
+}
+
+/** For a large text, shows "Preparing the import..." and lets it paint; the caller hides it. Null for small texts. */
+async function busyNotice(file: TFile, text: string): Promise<Notice | null> {
+	if (text.length <= BUSY_NOTICE_CHARS) return null;
+	const notice = new Notice(`Preparing the import of ${file.name}...`, 0);
+	await nextFrame();
+	return notice;
+}
 
 function hasChanges(u: UndoManifest): boolean {
 	return u.created.length > 0 || u.modified.length > 0;
@@ -84,7 +106,10 @@ export class ImportService {
 	 * reported in a notice and returned as a failed dry-run result.
 	 */
 	async runImportDialog(file: TFile, text: string, runOpts: ImportFileOptions = {}): Promise<ImportResult> {
+		let busy: Notice | null = null;
 		try {
+			if (!(await this.confirmLargeFile(file))) return emptyResult(true);
+			busy = await busyNotice(file, text);
 			await this.storage.init();
 			const fingerprint = makeFingerprint(await this.app.vault.readBinary(file), file.stat);
 			const cfg = this.getFileConfig(file);
@@ -96,6 +121,7 @@ export class ImportService {
 			const stored = await this.storage.loadSnapshot(file.path);
 			const warnings = [...parsed.warnings];
 			if (cfg.rowFilter) warnings.push(ROW_FILTER_WARNING(countMatching(parsed, cfg), parsed.rows.length));
+			if (this.storage.unreadableState(file.path).includes("snapshot")) warnings.push(HISTORY_UNREADABLE_WARNING);
 			const staticFolder = staticPrefix(resolveTargetFolder(cfg, file.path));
 
 			const modal = new ImportRunModal(this.app, {
@@ -111,10 +137,13 @@ export class ImportService {
 					const toWrite = pickedRows ? filterNotesByRows(allNotes, pickedRows) : notes;
 					const partial = pickedRows !== undefined || runOpts.rows !== undefined;
 					const snap = await this.storage.loadSnapshot(file.path);
+					// Notes renamed while the import runs keep their new path in the state the import saves.
+					const moves = this.storage.trackNoteMoves();
 					const out = await writeNotes(this.app, toWrite, cfg, {
 						snapshot: snap,
 						warnings,
 						onCheckpoint: async (s, u) => {
+							moves.apply(s, u);
 							try {
 								await this.storage.saveSnapshot(file.path, s);
 								if (hasChanges(u)) await this.storage.saveUndo(file.path, { ...u, csvPath: file.path });
@@ -123,7 +152,8 @@ export class ImportService {
 							}
 						},
 						...writeOpts,
-					});
+					}).finally(() => moves.stop());
+					moves.apply(out.snapshot, out.undo);
 					const undo: UndoManifest = { ...out.undo, csvPath: file.path };
 					if (cfg.createBase && staticFolder && (out.result.created > 0 || out.result.updated > 0)) {
 						const created = await createBaseFile(this.app, staticFolder, cfg, file.basename);
@@ -142,13 +172,27 @@ export class ImportService {
 				basePath: () => basePath(this.app, staticFolder),
 				openBase: () => openBase(this.app, staticFolder),
 			} satisfies ImportRunControls);
+			busy?.hide();
+			busy = null;
 			modal.open();
 			return await modal.closed;
 		} catch (e) {
+			busy?.hide();
 			console.error("CSV Importer: import failed", e);
 			new Notice(`Import failed: ${errorMessage(e)}`, 10000);
 			return { ...emptyResult(true), failed: 1, errors: [{ row: 0, message: errorMessage(e) }] };
 		}
+	}
+
+	/** Asks before importing a file over LARGE_FILE_BYTES; true for smaller files. */
+	private async confirmLargeFile(file: TFile): Promise<boolean> {
+		if (file.stat.size <= LARGE_FILE_BYTES) return true;
+		return confirmDialog(
+			this.app,
+			"Import a large CSV file?",
+			`${file.name} is ${formatMegabytes(file.stat.size)}. Preparing the import reads the whole file and can make Obsidian unresponsive for a while.`,
+			"Continue",
+		);
 	}
 
 	/** The one place that saves state after a write: snapshot, undo manifest, then the file config. */
@@ -218,18 +262,40 @@ export class ImportService {
 			new Notice("No CSV files with import settings found.");
 			return;
 		}
-		for (const f of files) await this.importFromDisk(f);
+		await this.importEach(files);
 	}
 
-	/** Reads the CSV and opens the import dialog for it. */
-	async importFromDisk(file: TFile): Promise<void> {
+	/**
+	 * Opens the import dialog of each CSV in turn. When a dialog is closed without importing, or the import is
+	 * stopped, asks whether to go on with the rest, so a long list can be stopped in one step.
+	 */
+	private async importEach(files: TFile[]): Promise<void> {
+		for (const [i, f] of files.entries()) {
+			const result = await this.importFromDisk(f);
+			const rest = files.slice(i + 1);
+			if (rest.length === 0 || (result && !result.dryRun && !result.cancelled)) continue;
+			const next = rest[0]!.name;
+			const ok = await confirmDialog(
+				this.app,
+				"Continue with the next CSV file?",
+				rest.length === 1 ? `${next} is still waiting to be re-imported.` : `${plural(rest.length, "CSV file", "CSV files")} are still waiting to be re-imported, starting with ${next}.`,
+				"Continue",
+			);
+			if (!ok) return;
+		}
+	}
+
+	/** Reads the CSV and opens the import dialog for it. Resolves with the dialog's result, or null when unreadable. */
+	async importFromDisk(file: TFile): Promise<ImportResult | null> {
+		let text: string;
 		try {
-			const text = await this.readCsv(file);
-			await this.runImportDialog(file, text);
+			text = await this.readCsv(file);
 		} catch (e) {
 			console.error("CSV Importer: could not read file", e);
-			new Notice(`Could not read ${file.name}.`);
+			new Notice(readFailureText(file.name, e), 10000);
+			return null;
 		}
+		return this.runImportDialog(file, text);
 	}
 
 	// --- imports index ---
@@ -301,7 +367,7 @@ export class ImportService {
 			checked++;
 			let edited = false;
 			for (const [prop, hash] of Object.entries(hashes)) {
-				if (valueHash(fm[prop] ?? null) !== hash) {
+				if (!matchesHash(fm[prop] ?? null, hash)) {
 					edited = true;
 					props.add(prop);
 				}
@@ -400,7 +466,7 @@ export class ImportService {
 			new Notice("No CSV files have changed since their last import.");
 			return;
 		}
-		for (const f of changed) await this.importFromDisk(f);
+		await this.importEach(changed);
 	}
 
 	/** Number of notes the import of this CSV owns (snapshot entries). */
@@ -540,6 +606,12 @@ export class ImportService {
 		if (file) void this.app.workspace.getLeaf("tab").openFile(file);
 		else new Notice("The note no longer exists.");
 	}
+}
+
+/** "Could not read data.csv: <reason>." with the reason the system gave, when there is one. */
+export function readFailureText(fileName: string, e: unknown): string {
+	const reason = errorMessage(e).trim().replace(/[.\s]+$/, "");
+	return reason ? `Could not read ${fileName}: ${reason}.` : `Could not read ${fileName}.`;
 }
 
 /** The notice shown after an undo, e.g. "Import undone: 3 removed, 1 restored." */

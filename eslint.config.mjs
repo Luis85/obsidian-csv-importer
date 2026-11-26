@@ -10,7 +10,6 @@ export default defineConfig([
 		"coverage",
 		"main.js",
 		"esbuild.config.mjs",
-		"version-bump.mjs",
 		"scripts/**",
 		"ui-preview/**",
 		".stryker-tmp/**",

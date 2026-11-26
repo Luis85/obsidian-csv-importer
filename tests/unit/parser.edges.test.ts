@@ -45,3 +45,15 @@ describe("detectDelimiter ties", () => {
 		expect(detectDelimiter("a;b|c\nd;e|f")).toBe(";");
 	});
 });
+
+describe("spaces before an opening quote", () => {
+	it("still open a quoted field, so a delimiter inside the quotes does not split it", () => {
+		const r = parseCsv('a,b,c\n1, "x, y", z\n', { delimiter: ",", hasHeader: true });
+		expect(r.rows).toEqual([["1", "x, y", " z"]]);
+	});
+
+	it("a quote after other text stays literal", () => {
+		const r = parseCsv('a,b\n1,x "y"\n', { delimiter: ",", hasHeader: true });
+		expect(r.rows).toEqual([["1", 'x "y"']]);
+	});
+});

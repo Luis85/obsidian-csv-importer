@@ -5,7 +5,7 @@ type Delim = Exclude<DelimiterOption, "auto">;
 const CANDIDATES: Delim[] = [",", ";", "\t", "|"];
 
 /**
- * Split text into records. Quote-aware; accepts CRLF/LF/CR. Completely blank lines are skipped
+ * Split text into records. Quote-aware; accepts CRLF/LF/CR, and line breaks inside quoted fields become LF. Completely blank lines are skipped
  * (so trailing empty lines never produce rows). Stops after `maxRecords` records.
  */
 function parseRecords(
@@ -43,9 +43,16 @@ class RecordSplitter {
 		private readonly delimiter: string,
 	) {}
 
-	/** Inside quotes: `""` is a quote, a single `"` closes. Returns the index of the last character consumed. */
+	/**
+	 * Inside quotes: `""` is a quote, a single `"` closes, and a line break (CRLF, CR or LF) becomes `\n`, as it is
+	 * written to the note. Returns the index of the last character consumed.
+	 */
 	quotedChar(i: number): number {
 		const ch = this.text[i];
+		if (ch === "\r") {
+			this.field += "\n";
+			return this.text[i + 1] === "\n" ? i + 1 : i;
+		}
 		if (ch !== '"') this.field += ch;
 		else if (this.text[i + 1] === '"') {
 			this.field += '"';
@@ -57,7 +64,9 @@ class RecordSplitter {
 	/** Outside quotes. Returns the index of the last character consumed. */
 	plainChar(i: number): number {
 		const ch = this.text[i];
-		if (ch === '"' && !this.started) {
+		// A quote opens a quoted field at its start, also after spaces (`a, "b,c"`, as hand-written CSV often has).
+		if (ch === '"' && this.atFieldStart()) {
+			this.field = "";
 			this.inQuotes = true;
 			this.quoteStartRecord = this.records.length;
 			this.quoted = true;
@@ -72,6 +81,11 @@ class RecordSplitter {
 			this.started = true;
 		}
 		return i;
+	}
+
+	/** Nothing but spaces read in this field yet (a quote here opens a quoted field). */
+	private atFieldStart(): boolean {
+		return !this.started || (!this.quoted && /^[ ]+$/.test(this.field));
 	}
 
 	endField(): void {

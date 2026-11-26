@@ -60,7 +60,7 @@ Clicking a `.csv` file opens it as a table. Each column header shows a type badg
 - **Link values ([[…]])** (writes each value as `[[value]]`; the item becomes **Unlink values** once set),
 - **Exclude from import** (or **Include in import**).
 
-Above the table: a filter box, **Import settings** (an icon on phones), and one primary button, **Import 6 rows**. A status line shows rows, columns, delimiter, extra properties, when the file was last imported and **Undo** (undoes the last import). At most one callout is shown at a time: a read error, changed columns (with **Review columns**), or a note for the first import. Its title names the problem, for example **Columns changed**; when unrelated problems are listed together it says how many there are (**2 things to check**). If a row filter is set, the callout says how many rows will be imported. Long tables are shown in pages; **Show more** appends rows.
+Above the table: a filter box, **Import settings** (an icon on phones), and one primary button, **Import 6 rows**. A status line shows rows, columns, delimiter, extra properties, when the file was last imported and **Undo** (undoes the last import). At most one callout is shown at a time: a read error, changed columns (with **Review columns**), or a note for the first import. Its title names the problem, for example **Columns changed**; when unrelated problems are listed together it says how many there are (**2 things to check**). If a row filter is set, the callout says how many rows will be imported. Long tables are shown in pages; **Show more** appends rows, up to 5,000 rows (use the filter box to find others). The import always includes every row.
 
 Tick rows to import only those: the header checkbox selects every row that matches the filter, shift-click selects a range, and the primary button becomes **Import 2 selected rows**. **Clear selection** in the status line drops the selection. The view's more-options menu (⋮) has **Import settings** and **Open CSV imports**.
 
@@ -198,7 +198,7 @@ The file menu of a CSV file (right-click in the file explorer) has **Import** (*
 
 The ribbon icon **Open CSV imports** (or the command of the same name, or the button at the top of the plugin's settings) opens **CSV imports**, a list of every CSV file with import settings. It opens in its own tab; opening it again reveals the existing one. Files are sorted by last import, newest first, then by name.
 
-Each row shows the CSV's name as a link (click it to open the CSV in the table view), its folder, when it was last imported (or "Never imported"), and how many notes this import owns (a dash when there are none). A missing file is marked **CSV missing**. Actions per row:
+Each row shows the CSV's name as a link (click it to open the CSV in the table view), its folder, when it was last imported (or "Never imported"), and how many notes this import owns (a dash when there are none). A missing file is marked **CSV missing**: deleting or moving a CSV out of the vault keeps its import settings and history, so its notes can still be undone or deleted, and putting the file back (from the trash, or when a sync tool restores it) picks up where it left off. Use **Remove from CSV imports...** to forget it. Actions per row:
 
 - **Import** (never imported) or **Re-import**: runs the normal import dialog.
 - **Import settings** (icon button, shown on hover): opens the import settings.
@@ -214,7 +214,7 @@ Under the name, the row also shows the result of the last import ("12 new · 5 u
 
 **Copy a file from your device...** opens **Add CSV file**, which copies a CSV from anywhere on your device into the vault. Choose the file with the system file picker (it works on desktop and mobile), the folder in the vault and the file name. If a file of that name already exists you choose **Replace the existing file** or **Keep both** (the new file gets a free name such as `name 1.csv`). The bytes are copied unchanged. The file is then added to CSV imports and opened in the table view. The plugin cannot follow the original file: to update the copy, add the file again with the same folder and name and choose Replace; CSV imports then shows it as changed.
 
-At the top: a filter box, **Add CSV**, **Re-import all**, and a refresh button. **Re-import all** runs the import dialog for every listed CSV that still exists. With no entries, the view shows "No imports yet" and how to set one up; the filter box and **Re-import all** are hidden.
+At the top: a filter box, **Add CSV**, **Re-import all**, and a refresh button. **Re-import all** runs the import dialog for every listed CSV that still exists, one after the other. When you close a dialog without importing, or stop an import, you are asked whether to go on with the remaining files. With no entries, the view shows "No imports yet" and how to set one up; the filter box and **Re-import all** are hidden.
 
 **Delete imported notes...** moves the notes this import owns to the trash (using your Obsidian trash setting) after a confirmation that states the count. A note counts as owned when the import history lists it and it still exists as a Markdown note, even if you renamed or moved it. Notes you created yourself, even in the same folder, are never touched. A checkbox, **Also delete the base file**, also trashes the base. Afterwards the import history and undo data are cleared and "last import" is reset, but the CSV's settings stay, so you can import again. This works even when the CSV file is missing. It does not use the undo data, so it cannot be undone from the plugin; restore from Obsidian's trash instead.
 
@@ -262,11 +262,12 @@ Per file only (import settings, not in the settings tab): column types, property
 ## Privacy and data
 
 - CSV Importer makes no network requests and collects no telemetry.
-- Settings, including per-file import settings, are stored in `.obsidian/plugins/csv-importer/data.json`.
-- Import state and undo data are stored in `.obsidian/plugins/csv-importer/imports/`:
-  - `index.json`: which CSV files have import state, and whether they can be undone.
-  - `<hash>.json`: per CSV, a hash of the last imported value per note and property, used to protect your edits and to know which notes an import owns.
+- Settings, including per-file import settings, are stored in `data.json` in the plugin's folder, `<config folder>/plugins/csv-importer/` (the config folder is `.obsidian` unless you changed it).
+- Import state and undo data are stored in the `imports/` folder next to it:
+  - `index.json`: per CSV path, whether it has import state and can be undone, the folders of its imported notes, and the fingerprint and counts described below.
+  - `<hash>.json`: per CSV, its path and a hash of the last imported value per note and property, used to protect your edits and to know which notes an import owns.
   - `<hash>.undo.json`: per CSV, the previous content of the notes the last import changed.
+  - `<file>.tmp` exists only while a state file is being replaced; `<file>.unreadable` is a copy of a state file that could not be read (see Troubleshooting), kept so you can recover it.
 
   `<hash>` is derived from the CSV's path. The undo files can contain row data. If you sync your vault's configuration folder, these files are synced too.
 - The CSV file is never modified.
@@ -281,9 +282,13 @@ Per file only (import settings, not in the settings tab): column types, property
 - Rows removed from the CSV leave their notes in place.
 - Renaming a column in the CSV needs re-mapping in the import settings.
 - Time zones are dropped from datetimes.
-- Undo covers only the last import of a file. Very large imports may not be fully undoable because the stored undo data is capped; you get a warning when that happens.
+- Undo covers only the last import of a file. Undo keeps at most about 20 million characters of previous note content per import; a larger import cannot be undone completely, and you get a warning when that happens.
 - One row filter condition per file.
-- Column types are inferred from all rows, so very large files take longer to open.
+- Column types are inferred from all rows, so very large files take longer to open. Files over 50 MB ask before an import reads them, and the table view shows at most 5,000 rows.
+- Columns named like a version (Version, Release, Build) are inferred as text, so `1.10` stays `1.10`. Set the type by hand for other columns of that kind.
+- If Obsidian quits during an import, the last second or two of rows may be missing from the import history. Those notes are still owned through their source link; without **Add source link**, a re-import skips them as "not created by this import".
+- Note paths longer than 200 characters get a warning, as Windows and some sync tools cannot store them.
+- The interface is in English only.
 
 ## Troubleshooting
 
@@ -304,6 +309,12 @@ A note with that name or key already exists but this CSV did not create it. Rena
 
 **Dates are not recognized.**
 Slash dates like `03/04/2026` are ambiguous and the column stays text unless another value settles the order. Set **Date order for dates like 03/04/2026** on the **File format** tab. Excel serial numbers are inferred as numbers; set the column type to Date to convert them.
+
+**The import preview says the import history could not be read.**
+The file that records what the last import wrote was damaged (for example by a sync conflict) or comes from a newer version of the plugin. Values you edited in Obsidian are not recognized as edits for this import. A copy of the file is kept as `<hash>.json.unreadable` in the plugin's `imports/` folder. If you updated the plugin on another device, update it here too before importing.
+
+**A notice says the saved settings come from a newer version.**
+You use a newer CSV Importer on another device that syncs the same vault. Update the plugin; until then this device reads the settings but does not save changes, so the newer data is not overwritten.
 
 ## FAQ
 
@@ -343,16 +354,8 @@ Requires Obsidian 1.15.1 or later (desktop and mobile).
 
 ### Community plugins
 
-Once CSV Importer is listed in the community store:
-
 1. Open **Settings > Community plugins** and turn off restricted mode.
 2. Select **Browse**, search for **CSV Importer**, then **Install** and **Enable**.
-
-### BRAT
-
-1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin.
-2. Run **BRAT: Add a beta plugin for testing** and enter `luis85/obsidian-csv-importer`.
-3. BRAT installs the latest GitHub release and keeps it updated.
 
 ### Manual
 
@@ -361,6 +364,17 @@ Once CSV Importer is listed in the community store:
 3. Reload Obsidian and enable **CSV Importer** under **Settings > Community plugins**.
 
 Developing the plugin? See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## For other plugins
+
+These parts are stable within a major version (1.x); everything else, including the files in the plugin folder, is internal and may change.
+
+- The workspace event `csv-importer:changed` fires with the CSV's vault path after its import settings, import history or imported notes changed (settings saved, import, undo, delete, remove from CSV imports). Listen with `app.workspace.on("csv-importer:changed", (csvPath) => ...)` and register the returned reference.
+- The plugin instance (`app.plugins.getPlugin("csv-importer")`) offers:
+  - `importFile(file, text, { rows? })`: opens the import dialog for a CSV `TFile` with its decoded text; `rows` limits the run to these 1-based data row numbers. Resolves with the result when the dialog closes (`dryRun: true` when nothing was written).
+  - `csvStatus(file)`: `{ imported, changed, lastImport, modifiedAt }`, whether the CSV changed since its last import.
+  - `canUndo(file)` and `undoLastImport(file)`.
+  - `openImportIndex()`: opens the CSV imports view.
 
 ## License
 

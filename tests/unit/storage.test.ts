@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ImportStorage } from "../../src/storage";
+import { ImportStorage, STATE_VERSION } from "../../src/storage";
 import { MockApp } from "./mocks/obsidian";
 import type { App } from "obsidian";
 
@@ -85,5 +85,95 @@ describe("data versioning", () => {
 	it("exports the history warning text", async () => {
 		const { HISTORY_NOT_SAVED_WARNING } = await import("../../src/import/importer");
 		expect(HISTORY_NOT_SAVED_WARNING).toContain("import history could not be saved");
+	});
+});
+
+describe("ImportStorage: damaged and newer state files", () => {
+	const snapFileOf = (app: MockApp) => [...app.vault.adapter.data.keys()].find((k) => /\/[0-9a-f]{14}\.json$/.test(k))!;
+
+	async function saved() {
+		const app = new MockApp();
+		const storage = new ImportStorage(app as unknown as App, "plugins/csv");
+		await storage.saveSnapshot("a.csv", { "x.md": { k: "1" } });
+		return { app, file: snapFileOf(app) };
+	}
+
+	it("writes the format version and leaves no temporary copy", async () => {
+		const { app, file } = await saved();
+		expect(JSON.parse(app.vault.adapter.data.get(file)!)).toMatchObject({ version: STATE_VERSION, csvPath: "a.csv" });
+		expect([...app.vault.adapter.data.keys()].some((k) => k.endsWith(".tmp"))).toBe(false);
+	});
+
+	it("reads the temporary copy when the file itself was cut off", async () => {
+		const { app, file } = await saved();
+		app.vault.adapter.data.set(`${file}.tmp`, app.vault.adapter.data.get(file)!);
+		app.vault.adapter.data.set(file, '{"version":1,"csvPath":"a.csv","snap');
+		const fresh = new ImportStorage(app as unknown as App, "plugins/csv");
+		expect(await fresh.loadSnapshot("a.csv")).toEqual({ "x.md": { k: "1" } });
+		expect(fresh.unreadableState("a.csv")).toEqual([]);
+	});
+
+	it("reports a corrupt file, keeps a copy of it, and clears the report once saved again", async () => {
+		const { app, file } = await saved();
+		app.vault.adapter.data.set(file, '{"csvPath":"a.csv","snap');
+		const fresh = new ImportStorage(app as unknown as App, "plugins/csv");
+		expect(await fresh.loadSnapshot("a.csv")).toEqual({});
+		expect(fresh.unreadableState("a.csv")).toEqual(["snapshot"]);
+		expect(app.vault.adapter.data.get(`${file}.unreadable`)).toBe('{"csvPath":"a.csv","snap');
+		await fresh.saveSnapshot("a.csv", {});
+		expect(fresh.unreadableState("a.csv")).toEqual([]);
+		expect(app.vault.adapter.data.get(`${file}.unreadable`)).toBe('{"csvPath":"a.csv","snap');
+	});
+
+	it("does not read a file written by a newer version", async () => {
+		const { app, file } = await saved();
+		app.vault.adapter.data.set(file, JSON.stringify({ version: STATE_VERSION + 1, csvPath: "a.csv", snapshot: { "x.md": {} } }));
+		const fresh = new ImportStorage(app as unknown as App, "plugins/csv");
+		expect(await fresh.loadSnapshot("a.csv")).toEqual({});
+		expect(fresh.unreadableState("a.csv")).toEqual(["snapshot"]);
+	});
+
+	it("reads files without a version (0.4.1 and earlier) and returns undo manifests without it", async () => {
+		const { app, file } = await saved();
+		app.vault.adapter.data.set(file, JSON.stringify({ csvPath: "a.csv", snapshot: { "y.md": { k: "2" } } }));
+		const fresh = new ImportStorage(app as unknown as App, "plugins/csv");
+		expect(await fresh.loadSnapshot("a.csv")).toEqual({ "y.md": { k: "2" } });
+		const manifest = { csvPath: "a.csv", timestamp: 1, created: ["y.md"], modified: [] };
+		await fresh.saveUndo("a.csv", manifest);
+		const again = new ImportStorage(app as unknown as App, "plugins/csv");
+		expect(await again.loadUndo("a.csv")).toEqual(manifest);
+	});
+
+	it("retries a write that failed", async () => {
+		const { app, file } = await saved();
+		const storage = new ImportStorage(app as unknown as App, "plugins/csv");
+		await storage.loadSnapshot("a.csv");
+		const realWrite = app.vault.adapter.write.bind(app.vault.adapter);
+		app.vault.adapter.write = async () => {
+			throw new Error("disk full");
+		};
+		await expect(storage.saveSnapshot("a.csv", { "z.md": { k: "3" } })).rejects.toThrow("disk full");
+		app.vault.adapter.write = realWrite;
+		await storage.saveUndo("a.csv", null); // any later save also writes the pending snapshot
+		expect(JSON.parse(app.vault.adapter.data.get(file)!).snapshot).toEqual({ "z.md": { k: "3" } });
+	});
+});
+
+describe("ImportStorage.trackNoteMoves", () => {
+	it("moves notes renamed while an import runs in the import's own copy, until stopped", async () => {
+		const app = new MockApp();
+		const storage = new ImportStorage(app as unknown as App, "plugins/csv");
+		const tracker = storage.trackNoteMoves();
+		await storage.renameNote("n/1.md", "m/1.md");
+		const snapshot = { "n/1.md": { k: "1" }, "n/2.md": { k: "2" } };
+		const undo = { csvPath: "a.csv", timestamp: 1, created: ["n/1.md"], modified: [], writtenHashes: { "n/1.md": "h" } };
+		tracker.apply(snapshot, undo);
+		expect(Object.keys(snapshot).sort()).toEqual(["m/1.md", "n/2.md"]);
+		expect(undo.created).toEqual(["m/1.md"]);
+		expect(undo.writtenHashes).toEqual({ "m/1.md": "h" });
+		tracker.stop();
+		await storage.renameNote("n/2.md", "m/2.md");
+		tracker.apply(snapshot, undo);
+		expect(snapshot).toHaveProperty("n/2.md");
 	});
 });

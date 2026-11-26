@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+First release for the Obsidian community directory. Findings of the review before 1.0: `docs/REVIEW-1.0.md`.
+
+### Data safety
+- **Multi-line cells from Windows and Excel CSVs** update again on re-import. Line breaks inside quoted cells were remembered with CRLF while the note got LF, so every changed multi-line cell counted as edited in Obsidian and was never updated. Notes imported by earlier versions are recognized.
+- **Empty cells: Omit property**: values added in Obsidian to notes imported by 0.4.0 or earlier are now protected too (0.4.1 covered new imports only).
+- **Import history is written safely.** Each state file goes through a temporary copy, so a crash or full disk no longer leaves a half-written file. A file that cannot be read (damaged, or from a newer version of the plugin) is kept as `.unreadable`, and the import preview warns that edits in Obsidian are not recognized for that import. A failed save is retried.
+- **A CSV deleted inside Obsidian keeps its settings and import history** and shows as **CSV missing**, so its notes can still be undone or deleted, and restoring the file (from the trash, or by a sync tool) picks up where it left off. Before, the history was deleted at once.
+- **Placeholder folders** (`Projects/{{status}}`): a row whose folder changes, or a note you moved to a sibling folder, is matched by its key instead of getting a second note.
+- **An undo that was cut off** (Obsidian closed halfway) can be run again; restored notes count as restored, and later re-imports update them normally.
+- Updates decide on the note's frontmatter as it is at write time, so an edit made a moment before the import (or synced in) is never mistaken for an unedited value.
+- Notes renamed while an import runs keep their new path in the import history.
+- File names are compared with Unicode normalization (NFC) as well as case-insensitively, so names written by macOS or sync tools in decomposed form match.
+- **Versions**: the state files carry a format version, and settings saved by a newer version of the plugin are read but never overwritten (a notice asks you to update). Global settings are checked when loaded.
+
+### Import and table view
+- **Re-import all** and **Re-import changed** ask whether to go on when you close a dialog without importing or stop an import, so a long list can be stopped in one step.
+- CSV files over 50 MB ask before the import reads them; large files show "Preparing the import..." until the dialog opens.
+- Read errors name the reason ("Could not read data.csv: EBUSY: resource busy or locked.").
+- The table view shows at most 5,000 rows (the import always takes every row), caches type inference between redraws and handles row checkboxes with one listener.
+- A CSV with only a header row says so instead of "This file has no rows."
+- Columns named like a version (Version, Release, Build) are inferred as text, so `1.10` stays `1.10`.
+- The preview warns about note paths longer than 200 characters (Windows and some sync tools cannot store them).
+- A quote after leading spaces opens a quoted field (`1, "a, b"`).
+- The CSV imports view only refreshes for changes to CSVs, bases and notes in an import's folder, and rechecks edited notes only for notes in those folders.
+- Accessibility: the column menu opened from the keyboard appears below the badge and returns focus to it; the select-all checkbox has its own label.
+
+### Docs
+- README: the part of the plugin other plugins can rely on (`csv-importer:changed`, `importFile`, `csvStatus`, undo), what the state files hold, new limitations and troubleshooting entries. BRAT instructions removed.
+
+### Development
+- Releases run only on `main`, need CHANGELOG notes for the version, run the end-to-end tests first, and can finish a failed run with `version=current`.
+- GitHub Actions pinned by commit SHA, kept current by Dependabot.
+- `check-api-versions` also reports overrides of base-class members newer than `minAppVersion`.
+- End-to-end fixtures for real-world files: an Excel export (BOM, semicolons, CRLF, a multi-line cell), header-only and empty CSVs, a products file with version numbers, duplicate keys and a placeholder folder, a decomposed (NFD) file name, and a generated 20,000-row file. `examples/excel-export.csv` is a messy Excel export to try.
+- Quality gates block releases: the fallow check and the mutation tests (score 92.9 %, threshold 90 %).
+- `version-bump.mjs` removed; `npm version` uses `scripts/prepare-release.mjs`. `package.json` has `repository`, `bugs` and `homepage`.
+
 ## 0.4.1
 ### Fixes
 - **Empty cells: Omit property**: a value you add in Obsidian to a property the CSV left empty is now protected on re-import (with **Keep values edited in Obsidian**), instead of being overwritten once the CSV has a value. Omitted properties stay managed by the import, and a tags cell that holds no tags (for example `#`) is treated like an empty cell.

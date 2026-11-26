@@ -54,6 +54,33 @@ export function createDefaultFileConfig(settings: PluginSettings): FileImportCon
 /** Current schema version of data.json. */
 export const CURRENT_DATA_VERSION = 1;
 
+/** Allowed values of the enum settings; any other stored value falls back to the default. */
+const SETTING_CHOICES: Partial<Record<keyof PluginSettings, readonly unknown[]>> = {
+	defaultDelimiter: ["auto", ",", ";", "\t", "|"],
+	defaultDecimalSeparator: [".", ","],
+	defaultConflict: ["skip", "overwrite", "update", "rename"],
+	defaultEmptyValues: ["empty", "omit"],
+	defaultEncoding: ["auto", "utf-8", "utf-16le", "utf-16be", "windows-1252"],
+};
+
+/**
+ * The global settings from data.json: every known setting with a value of the right type (and, for choices, a
+ * known value), defaults for the rest. Unknown keys are dropped.
+ */
+export function sanitizeSettings(raw: unknown): PluginSettings {
+	const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+	const out: PluginSettings = { ...DEFAULT_SETTINGS };
+	const target = out as unknown as Record<string, unknown>;
+	for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof PluginSettings)[]) {
+		const v = src[key];
+		const choices = SETTING_CHOICES[key];
+		if (typeof v !== typeof DEFAULT_SETTINGS[key] || (choices && !choices.includes(v))) continue;
+		target[key] = v;
+	}
+	if (!Number.isInteger(out.pageSize) || out.pageSize < 10 || out.pageSize > 100000) out.pageSize = DEFAULT_SETTINGS.pageSize;
+	return out;
+}
+
 const DATE_ORDERS = ["auto", "dmy", "mdy"];
 const FILTER_OPS = ["equals", "notEquals", "contains", "notContains", "empty", "notEmpty", "greaterThan", "lessThan"];
 const PROP_TYPES = ["text", "number", "checkbox", "date", "datetime", "list"];
