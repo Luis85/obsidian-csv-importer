@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
 First release for the Obsidian community directory. Findings of the review before 1.0: `docs/REVIEW-1.0.md`.
 
 ### Data safety

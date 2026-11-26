@@ -1,6 +1,6 @@
 {
   "name": "obsidian-csv-importer",
-  "version": "0.4.1",
+  "version": "1.0.0",
   "description": "Turn CSV files into one note per row with typed properties that Bases can sum and filter. Re-import safely when the CSV changes: your edits are kept. Includes table view, preview and undo.",
   "main": "main.js",
   "type": "module",
