@@ -1,7 +1,10 @@
 import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { menuItems, openCsv, shot } from "../flows";
-import { CSV, PLUGIN_ID, closeSettings, installConsoleSpy, openPluginSettings, pluginProblems, resetEverything, waitForViewType } from "../support";
+import {
+	CSV, PLUGIN_ID, closeSettings, importViaDialog, installConsoleSpy, openPluginSettings, pluginProblems, readVaultFile, resetEverything, runCommand,
+	waitForViewType,
+} from "../support";
 
 const SPEC = "smoke";
 
@@ -20,7 +23,7 @@ describe("plugin loads, commands, ribbon, file menu, settings tab", function () 
 		}, PLUGIN_ID);
 		expect(state.enabled).toBe(true);
 		expect(state.commands).toEqual(
-			["configure-current-csv", "import-current-csv", "open-import-index", "reimport-all-csv", "undo-import-current-csv"].map((c) => `${PLUGIN_ID}:${c}`),
+			["configure-current-csv", "import-current-csv", "open-import-index", "reimport-all-csv", "save-diagnostics-report", "undo-import-current-csv"].map((c) => `${PLUGIN_ID}:${c}`),
 		);
 	});
 
@@ -87,5 +90,19 @@ describe("plugin loads, commands, ribbon, file menu, settings tab", function () 
 		await openCsv(CSV);
 		expect(await menuItems()).toEqual([]);
 		await expect(browser.$("[data-testid=csv-view]")).toBeDisplayed();
+	});
+
+	it("saves a diagnostics report with versions, the CSV imports and the recent steps", async function () {
+		await importViaDialog(CSV);
+		await runCommand("save-diagnostics-report");
+		const name = await browser.waitUntil(
+			() => browser.executeObsidian(({ app }) => app.vault.getRoot().children.map((c) => c.name).find((n) => n.startsWith("CSV Importer diagnostics")) ?? false),
+			{ timeoutMsg: "no diagnostics note" },
+		);
+		const text = await readVaultFile(String(name));
+		expect(text).toContain("- CSV Importer: ");
+		expect(text).toContain("| Data/timesheet.csv | yes |");
+		expect(text).toMatch(/\[import\] dialog result \{"csv":"Data\/timesheet\.csv","dryRun":false/);
+		expect(text).not.toContain("Softwareentwickler"); // no row content
 	});
 });

@@ -25,7 +25,7 @@
     },
     "src/obsidian/importService.ts": {
       "crap_moderate": {
-        "count": 2
+        "count": 3
       }
     },
     "src/view/AddCsvModal.ts": {
@@ -66,7 +66,7 @@
         "count": 2
       },
       "crap_moderate": {
-        "count": 1
+        "count": 2
       }
     },
     "src/view/ScanVaultModal.ts": {
@@ -186,28 +186,36 @@
       "crap_moderate": {
         "count": 1
       }
+    },
+    "wdio.conf.mts": {
+      "crap_high": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
     }
   },
   "runtime_coverage_findings": [],
   "target_keys": [
-    "src/main.ts:hidden coupling",
-    "src/import/noteBuilder.ts:high impact",
-    "src/view/ImportRunModal.ts:high impact",
     "src/defaults.ts:hidden coupling",
-    "src/import/importer.ts:high impact",
-    "src/view/ImportConfigModal.ts:hidden coupling",
-    "src/csv/typeInference.ts:high impact",
+    "src/main.ts:hidden coupling",
     "src/view/ImportIndexView.ts:untested risk",
+    "src/view/ImportConfigModal.ts:hidden coupling",
+    "src/import/noteBuilder.ts:high impact",
+    "src/view/ImportRunModal.ts:hidden coupling",
     "src/view/CsvView.ts:high impact",
+    "src/import/importer.ts:high impact",
+    "src/csv/typeInference.ts:high impact",
     "src/import/merge.ts:high impact",
     "src/csv/parser.ts:high impact",
     "src/view/config/ColumnRow.ts:untested risk",
     "src/view/TableRenderer.ts:untested risk",
     "src/storage.ts:hidden coupling",
-    "tests/e2e/support.ts:high impact",
-    "src/import/fingerprint.ts:high impact",
-    "src/core/util.ts:high impact",
     "src/settings.ts:hidden coupling",
+    "src/import/fingerprint.ts:high impact",
+    "tests/e2e/support.ts:high impact",
+    "src/core/util.ts:high impact",
     "scripts/check-api-versions.mjs:untested risk",
     "src/view/config/Tabs.ts:untested risk",
     "src/import/templates.ts:high impact",

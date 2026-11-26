@@ -89,10 +89,28 @@ describe("real-world CSV files", function () {
 	});
 
 	it("imports a CSV with a decomposed (NFD) file name and finds its notes again on re-import", async function () {
-		await openCsv(CAFE);
+		// Written on disk under its decomposed name, as a sync tool or macOS does, not through the vault adapter: the
+		// adapter normalizes paths to NFC, and a file written through it under an NFD path shows up twice in the vault
+		// (once from the write, once from the file watcher). So this file is made here, not kept with the fixtures.
+		await browser.executeObsidian(async ({ app, require }, path) => {
+			const fs = require("fs") as typeof import("fs");
+			const base = (app.vault.adapter as unknown as { basePath: string }).basePath;
+			fs.writeFileSync(`${base}/${path}`, "id,dish\n1,Crêpe\n2,Soupe à l'oignon\n");
+		}, CAFE);
+		// Obsidian lists the file once, under the path it uses for it (composed); the plugin works with that path.
+		let path = "";
+		await browser.waitUntil(
+			async () => {
+				const found = await browser.executeObsidian(({ app }) => app.vault.getFiles().filter((f) => f.name.startsWith("Caf")).map((f) => f.path));
+				path = found[0] ?? "";
+				return found.length === 1;
+			},
+			{ timeoutMsg: "the vault did not pick up the CSV, or lists it twice" },
+		);
+		await openCsv(path);
 		await expect(browser.$("[data-testid=csv-table]")).toHaveText(expect.stringContaining("Crêpe"));
-		await importViaDialog(CAFE);
-		await openPreview(CAFE);
+		await importViaDialog(path);
+		await openPreview(path);
 		expect(await countsLine()).toBe("2 unchanged");
 		await clickButton("Cancel");
 		await waitForNoModal();

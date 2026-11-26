@@ -6,6 +6,7 @@ import { parseCsv } from "../csv/parser";
 import { detectHeaderDrift, prepareConfig } from "../csv/typeInference";
 import { emptyResult } from "../core/result";
 import { errorMessage, plural } from "../core/util";
+import { trace, traceError } from "../core/trace";
 import { ROW_FILTER_WARNING, HISTORY_NOT_SAVED_WARNING, HISTORY_UNREADABLE_WARNING, applyUndo, applyUndoToSnapshot, writeNotes } from "../import/importer";
 import { matchesHash, valueHash } from "../import/merge";
 import { checkChanged, hashBytes, lastRunOf, makeFingerprint } from "../import/fingerprint";
@@ -43,6 +44,21 @@ async function busyNotice(file: TFile, text: string): Promise<Notice | null> {
 	const notice = new Notice(`Preparing the import of ${file.name}...`, 0);
 	await nextFrame();
 	return notice;
+}
+
+/** Records how an import dialog ended, and passes its result on. */
+function traceResult(file: TFile, r: ImportResult): ImportResult {
+	trace("import", "dialog result", {
+		csv: file.path,
+		dryRun: r.dryRun,
+		cancelled: r.cancelled,
+		created: r.created,
+		updated: r.updated,
+		unchanged: r.unchanged,
+		skipped: r.skipped,
+		failed: r.failed,
+	});
+	return r;
 }
 
 function hasChanges(u: UndoManifest): boolean {
@@ -107,6 +123,7 @@ export class ImportService {
 	 */
 	async runImportDialog(file: TFile, text: string, runOpts: ImportFileOptions = {}): Promise<ImportResult> {
 		let busy: Notice | null = null;
+		trace("import", "prepare", { csv: file.path, bytes: file.stat.size, rows: runOpts.rows?.length });
 		try {
 			if (!(await this.confirmLargeFile(file))) return emptyResult(true);
 			busy = await busyNotice(file, text);
@@ -123,6 +140,7 @@ export class ImportService {
 			if (cfg.rowFilter) warnings.push(ROW_FILTER_WARNING(countMatching(parsed, cfg), parsed.rows.length));
 			if (this.storage.unreadableState(file.path).includes("snapshot")) warnings.push(HISTORY_UNREADABLE_WARNING);
 			const staticFolder = staticPrefix(resolveTargetFolder(cfg, file.path));
+			trace("import", "planned", { csv: file.path, rows: parsed.rows.length, notes: notes.length, warnings: warnings.length, folder: staticFolder });
 
 			const modal = new ImportRunModal(this.app, {
 				csvPath: file.path,
@@ -175,9 +193,10 @@ export class ImportService {
 			busy?.hide();
 			busy = null;
 			modal.open();
-			return await modal.closed;
+			return traceResult(file, await modal.closed);
 		} catch (e) {
 			busy?.hide();
+			traceError("import", "failed", e, { csv: file.path });
 			console.error("CSV Importer: import failed", e);
 			new Notice(`Import failed: ${errorMessage(e)}`, 10000);
 			return { ...emptyResult(true), failed: 1, errors: [{ row: 0, message: errorMessage(e) }] };
@@ -187,12 +206,14 @@ export class ImportService {
 	/** Asks before importing a file over LARGE_FILE_BYTES; true for smaller files. */
 	private async confirmLargeFile(file: TFile): Promise<boolean> {
 		if (file.stat.size <= LARGE_FILE_BYTES) return true;
-		return confirmDialog(
+		const ok = await confirmDialog(
 			this.app,
 			"Import a large CSV file?",
 			`${file.name} is ${formatMegabytes(file.stat.size)}. Preparing the import reads the whole file and can make Obsidian unresponsive for a while.`,
 			"Continue",
 		);
+		trace("import", ok ? "large file confirmed" : "large file declined", { csv: file.path });
+		return ok;
 	}
 
 	/** The one place that saves state after a write: snapshot, undo manifest, then the file config. */
@@ -213,6 +234,7 @@ export class ImportService {
 			// A stopped or partial run does not count as "the CSV as it is now was imported".
 			await this.storage.setMeta(file.path, { lastRun: lastRunOf(result), ...(fingerprint && !result.cancelled ? { fingerprint } : {}) });
 		} catch (e) {
+			traceError("import", "could not save import history", e, { csv: file.path });
 			console.error("CSV Importer: could not save import history", e);
 			result.warnings.push(HISTORY_NOT_SAVED_WARNING);
 		}
@@ -243,7 +265,9 @@ export class ImportService {
 		);
 		if (!ok) return;
 		const snapshot = await this.storage.loadSnapshot(csvPath);
+		trace("undo", "start", { csv: csvPath, created: manifest.created.length, modified: manifest.modified.length });
 		const outcome = await applyUndo(this.app, manifest);
+		trace("undo", "done", { csv: csvPath, trashed: outcome.trashed, restored: outcome.restored, failed: outcome.failed, changed: outcome.changed.length });
 		await this.storage.saveSnapshot(csvPath, applyUndoToSnapshot(snapshot, manifest, new Set(outcome.changed)));
 		await this.storage.saveUndo(csvPath, null);
 		triggerCsvChanged(this.app, csvPath);
@@ -270,6 +294,7 @@ export class ImportService {
 	 * stopped, asks whether to go on with the rest, so a long list can be stopped in one step.
 	 */
 	private async importEach(files: TFile[]): Promise<void> {
+		trace("import", "bulk start", { files: files.length });
 		for (const [i, f] of files.entries()) {
 			const result = await this.importFromDisk(f);
 			const rest = files.slice(i + 1);
@@ -281,6 +306,7 @@ export class ImportService {
 				rest.length === 1 ? `${next} is still waiting to be re-imported.` : `${plural(rest.length, "CSV file", "CSV files")} are still waiting to be re-imported, starting with ${next}.`,
 				"Continue",
 			);
+			trace("import", ok ? "bulk continues" : "bulk stopped", { remaining: rest.length });
 			if (!ok) return;
 		}
 	}
@@ -291,6 +317,7 @@ export class ImportService {
 		try {
 			text = await this.readCsv(file);
 		} catch (e) {
+			traceError("import", "could not read CSV", e, { csv: file.path });
 			console.error("CSV Importer: could not read file", e);
 			new Notice(readFailureText(file.name, e), 10000);
 			return null;

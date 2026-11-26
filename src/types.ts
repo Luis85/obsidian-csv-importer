@@ -182,6 +182,8 @@ export interface PluginSettings {
 	midnightAsDate: boolean;
 	/** Max rows rendered in the table before "show more". */
 	pageSize: number;
+	/** Print the plugin's steps to the developer console (they are always kept in memory for diagnostics reports). */
+	debugLog: boolean;
 }
 
 /** Shape of data.json. */

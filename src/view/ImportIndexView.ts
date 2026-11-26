@@ -5,6 +5,7 @@ import { errorMessage } from "../core/util";
 import { relativeTime } from "./relativeTime";
 import { lastRunText } from "../import/fingerprint";
 import { onCsvChanged } from "../obsidian/events";
+import { trace, traceError } from "../core/trace";
 import { AddCsvModal } from "./AddCsvModal";
 import { ScanVaultModal } from "./ScanVaultModal";
 import { badge, iconButton, renderCallout } from "./dom";
@@ -110,7 +111,9 @@ export class ImportIndexView extends ItemView {
 			this.itemsKey = key;
 			this.items = items;
 			this.loaded = true;
+			trace("index", "list redrawn", { items: items.length, force });
 		} catch (e) {
+			traceError("index", "could not list imports", e);
 			console.error("CSV Importer: could not list imports", e);
 			new Notice(`Could not load the imports: ${errorMessage(e)}`);
 		}
@@ -122,6 +125,11 @@ export class ImportIndexView extends ItemView {
 		root.empty();
 		root.addClass("csv-importer-index");
 		root.setAttr("data-testid", "csv-index");
+		// Which element got the press and the click (capture phase, before any handler): tells a click that never
+		// reached a button apart from one whose action did nothing.
+		for (const type of ["pointerdown", "click"] as const) {
+			this.registerDomEvent(root, type, (ev) => trace("index", type, { target: describeTarget(ev.target), x: Math.round(ev.clientX), y: Math.round(ev.clientY) }), { capture: true });
+		}
 
 		const tools = root.createDiv({ cls: "csv-importer-index-tools" });
 		const search = tools.createEl("input", {
@@ -143,7 +151,7 @@ export class ImportIndexView extends ItemView {
 		setIcon(add.createSpan({ cls: "csv-importer-index-add-chevron" }), "chevron-down");
 		add.addEventListener("click", () => this.openAddMenu(add));
 		const all = tools.createEl("button", { cls: "csv-importer-index-all", text: REIMPORT_ALL, attr: { type: "button" } });
-		all.addEventListener("click", () => void this.guard(() => this.host.reimportAll()));
+		all.addEventListener("click", () => void this.guard(() => this.host.reimportAll(), "re-import all"));
 		this.reimportAllBtn = all;
 		iconButton(tools, { icon: "refresh-cw", label: "Refresh", onClick: () => void this.refresh() });
 
@@ -167,7 +175,7 @@ export class ImportIndexView extends ItemView {
 			const box = renderCallout(list, "info", {
 				title: changedLine(changed),
 				items: [],
-				action: { label: REIMPORT_CHANGED, onClick: () => void this.guard(() => this.host.reimportChanged()) },
+				action: { label: REIMPORT_CHANGED, onClick: () => void this.guard(() => this.host.reimportChanged(), "re-import changed") },
 			});
 			box.addClass("csv-importer-index-changed");
 			box.setAttr("data-testid", "csv-index-changed");
@@ -303,14 +311,14 @@ export class ImportIndexView extends ItemView {
 				attr: { type: "button", "aria-label": `${label} ${item.fileName}`, "data-testid": "csv-index-primary" },
 			});
 			if (item.changed) primary.addClass("mod-cta");
-			primary.addEventListener("click", () => void this.guard(() => this.host.reimport(item.csvPath)));
+			primary.addEventListener("click", () => void this.guard(() => this.host.reimport(item.csvPath), `${label} ${item.csvPath}`));
 			const cfg = all.find((a) => a.id === "configure");
 			if (cfg) {
 				iconButton(actions, {
 					icon: cfg.icon,
 					label: `${cfg.label} for ${item.fileName}`,
 					cls: "csv-importer-index-configure",
-					onClick: () => void this.guard(cfg.run),
+					onClick: () => void this.guard(cfg.run, `${cfg.label} ${item.csvPath}`),
 				});
 			}
 		}
@@ -356,10 +364,10 @@ export class ImportIndexView extends ItemView {
 	private openMenu(ev: MouseEvent, actions: RowAction[]): void {
 		const menu = new Menu();
 		const regular = actions.filter((a) => !a.menuOnly);
-		for (const a of regular) menu.addItem((i) => i.setTitle(a.label).setIcon(a.icon).onClick(() => void this.guard(a.run)));
+		for (const a of regular) menu.addItem((i) => i.setTitle(a.label).setIcon(a.icon).onClick(() => void this.guard(a.run, a.label)));
 		if (regular.length > 0) menu.addSeparator();
 		for (const a of actions.filter((x) => x.menuOnly)) {
-			menu.addItem((i) => i.setTitle(a.label).setIcon(a.icon).setWarning(a.warning === true).onClick(() => void this.guard(a.run)));
+			menu.addItem((i) => i.setTitle(a.label).setIcon(a.icon).setWarning(a.warning === true).onClick(() => void this.guard(a.run, a.label)));
 		}
 		menu.showAtMouseEvent(ev);
 	}
@@ -399,13 +407,24 @@ export class ImportIndexView extends ItemView {
 	}
 
 	/** Runs an action, reports failures and refreshes the list afterwards. */
-	private async guard(run: () => Promise<void> | void): Promise<void> {
+	private async guard(run: () => Promise<void> | void, action: string): Promise<void> {
+		trace("index", `action: ${action}`);
 		try {
 			await run();
+			trace("index", `action done: ${action}`);
 		} catch (e) {
+			traceError("index", `action failed: ${action}`, e);
 			console.error("CSV Importer: index action failed", e);
 			new Notice(`Something went wrong: ${errorMessage(e)}`);
 		}
 		await this.refresh();
 	}
 }
+
+/** A short name for an event target: its test id, aria label or classes, and text. */
+function describeTarget(target: EventTarget | null): string {
+	if (!(target instanceof HTMLElement)) return target === null ? "none" : "not an element";
+	const id = target.getAttr("data-testid") ?? target.getAttr("aria-label") ?? target.className;
+	return `${target.tagName.toLowerCase()} ${id} "${(target.textContent ?? "").trim().slice(0, 30)}"`;
+}
+

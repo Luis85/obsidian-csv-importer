@@ -68,7 +68,7 @@ Manifest (`manifest.json`):
 
 Code and repository:
 
-- [ ] Command IDs don't contain the plugin id. Current IDs: `open-import-index`, `import-current-csv`, `reimport-all-csv`, `undo-import-current-csv` and `configure-current-csv`.
+- [ ] Command IDs don't contain the plugin id. Current IDs: `open-import-index`, `import-current-csv`, `reimport-all-csv`, `undo-import-current-csv`, `configure-current-csv` and `save-diagnostics-report`.
 - [ ] Command names don't contain the plugin name, and there are no default hotkeys.
 - [ ] No sample-plugin code is left over.
 - [ ] No `innerHTML`, `outerHTML` or `insertAdjacentHTML`. Build the DOM with `createEl` and `createDiv`.
@@ -108,7 +108,7 @@ The Developer policies forbid client-side telemetry, ads in the plugin UI, obfus
   - settings in `data.json`;
   - import state in `.obsidian/plugins/csv-importer/imports/`: `index.json` (per CSV: size, modification time, content hash and the counts of the last import, no row content) and `<hash>.json`, which holds hashes of the last imported values;
   - undo data in `<hash>.undo.json`, which holds the previous note content and may contain row data.
-- [ ] **Files written:** notes, an optional `.base` file and an optional import report note. The CSV is never modified. Nothing outside the vault is accessed, with one user-initiated exception: **Add CSV file...** shows the system file picker (`<input type="file">`, no Node or Electron APIs) and reads only the file the user selects, copying it into the vault. The README discloses it under "Privacy and data".
+- [ ] **Files written:** notes, an optional `.base` file, an optional import report note and, only when the user runs **Save diagnostics report**, a diagnostics note (versions, settings, CSV paths, recent steps; no row content). The recent steps are kept in memory only and never sent. The CSV is never modified. Nothing outside the vault is accessed, with one user-initiated exception: **Add CSV file...** shows the system file picker (`<input type="file">`, no Node or Electron APIs) and reads only the file the user selects, copying it into the vault. The README discloses it under "Privacy and data".
 - [ ] **Account requirement, paid features and ads:** none.
 
 ## Lessons from the review of 0.1.0

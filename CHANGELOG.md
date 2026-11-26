@@ -27,6 +27,11 @@ First release for the Obsidian community directory. Findings of the review befor
 - The CSV imports view only refreshes for changes to CSVs, bases and notes in an import's folder, and rechecks edited notes only for notes in those folders.
 - Accessibility: the column menu opened from the keyboard appears below the badge and returns focus to it; the select-all checkbox has its own label.
 
+### Diagnostics
+- **Save diagnostics report** (command, and **Troubleshooting** in the settings) writes a note with the plugin and Obsidian versions, settings, the state of each CSV import and the plugin's recent steps, for bug reports. No row content.
+- **Debug log** setting: prints each step of imports, undo and the CSV imports view to the developer console.
+- End-to-end test failures now save the plugin's recent steps, open dialogs, notices, focus and the page HTML next to the screenshot; CI logs every WebDriver command.
+
 ### Docs
 - README: the part of the plugin other plugins can rely on (`csv-importer:changed`, `importFile`, `csvStatus`, undo), what the state files hold, new limitations and troubleshooting entries. BRAT instructions removed.
 
@@ -34,7 +39,7 @@ First release for the Obsidian community directory. Findings of the review befor
 - Releases run only on `main`, need CHANGELOG notes for the version, run the end-to-end tests first, and can finish a failed run with `version=current`.
 - GitHub Actions pinned by commit SHA, kept current by Dependabot.
 - `check-api-versions` also reports overrides of base-class members newer than `minAppVersion`.
-- End-to-end fixtures for real-world files: an Excel export (BOM, semicolons, CRLF, a multi-line cell), header-only and empty CSVs, a products file with version numbers, duplicate keys and a placeholder folder, a decomposed (NFD) file name, and a generated 20,000-row file. `examples/excel-export.csv` is a messy Excel export to try.
+- End-to-end fixtures for real-world files: an Excel export (BOM, semicolons, CRLF, a multi-line cell), header-only and empty CSVs, a products file with version numbers, duplicate keys and a placeholder folder, a CSV written to disk under a decomposed (NFD) name, and a generated 20,000-row file. `examples/excel-export.csv` is a messy Excel export to try.
 - Quality gates block releases: the fallow check and the mutation tests (score 92.9 %, threshold 90 %).
 - `version-bump.mjs` removed; `npm version` uses `scripts/prepare-release.mjs`. `package.json` has `repository`, `bugs` and `homepage`.
 

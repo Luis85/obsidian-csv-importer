@@ -191,6 +191,7 @@ Commands (in the command palette, none has a default hotkey):
 - **Open import settings for current CSV file**
 - **Undo last import of current CSV file** (only when the last import can be undone)
 - **Re-import all CSV imports**
+- **Save diagnostics report** (see Troubleshooting)
 
 The file menu of a CSV file (right-click in the file explorer) has **Import** (**Re-import** once the file was imported), **Import settings**, and **Undo last import** when the last import can be undone. The ribbon icon **Open CSV imports** opens the CSV imports view.
 
@@ -251,6 +252,11 @@ The encoding is detected automatically: byte order mark, then UTF-8, and Windows
 
 - Rows shown per page
 
+**Troubleshooting**
+
+- **Debug log**: prints each step of imports, undo and the CSV imports view to the developer console (Ctrl+Shift+I, or Cmd+Option+I on macOS).
+- **Diagnostics report**: **Save diagnostics report** writes a note for a bug report (see Troubleshooting).
+
 **Danger zone**
 
 - **Reset all import settings**: **Reset...** removes the saved import settings of every CSV file after a confirmation. Imported notes are not affected.
@@ -273,7 +279,8 @@ Per file only (import settings, not in the settings tab): column types, property
 - The CSV file is never modified.
 - **Add CSV file...** opens the system file picker. Only a file you choose there is read, only when you choose it, and it is copied into the vault (the folder and name you set). The plugin does not follow, watch or read the original again, and accesses no other files outside the vault.
 - Per CSV, `imports/index.json` also holds the CSV's size, modification time, a content hash (to show that the file changed since the last import) and the counts of the last import. No row content is stored there.
-- Files the plugin creates: the notes, an optional `.base` file, and an optional import report note.
+- Files the plugin creates: the notes, an optional `.base` file, an optional import report note, and a diagnostics report note when you run **Save diagnostics report**.
+- The plugin keeps its recent steps (the last 500: actions, file paths, counts, error messages, never row content) in memory only. They appear in the developer console with **Debug log** on, and in the diagnostics report you save yourself. Nothing is sent anywhere.
 - It uses only Obsidian's documented plugin API. It does not write `.obsidian/types.json`: because values are written as typed YAML, Obsidian picks up the property types from the notes.
 
 ## Limitations
@@ -315,6 +322,9 @@ The file that records what the last import wrote was damaged (for example by a s
 
 **A notice says the saved settings come from a newer version.**
 You use a newer CSV Importer on another device that syncs the same vault. Update the plugin; until then this device reads the settings but does not save changes, so the newer data is not overwritten.
+
+**Reporting a problem.**
+Run **Save diagnostics report** (command palette, or the **Troubleshooting** section of the settings) right after the problem happened. It saves a note named `CSV Importer diagnostics <date>.md` at the root of your vault with the plugin and Obsidian versions, your settings, the paths and state of your CSV imports, and the plugin's recent steps, and opens it. It holds no row content; read it before you share it, since file paths can be personal. Attach it to the issue together with a few anonymized rows of the CSV. To watch the steps live, turn on **Debug log** and open the developer console.
 
 ## FAQ
 

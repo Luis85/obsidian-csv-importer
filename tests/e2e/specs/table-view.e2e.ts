@@ -2,7 +2,7 @@ import { browser, expect } from "@wdio/globals";
 import { describe, it, before, beforeEach, after } from "mocha";
 import { clickMenuItem, menuItems, openCsv, shot, writeVault } from "../flows";
 import {
-	CSV, NOTES_DIR, activeViewType, importAndReadFirstNote, installConsoleSpy, listNotes, pluginProblems, resetEverything,
+	CSV, NOTES_DIR, activeViewType, clickPastNotices, importAndReadFirstNote, installConsoleSpy, listNotes, pluginProblems, resetEverything,
 } from "../support";
 
 const SPEC = "table-view";
@@ -95,7 +95,7 @@ describe("CSV table view", function () {
 	it("offers Import settings and Open CSV imports in the more-options menu and opens CSV imports", async function () {
 		await openCsv(CSV);
 		await expect(browser.$("[data-testid=csv-configure]")).toHaveAttribute("aria-label", "Import settings");
-		await browser.$('.workspace-leaf.mod-active .view-action[aria-label="More options"]').click();
+		await clickPastNotices(browser.$('.workspace-leaf.mod-active .view-action[aria-label="More options"]'));
 		const items = await menuItems();
 		expect(items).toEqual(expect.arrayContaining(["Import settings", "Open CSV imports"]));
 		await clickMenuItem("Open CSV imports");

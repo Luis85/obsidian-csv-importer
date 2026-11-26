@@ -138,7 +138,22 @@ Environment variables: `OBSIDIAN_VERSIONS` (default `earliest/earliest latest/la
 
 On Linux Obsidian needs a display. Locally: `xvfb-run -a npm run test:e2e`. If Node's `fetch` does not use your proxy when downloading Obsidian versions, run with `NODE_USE_ENV_PROXY=1` (Node 22.21 or newer). CI (`.github/workflows/e2e.yml`) installs `herbstluftwm dzen2 x11-xserver-utils`, starts `Xvfb :99` and a window manager, runs the desktop job and the mobile job, and uploads `reports/e2e/` (screenshots, contrast reports, logs) on every run. It runs on pull requests that touch the plugin or the suite, nightly, and on demand. The Obsidian download cache `.obsidian-cache/` is keyed on `manifest.json` and `wdio.conf.mts`.
 
-Outputs, all gitignored: `reports/e2e/screenshots/<spec>/<step>.png` (key steps of each flow, light and dark for UI-heavy steps), `reports/e2e/appearance-contrast.json` (measured contrast per text), `reports/e2e/failures/` (a screenshot per failed test) and `reports/e2e/logs/`.
+Outputs, all gitignored: `reports/e2e/screenshots/<spec>/<step>.png` (key steps of each flow, light and dark for UI-heavy steps), `reports/e2e/appearance-contrast.json` (measured contrast per text), `reports/e2e/failures/` and `reports/e2e/logs/`.
+
+**Debugging a failure.** For each failed test, `reports/e2e/failures/` (in CI: the `e2e-desktop-artifacts` or `e2e-mobile-artifacts` artifact) holds:
+
+- `<test>.png`: the window when the test failed.
+- `<test>.json`: the error, the open dialogs and menus, the notices, the active tab, which element had focus, whether the window had focus, and console errors seen by the spy.
+- `<test>.steps.txt`: the plugin's recent steps (its in-memory trace, `src/core/trace.ts`): which button was clicked, each step of an import or undo with paths and counts, state that could not be read or written.
+- `<test>.html`: the page's DOM at that moment.
+
+In CI, `reports/e2e/logs/wdio-<worker>.log` also lists every WebDriver command with its result (`logLevel` is `info` when `CI` is set). Locally, set `E2E_LOG_LEVEL=info` for the same log.
+
+**Notices and top-right controls.** Obsidian stacks notices at the top right of the window and moves the stack whenever one comes or goes. On a wide window (as on CI) they cover the right end of a view's toolbar or header, and a click that lands on a notice only dismisses it. WebDriver's "clickable" check looks at one moment and cannot rule that out while the stack moves. Notices also outlive a test unless they are cleared. So `resetEverything` and `closeAllModals` dismiss notices, `openIndex` does too, and a click on a control at the top right (the CSV imports toolbar and row menus, the table view's **Import settings**, a tab's **More options**) goes through `clickPastNotices`. A failure report whose JSON lists a notice, or a WebDriver log line "element click intercepted ... Other element would receive the click: `<div class="notice">`", points here.
+
+**Files with decomposed (NFD) names.** Write them to disk with Node's `fs` inside the test, as `fixtures.e2e.ts` does, not as vault fixtures: the vault adapter normalizes paths to NFC, so a fixture written through it under an NFD name appears twice in the vault.
+
+Add a `trace(...)` call (`src/core/trace.ts`) when you add a user action or a step that can fail: it costs little, holds no row content, and makes the next failure readable. Users get the same trace through **Save diagnostics report**.
 
 Limitations: Obsidian downloads come from GitHub (`raw.githubusercontent.com` and `github.com` release assets), so the first run needs network access; later runs use `.obsidian-cache/`. Mobile emulation is the desktop app in a phone-sized window, not the real mobile app. The functional import and undo specs run on desktop only. Beta versions need an Obsidian account and are not used.
 

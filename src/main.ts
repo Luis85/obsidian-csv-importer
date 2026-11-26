@@ -1,4 +1,4 @@
-import { Notice, Plugin } from "obsidian";
+import { Notice, Platform, Plugin, apiVersion } from "obsidian";
 import type { TFile } from "obsidian";
 import { ConfigStore } from "./configStore";
 import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig, sanitizeSettings } from "./defaults";
@@ -8,6 +8,9 @@ import { isCsv, registerVaultEvents } from "./obsidian/vaultEvents";
 import { CsvImporterSettingTab } from "./settings";
 import type { SettingsHost } from "./settings";
 import { ImportStorage } from "./storage";
+import { buildDiagnosticsReport, diagnosticsFileName } from "./core/diagnostics";
+import { formatTrace, setTraceToConsole, trace, traceEntries } from "./core/trace";
+import { lastRunText } from "./import/fingerprint";
 import type { CsvEncoding, FileImportConfig, ImportResult, PluginData, PluginSettings } from "./types";
 import { CsvView, VIEW_TYPE_CSV } from "./view/CsvView";
 import { ImportConfigModal } from "./view/ImportConfigModal";
@@ -29,6 +32,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 	override async onload(): Promise<void> {
 		const raw = (await this.loadData()) as Partial<PluginData> | null;
 		this.settings = sanitizeSettings(raw?.settings);
+		setTraceToConsole(this.settings.debugLog);
 		const version = typeof raw?.version === "number" ? raw.version : 0;
 		this.dataFromNewerVersion = version > CURRENT_DATA_VERSION;
 		if (this.dataFromNewerVersion) {
@@ -44,6 +48,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 		this.storage = new ImportStorage(this.app, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
 		this.service = new ImportService(this.app, this.storage, this.store, () => this.settings);
 		void this.storage.init();
+		trace("plugin", "loaded", { version: this.manifest.version, obsidian: apiVersion, dataVersion: version, newerData: this.dataFromNewerVersion, csvs: Object.keys(files).length });
 		if (version < CURRENT_DATA_VERSION) void this.persist().catch((e) => console.error("CSV Importer: could not save data", e));
 
 		this.registerView(VIEW_TYPE_CSV, (leaf) => new CsvView(leaf, this));
@@ -97,6 +102,11 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 				if (!checking) void svc.undoLastImport(file);
 				return true;
 			},
+		});
+		this.addCommand({
+			id: "save-diagnostics-report",
+			name: "Save diagnostics report",
+			callback: () => void this.saveDiagnosticsReport(),
 		});
 		this.addCommand({
 			id: "configure-current-csv",
@@ -165,7 +175,47 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 	// --- SettingsHost ---
 
 	async saveSettings(): Promise<void> {
+		setTraceToConsole(this.settings.debugLog);
 		await this.persist();
+	}
+
+	/** The plugin's recent steps as text, one per line (used by the end-to-end tests' failure reports). */
+	recentSteps(): string {
+		return formatTrace(traceEntries());
+	}
+
+	/**
+	 * Writes a note with versions, settings, the CSV imports and the plugin's recent steps (no row content) at the
+	 * vault root and opens it, for a bug report.
+	 */
+	async saveDiagnosticsReport(): Promise<void> {
+		try {
+			await this.storage.init();
+			const imports = (await this.service.listImports()).map((i) => ({
+				csvPath: i.csvPath,
+				exists: i.exists,
+				lastImport: i.lastImport,
+				hasUndo: i.hasUndo,
+				unreadable: this.storage.unreadableState(i.csvPath),
+				lastRun: i.lastRun ? lastRunText(i.lastRun) : null,
+			}));
+			const now = Date.now();
+			const text = buildDiagnosticsReport({
+				pluginVersion: this.manifest.version,
+				obsidianVersion: apiVersion,
+				platform: Platform.isMobile ? "mobile" : "desktop",
+				now,
+				settings: { ...this.settings },
+				imports,
+				trace: traceEntries(),
+			});
+			const file = await this.app.vault.create(diagnosticsFileName(now), text);
+			await this.app.workspace.getLeaf("tab").openFile(file);
+			new Notice(`Saved ${file.name}. Attach it to your bug report.`);
+		} catch (e) {
+			console.error("CSV Importer: could not save the diagnostics report", e);
+			new Notice(`Could not save the diagnostics report: ${e instanceof Error ? e.message : String(e)}`);
+		}
 	}
 
 	async forgetAllFileConfigs(): Promise<void> {

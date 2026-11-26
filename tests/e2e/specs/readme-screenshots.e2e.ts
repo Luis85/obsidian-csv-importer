@@ -3,8 +3,7 @@ import { browser } from "@wdio/globals";
 import { describe, it, before, beforeEach } from "mocha";
 import { clickMenuItem, openConfigTab, openCsv, patchConfig, setWindowSize, writeVault } from "../flows";
 import {
-	CSV, CSV_DE, clickButton, importViaDialog, installConsoleSpy, openFile, readVaultFile, resetEverything, runCommand, setColorScheme, waitForModal,
-	waitForNoModal, waitForViewType,
+	CSV, CSV_DE, clickButton, clickPastNotices, importViaDialog, installConsoleSpy, openFile, readVaultFile, resetEverything, runCommand, setColorScheme, waitForModal, waitForNoModal, waitForViewType,
 } from "../support";
 
 /**
@@ -44,14 +43,14 @@ describe("README screenshots", function () {
 
 	it("import-settings.png: columns, types and live note preview", async function () {
 		await openCsv(CSV_DE);
-		await browser.$("[data-testid=csv-configure]").click();
+		await clickPastNotices(browser.$("[data-testid=csv-configure]"));
 		await browser.$("[data-testid=import-config-modal]").waitForDisplayed();
 		await capture("[data-testid=import-config-modal]", "import-settings");
 	});
 
 	it("import-settings-reimport.png: keep edited values, composite key, extra ID property", async function () {
 		await openCsv(CSV_DE);
-		await browser.$("[data-testid=csv-configure]").click();
+		await clickPastNotices(browser.$("[data-testid=csv-configure]"));
 		await browser.$("[data-testid=import-config-modal]").waitForDisplayed();
 		await browser.$(".csv-importer-extra-add button").click();
 		await clickMenuItem("ID (unique per note)");
