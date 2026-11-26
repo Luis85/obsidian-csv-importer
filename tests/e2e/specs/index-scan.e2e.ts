@@ -25,6 +25,8 @@ describe("Index: scan vault", function () {
 		expect(names).toContain("timesheet-de.csv");
 		expect(names).not.toContain("timesheet.csv");
 		for (const box of await browser.$$(`${MODAL} [data-testid=scan-row] input`)) expect(await box.isSelected()).toBe(true);
+		// Row counts load as rows scroll into view; bring each one into view so all of them load.
+		for (const row of await browser.$$(`${MODAL} [data-testid=scan-row]`)) await row.scrollIntoView({ block: "nearest" });
 		await browser.waitUntil(
 			async () => {
 				const texts = await browser.$$(`${MODAL} .csv-importer-scan-rows`).map((e) => e.getText());

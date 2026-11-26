@@ -19,7 +19,8 @@ Status as of 2026-11-26. **Done** means it is on the branch for 1.0.0. The [earl
 ## Checks at the end
 
 - Lint, the type checks, 644 unit tests, the build and fallow pass.
-- End-to-end tests pass: 50 desktop specs (Obsidian 1.15.1 and latest) and 3 mobile emulation specs, locally and in CI.
+- End-to-end tests pass: 52 desktop spec runs (26 specs on Obsidian 1.15.1 and on the latest version) and 3 mobile emulation specs, locally and in CI.
+- New fixtures in the test vault cover the file shapes behind these findings, read through Obsidian: `excel-export.csv` (BOM, semicolons, CRLF, a multi-line cell; stored as binary so git keeps the CRLF), `header-only.csv`, `empty.csv`, `products.csv` (version numbers, duplicate keys, placeholder folder), `Café.csv` with a decomposed name, and a generated 20,000-row file (`tests/e2e/specs/fixtures.e2e.ts`). The suite could not catch D1 before: every fixture was checked out with LF.
 - The mutation score is 92.9 % (3,659 of 3,937 mutants detected); the threshold is 90 %.
 
 ## Blocking

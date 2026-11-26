@@ -68,17 +68,23 @@ Screenshots of the key steps (light and dark where the step is UI heavy) are wri
 | Index: Import for never imported CSV | index-flows | lists a configured but never imported CSV |
 | Index: Re-import, last import, note count | index-flows | shows last import and note count |
 | Index: filter box, open CSV from name | index-flows | filters the list and opens a CSV |
-| Index: Re-import all | index-flows | re-imports every listed CSV |
+| Index: Re-import all, and stopping it after a dialog closed without importing | index-flows | re-imports every listed CSV with Re-import all; stops Re-import all in one step when told not to go on |
 | Index: row menu (Import settings, Open base, Undo last import) | index-flows | offers ... in the row menu; opens the base; undoes the last import |
 | Index: Delete imported notes (+ base option) | index-flows | deletes the imported notes and, when ticked, the base |
 | Index: Remove from CSV imports | index-flows | removes a CSV from CSV imports but keeps its notes |
 | Index: CSV missing | index-flows | marks a CSV that no longer exists |
+| Index: CSV deleted inside Obsidian keeps its history, restored file picks up | index-flows | keeps a CSV deleted inside Obsidian as CSV missing, and restores it when the file comes back |
 | Index: Add CSV > Scan vault (list, add, re-scan, empty state) | index-scan | lists CSV files that are not in the index; adds the checked files with default settings; shows an empty state |
 | Index: Add CSV > Copy a file from your device | index-add-outside | copies the picked file's bytes ...; asks what to do when the file exists |
 | Index: Changed badge, banner, Re-import changed | index-changed | marks a modified CSV as Changed live; does not mark a CSV that was only touched; treats an import without a recorded fingerprint as changed |
 | Index: last import counts, edited since import | index-counts | shows the counts of the last import; counts notes edited since the import |
 | Index: empty state | smoke | opens the CSV imports index from the ribbon icon |
 | Encoding: Windows-1252, UTF-16, manual choice | encoding-drift-warnings | detects Windows-1252; reads UTF-16; lets the encoding be set by hand |
+| Real-world files: Excel export (BOM, semicolons, CRLF, multi-line cell) and re-import of a changed multi-line cell | fixtures | imports an Excel export ... and updates a changed multi-line cell on re-import |
+| Empty states: header-only and empty CSV | fixtures | says when a CSV has only a header row, and when it is empty |
+| Version columns stay text, duplicate keys, placeholder folder that changes | fixtures | keeps version numbers as text, warns about duplicate keys, and updates a row whose placeholder folder changed |
+| Decomposed (NFD) file names | fixtures | imports a CSV with a decomposed (NFD) file name and finds its notes again on re-import |
+| Large file: 5,000-row table cap, preview of every row | fixtures | shows at most 5,000 rows of a large file and still previews every row |
 | Persistence across restarts | persistence | keeps import settings, history and undo data after the plugin is reloaded |
 | Privacy: no network requests | no-network | requests no web resource |
 | Look: contrast >= 4.5:1, overflow, no button chrome | appearance | all tests |
