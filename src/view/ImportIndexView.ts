@@ -111,7 +111,9 @@ export class ImportIndexView extends ItemView {
 			this.itemsKey = key;
 			this.items = items;
 			this.loaded = true;
+			trace("index", "list redrawn", { items: items.length, force });
 		} catch (e) {
+			traceError("index", "could not list imports", e);
 			console.error("CSV Importer: could not list imports", e);
 			new Notice(`Could not load the imports: ${errorMessage(e)}`);
 		}
@@ -123,6 +125,11 @@ export class ImportIndexView extends ItemView {
 		root.empty();
 		root.addClass("csv-importer-index");
 		root.setAttr("data-testid", "csv-index");
+		// Which element got the press and the click (capture phase, before any handler): tells a click that never
+		// reached a button apart from one whose action did nothing.
+		for (const type of ["pointerdown", "click"] as const) {
+			this.registerDomEvent(root, type, (ev) => trace("index", type, { target: describeTarget(ev.target), x: Math.round(ev.clientX), y: Math.round(ev.clientY) }), { capture: true });
+		}
 
 		const tools = root.createDiv({ cls: "csv-importer-index-tools" });
 		const search = tools.createEl("input", {
@@ -413,3 +420,11 @@ export class ImportIndexView extends ItemView {
 		await this.refresh();
 	}
 }
+
+/** A short name for an event target: its test id, aria label or classes, and text. */
+function describeTarget(target: EventTarget | null): string {
+	if (!(target instanceof HTMLElement)) return target === null ? "none" : "not an element";
+	const id = target.getAttr("data-testid") ?? target.getAttr("aria-label") ?? target.className;
+	return `${target.tagName.toLowerCase()} ${id} "${(target.textContent ?? "").trim().slice(0, 30)}"`;
+}
+

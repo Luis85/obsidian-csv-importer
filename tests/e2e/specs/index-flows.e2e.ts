@@ -75,13 +75,6 @@ describe("CSV imports index", function () {
 		await all.waitForEnabled();
 		await all.waitForClickable({ timeout: 15000 });
 		await all.click();
-		// On CI the click has twice focused the button without opening the first dialog, while no dialog was open and
-		// nothing covered it (failure screenshot of the release run for 1.0.0); it never happened locally. Click once
-		// more when no preview came up, so the test checks the flow, not the delivery of one click.
-		const previewShown = () =>
-			browser.$$(".modal-container .modal").some(async (m) => /import preview/i.test(await m.getText()));
-		const shown = await browser.waitUntil(previewShown, { timeout: 10000 }).catch(() => false);
-		if (!shown && (await browser.$$(".modal-container").length) === 0) await all.click();
 		await waitForModal(/import preview/i);
 	}
 
