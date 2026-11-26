@@ -3,7 +3,7 @@ import type { TFile } from "obsidian";
 import { ConfigStore } from "./configStore";
 import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig, sanitizeSettings } from "./defaults";
 import type { CsvStatus, EditedNotes, ImportFileOptions, ImportIndexHost, ImportSummary } from "./host";
-import { ImportService } from "./obsidian/importService";
+import { ImportService, readFailureText } from "./obsidian/importService";
 import { isCsv, registerVaultEvents } from "./obsidian/vaultEvents";
 import { CsvImporterSettingTab } from "./settings";
 import type { SettingsHost } from "./settings";
@@ -158,7 +158,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 			new ImportConfigModal(this.app, this, file, text).open();
 		} catch (e) {
 			console.error("CSV Importer: could not open the import settings", e);
-			new Notice(`Could not read ${file.name}.`);
+			new Notice(readFailureText(file.name, e), 10000);
 		}
 	}
 

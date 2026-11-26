@@ -231,6 +231,7 @@ export const LINK_NOTES_TO_CSV = "Link notes to the CSV";
 
 /** Other strings named in the spec (sections 3, 4, 5, 6). */
 export const NO_ROWS = "This file has no rows.";
+export const HEADER_ONLY = "This file has only a header row. Add rows below it to import them.";
 export function noRowsMatch(query: string): string {
 	return `No rows match \u201c${query}\u201d`;
 }

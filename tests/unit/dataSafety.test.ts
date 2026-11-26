@@ -2,7 +2,8 @@
 // note stopped updating.
 import { describe, expect, it } from "vitest";
 import { parseCsv } from "../../src/csv/parser";
-import { outermostFolders } from "../../src/import/importer";
+import type { App } from "obsidian";
+import { applyUndo, applyUndoToSnapshot, outermostFolders } from "../../src/import/importer";
 import { matchesHash, valueHash } from "../../src/import/merge";
 import { cfg, setup } from "./helpers/harness";
 
@@ -93,5 +94,34 @@ describe("rows whose note is in another folder than planned", () => {
 	it("outermostFolders drops folders inside others", () => {
 		expect(outermostFolders(["a/b", "a", "c/d", "c/d/e", "cd"])).toEqual(["a", "cd", "c/d"]);
 		expect(outermostFolders(["a", ""])).toEqual([""]);
+	});
+});
+
+describe("an undo that was interrupted", () => {
+	it("can be run again: restored notes count as restored and a later re-import updates them", async () => {
+		const t = setup({ conflict: "update" });
+		await t.run("id,role\n1,Dev\n");
+		const out = await t.run("id,role\n1,Lead\n");
+		const app = t.app as unknown as App;
+		await applyUndo(app, out.undo); // Obsidian closed before the state was saved
+		const again = await applyUndo(app, out.undo);
+		expect(again).toMatchObject({ restored: 1, changed: [] });
+		t.setSnapshot(applyUndoToSnapshot(t.getSnapshot(), out.undo, new Set(again.changed)));
+		expect(t.fm(NOTE).role).toBe("Dev");
+		const r = await t.run("id,role\n1,Lead\n");
+		expect(r.result.rows[0]?.outcome).toBe("updated");
+		expect(t.fm(NOTE).role).toBe("Lead");
+	});
+
+	it("still leaves a note alone that was edited after the import", async () => {
+		const t = setup({ conflict: "update" });
+		await t.run("id,role\n1,Dev\n");
+		const out = await t.run("id,role\n1,Lead\n");
+		await t.editInBases(NOTE, (fm) => {
+			fm.role = "Mine";
+		});
+		const r = await applyUndo(t.app as unknown as App, out.undo);
+		expect(r.changed).toEqual([NOTE]);
+		expect(t.fm(NOTE).role).toBe("Mine");
 	});
 });

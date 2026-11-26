@@ -9,7 +9,7 @@ import { onCsvChanged } from "../obsidian/events";
 import { ImportConfigModal } from "./ImportConfigModal";
 import { TableRenderer } from "./TableRenderer";
 import { renderCallout, safeTargetFolder } from "./dom";
-import { OPEN_CSV_IMPORTS, REVIEW_COLUMNS, TYPE_LABELS, delimiterLabel, driftMessage, importRowsLabel, NO_ROWS } from "./labels";
+import { OPEN_CSV_IMPORTS, REVIEW_COLUMNS, TYPE_LABELS, delimiterLabel, driftMessage, importRowsLabel, HEADER_ONLY, NO_ROWS } from "./labels";
 import { relativeTime } from "./relativeTime";
 import {
 	CHANGED_SINCE_IMPORT, CHECK_DELIMITER, CLEAR_SELECTION, FILTER_LABEL, FILTER_PLACEHOLDER, FIRST_IMPORT_TITLE, IMPORT_ACTION, IMPORT_SETTINGS,
@@ -60,6 +60,7 @@ export class CsvView extends TextFileView {
 	private statusToken = 0;
 	private bannerEl: HTMLElement | null = null;
 	private loadCounter = 0;
+	private inferenceCache: { parsed: ParsedCsv; key: string; decimalSeparator: FileImportConfig["decimalSeparator"]; columns: ColumnConfig[] } | null = null;
 
 	private readonly onSearch = debounce((value: string) => {
 		this.table.setQuery(value);
@@ -272,7 +273,7 @@ export class CsvView extends TextFileView {
 		let columns: ColumnConfig[] = [];
 		if (parsed) {
 			try {
-				columns = prepareConfig(cfg, parsed, this.host.settings.midnightAsDate).columns;
+				columns = this.prepare(cfg, parsed).columns;
 			} catch (e) {
 				error = errorMessage(e);
 				parsed = null;
@@ -284,6 +285,24 @@ export class CsvView extends TextFileView {
 		if (this.statusEl) this.renderStatus(this.statusEl, cfg, parsed);
 		this.renderBanner(cfg, persistedColumns, parsed, error);
 		this.renderBody();
+	}
+
+	/**
+	 * prepareConfig, remembered for the last parse and config: type inference reads every row, and the view draws
+	 * again on every settings save, import, undo and file change, mostly with nothing relevant changed.
+	 */
+	private prepare(cfg: FileImportConfig, parsed: ParsedCsv): FileImportConfig {
+		const midnightAsDate = this.host.settings.midnightAsDate;
+		const key = JSON.stringify([midnightAsDate, cfg]);
+		const c = this.inferenceCache;
+		if (c && c.parsed === parsed && c.key === key) {
+			cfg.decimalSeparator = c.decimalSeparator;
+			cfg.columns = c.columns.map((col) => ({ ...col }));
+			return cfg;
+		}
+		prepareConfig(cfg, parsed, midnightAsDate);
+		this.inferenceCache = { parsed, key, decimalSeparator: cfg.decimalSeparator, columns: cfg.columns.map((col) => ({ ...col })) };
+		return cfg;
 	}
 
 	private getParsed(cfg: FileImportConfig): ParseCache {
@@ -367,7 +386,8 @@ export class CsvView extends TextFileView {
 		const { cfg, parsed, columns, error } = m;
 		if (error) return; // the error callout above the table explains it
 		if (!parsed || parsed.headers.length === 0 || parsed.rows.length === 0) {
-			body.createDiv({ cls: "csv-importer-empty", text: NO_ROWS });
+			const headerOnly = parsed !== null && cfg.hasHeader && parsed.headers.length > 0;
+			body.createDiv({ cls: "csv-importer-empty", text: headerOnly ? HEADER_ONLY : NO_ROWS });
 			return;
 		}
 		this.table.render(body, parsed, columns, cfg);
@@ -502,7 +522,7 @@ export class CsvView extends TextFileView {
 			const cfg = this.host.getFileConfig(file);
 			const parsed = this.getParsed(cfg).parsed;
 			if (!parsed) return;
-			prepareConfig(cfg, parsed, this.host.settings.midnightAsDate);
+			this.prepare(cfg, parsed);
 			const col = cfg.columns.find((c) => c.index === index);
 			if (!col) return;
 			mutate(col);

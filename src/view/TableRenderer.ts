@@ -2,12 +2,14 @@ import { setIcon, setTooltip } from "obsidian";
 import type { ColumnConfig, FileImportConfig, ParsedCsv } from "../types";
 import { convertValue } from "../csv/typeInference";
 import { NO_ROWS, TYPE_BADGES, TYPE_LABELS, noRowsMatch } from "./labels";
-import { SELECT_ROWS_HINT, SHOW_MORE, filterMatchCount, selectRowLabel } from "./runCopy";
+import { SELECT_ROWS_HINT, SHOW_MORE, filterMatchCount, selectRowLabel, shownRowsCap } from "./runCopy";
 import { conversionOptions } from "./shared";
 
 type SortDir = "asc" | "desc";
 
 const LONG_CELL = 40;
+/** Most rows the table puts in the DOM ("Show more" stops there), so a huge CSV stays responsive. */
+export const MAX_SHOWN_ROWS = 5000;
 
 interface Entry {
 	row: string[];
@@ -118,6 +120,12 @@ export class TableRenderer {
 		const pageSize = Math.max(1, this.hooks.pageSize());
 		page.pageSize = pageSize;
 		page.tbody = table.createEl("tbody");
+		// One listener for every row checkbox instead of one per row.
+		page.tbody.addEventListener("click", (ev: MouseEvent) => {
+			const box = ev.target;
+			if (!(box instanceof HTMLInputElement) || !box.matches("input.csv-importer-check[data-row]")) return;
+			this.onRowClick(page, Number(box.dataset.row), box.checked, ev.shiftKey);
+		});
 		this.appendRows(page, Math.max(this.visibleCount, pageSize));
 		page.moreEl = body.createDiv({ cls: "csv-importer-more" });
 		this.updateMore(page);
@@ -227,7 +235,7 @@ export class TableRenderer {
 
 	/** Append rows up to `target` without re-rendering what is already shown. */
 	private appendRows(page: Page, target: number): void {
-		const end = Math.min(page.entries.length, target);
+		const end = Math.min(page.entries.length, target, this.maxShown(page));
 		const frag = createFragment();
 		for (let r = page.shown; r < end; r++) {
 			const entry = page.entries[r];
@@ -239,7 +247,6 @@ export class TableRenderer {
 				type: "checkbox",
 				attr: { "aria-label": selectRowLabel(n), "data-testid": "csv-row-check", "data-row": String(n) },
 			});
-			box.addEventListener("click", (ev: MouseEvent) => this.onRowClick(page, n, box.checked, ev.shiftKey));
 			page.checks.set(n, box);
 			page.trs.set(n, tr);
 			tr.createEl("td", { cls: "csv-importer-rownum", text: String(n) });
@@ -264,6 +271,10 @@ export class TableRenderer {
 		if (!more) return;
 		more.empty();
 		if (page.shown >= page.entries.length) return;
+		if (page.shown >= this.maxShown(page)) {
+			more.createDiv({ cls: "csv-importer-more-cap", text: shownRowsCap(page.shown, page.entries.length) });
+			return;
+		}
 		const btn = more.createEl("button", {
 			cls: "csv-importer-btn",
 			text: `${SHOW_MORE} (${page.shown} of ${page.entries.length})`,
@@ -273,6 +284,10 @@ export class TableRenderer {
 			this.appendRows(page, this.visibleCount);
 			this.updateMore(page);
 		});
+	}
+
+	private maxShown(page: Page): number {
+		return Math.max(MAX_SHOWN_ROWS, page.pageSize);
 	}
 
 	private onRowClick(page: Page, n: number, checked: boolean, shift: boolean): void {
