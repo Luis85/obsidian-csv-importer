@@ -1,3 +1,4 @@
+import { trace } from "../core/trace";
 import { Menu, Modal, Notice, normalizePath, setIcon } from "obsidian";
 import type { App } from "obsidian";
 import type { HeaderDrift, ImportResult, NoteOutcome, RowOutcome } from "../types";
@@ -106,6 +107,7 @@ export class ImportRunModal extends Modal {
 	}
 
 	override onOpen(): void {
+		trace("dialog", "import dialog opened", { csv: this.ctl.csvPath });
 		void this.showPreview();
 	}
 
@@ -120,7 +122,9 @@ export class ImportRunModal extends Modal {
 	override onClose(): void {
 		this.stop = true;
 		this.contentEl.empty();
-		this.resolveClosed(this.finished ?? this.latest ?? emptyResult(true));
+		const result = this.finished ?? this.latest ?? emptyResult(true);
+		trace("dialog", "import dialog closed", { csv: this.ctl.csvPath, imported: !result.dryRun, cancelled: result.cancelled });
+		this.resolveClosed(result);
 	}
 
 	// --- phases ---

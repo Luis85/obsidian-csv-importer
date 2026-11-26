@@ -27,6 +27,11 @@ First release for the Obsidian community directory. Findings of the review befor
 - The CSV imports view only refreshes for changes to CSVs, bases and notes in an import's folder, and rechecks edited notes only for notes in those folders.
 - Accessibility: the column menu opened from the keyboard appears below the badge and returns focus to it; the select-all checkbox has its own label.
 
+### Diagnostics
+- **Save diagnostics report** (command, and **Troubleshooting** in the settings) writes a note with the plugin and Obsidian versions, settings, the state of each CSV import and the plugin's recent steps, for bug reports. No row content.
+- **Debug log** setting: prints each step of imports, undo and the CSV imports view to the developer console.
+- End-to-end test failures now save the plugin's recent steps, open dialogs, notices, focus and the page HTML next to the screenshot; CI logs every WebDriver command.
+
 ### Docs
 - README: the part of the plugin other plugins can rely on (`csv-importer:changed`, `importFile`, `csvStatus`, undo), what the state files hold, new limitations and troubleshooting entries. BRAT instructions removed.
 

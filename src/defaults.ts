@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	defaultCreateBase: true,
 	midnightAsDate: true,
 	pageSize: 200,
+	debugLog: false,
 };
 
 /** A fresh per-file config derived from global defaults (columns empty -> inferred on open). */

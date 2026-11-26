@@ -122,6 +122,8 @@ export const SETTINGS_DESC = {
 	pageSize: "Maximum number of rows rendered in the table before showing more.",
 	imports: "Every CSV with import settings in one list: import, re-import, change import settings or undo.",
 	reset: "Removes the saved import settings of every CSV file. Imported notes are not affected.",
+	debugLog: "Print each step of imports, undo and the CSV imports view to the developer console (Ctrl+Shift+I or Cmd+Option+I). Steps are always kept in memory for the diagnostics report.",
+	diagnostics: "Saves a note with versions, settings, the paths of your CSV imports and the plugin's recent steps, to attach to a bug report. No row content is included and nothing is sent anywhere.",
 } as const;
 
 /** Descriptions in the import settings dialog (one file). */
@@ -252,6 +254,7 @@ export const SETTINGS_HEADINGS = {
 	table: "Table view",
 	/** Unused since the "Open CSV imports" row moved to the top of the tab (kept for a stable export). */
 	imports: "CSV imports",
+	troubleshooting: "Troubleshooting",
 	danger: "Danger zone",
 } as const;
 

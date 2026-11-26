@@ -3,6 +3,7 @@ import type { App } from "obsidian";
 import { parentOf } from "./core/util";
 import { sanitizeFingerprint, sanitizeLastRun } from "./import/fingerprint";
 import type { ImportMeta, ImportSnapshot, UndoManifest } from "./types";
+import { traceError } from "./core/trace";
 
 /** Cheap per-CSV entry of imports/index.json: what exists, without reading the (large) state files. */
 interface IndexEntry {
@@ -306,6 +307,7 @@ export class ImportStorage {
 					await this.writeState(this.snapFile(idx.file), { version: STATE_VERSION, csvPath, snapshot: entry.snapshot ?? {} });
 				} catch (e) {
 					entry.snapDirty = true; // retried by the next save
+					traceError("storage", "could not write snapshot, retried on next save", e, { csv: csvPath });
 					throw e;
 				}
 			}
@@ -317,6 +319,7 @@ export class ImportStorage {
 					else await this.removeState(f);
 				} catch (e) {
 					entry.undoDirty = true;
+					traceError("storage", "could not write undo data, retried on next save", e, { csv: csvPath });
 					throw e;
 				}
 			}
@@ -385,6 +388,7 @@ export class ImportStorage {
 			}
 		}
 		if (failure === null) return null;
+		traceError("storage", "unreadable state file, kept as .unreadable", failure, { csv: csvPath, part, file: path });
 		console.error("CSV Importer: could not read import state", path, failure);
 		this.markUnreadable(csvPath, part);
 		await this.keepUnreadableCopy(path);

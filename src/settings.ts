@@ -24,6 +24,8 @@ export interface SettingsHost {
 	settings: PluginSettings;
 	saveSettings(): Promise<void>;
 	forgetAllFileConfigs(): Promise<void>;
+	/** Writes the diagnostics report note and opens it. */
+	saveDiagnosticsReport?(): Promise<void>;
 	/** Opens the CSV imports view. Optional: the settings tab hides the button when missing. */
 	openImportIndex?(): void | Promise<void>;
 }
@@ -118,6 +120,16 @@ export class CsvImporterSettingTab extends PluginSettingTab {
 			group(SETTINGS_HEADINGS.reimport, reimport),
 			group(SETTINGS_HEADINGS.reading, reading),
 			group(SETTINGS_HEADINGS.table, table),
+			group(SETTINGS_HEADINGS.troubleshooting, [
+				toggle("debugLog", "Debug log", SETTINGS_DESC.debugLog),
+				{
+					name: "Diagnostics report",
+					desc: SETTINGS_DESC.diagnostics,
+					render: (setting) => {
+						setting.addButton((b) => b.setButtonText("Save diagnostics report").onClick(() => void this.host.saveDiagnosticsReport?.()));
+					},
+				},
+			]),
 			group(SETTINGS_HEADINGS.danger, [
 				{
 					name: RESET_ALL_SETTINGS,
