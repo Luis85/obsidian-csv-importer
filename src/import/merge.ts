@@ -36,6 +36,15 @@ export function valueHash(value: unknown): string {
 	return fnv1a(isEmpty(value) ? "empty" : canon(value));
 }
 
+/**
+ * Whether `value` is the value a snapshot hash was taken of. Up to 0.4.1, line breaks inside quoted CSV cells kept
+ * their CRLF in the snapshot while the note got LF, so a multi-line value also matches the CRLF form of its hash.
+ */
+export function matchesHash(value: unknown, hash: string): boolean {
+	if (valueHash(value) === hash) return true;
+	return typeof value === "string" && value.includes("\n") && valueHash(value.replace(/\r?\n/g, "\r\n")) === hash;
+}
+
 export interface MergeInput {
 	/** Current frontmatter of the existing note (as parsed by Obsidian). */
 	existing: Record<string, unknown>;
@@ -67,7 +76,8 @@ export interface MergeResult {
 /**
  * Decide which managed properties to update. Never touches non-managed properties.
  * Rules per managed key k (planned value p = planned[k] ?? null, current c = existing[k]):
- * 1. keepValuesOnEmpty && p is empty && c is non-empty  -> keep c (no set); snapshot[k] keeps its previous entry if any.
+ * 1. keepValuesOnEmpty && p is empty && c is non-empty  -> keep c (no set); snapshot[k] keeps its previous entry if any
+ *    (for an omitted key of a note with a snapshot but no entry: the hash of an empty value).
  * 2. protectEdits && snapshot?.[k] !== undefined && valueHash(c) !== snapshot[k] -> preserved (user edited); snapshot keeps old entry.
  * 3. valueHash(c) !== valueHash(p) -> set[k] = p (when p is absent due to "omit" and c exists: do not delete; treat like rule 1).
  * Otherwise unchanged. snapshot[k] = valueHash(p) for keys set or already equal.
@@ -111,13 +121,14 @@ function mergeManaged(k: string, input: MergeInput, res: MergeResult): void {
 	const prev = input.snapshot?.[k];
 	if (keepsCurrentOnEmpty(k, p, c, input)) {
 		if (prev !== undefined) res.snapshot[k] = prev;
+		// Up to 0.4.0 an omitted property got no snapshot entry, so the import never wrote the value it holds now.
+		else if (input.snapshot !== undefined && !hasOwn(input.planned, k)) res.snapshot[k] = valueHash(null);
 		return;
 	}
 	const ph = valueHash(p);
-	const ch = valueHash(c);
-	if (ch === ph) {
+	if (valueHash(c) === ph) {
 		res.snapshot[k] = ph;
-	} else if (input.protectEdits && prev !== undefined && ch !== prev) {
+	} else if (input.protectEdits && prev !== undefined && !matchesHash(c, prev)) {
 		res.preserved.push(k);
 		res.snapshot[k] = prev;
 	} else {

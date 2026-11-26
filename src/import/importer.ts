@@ -35,6 +35,9 @@ export const EXTRA_PROPERTY_CONFLICT_WARNING = (name: string): string =>
 export const HISTORY_NOT_SAVED_WARNING =
 	"The notes were written, but the import history could not be saved. Undo and edit protection may not work for this import.";
 
+export const HISTORY_UNREADABLE_WARNING =
+	"The import history of this CSV could not be read, so values you edited in Obsidian are not recognized and may be overwritten. A copy of the damaged file was kept in the plugin's imports folder.";
+
 const CONFLICT_COPY = /\(conflicted copy|\.sync-conflict-|conflict\)/i;
 const isConflictCopy = (f: TFile): boolean => CONFLICT_COPY.test(f.basename ?? f.path);
 
@@ -96,7 +99,21 @@ function plannedSnapshot(note: PlannedNote): Record<string, string> {
 	return out;
 }
 
-/** Existing notes by the value of the key property, searched in the target folders (recursively). */
+/** The folders of `folders` that are not inside another one of them ("" is the vault root and contains all). */
+export function outermostFolders(folders: Iterable<string>): string[] {
+	const sorted = [...new Set(folders)].sort((a, b) => a.length - b.length || a.localeCompare(b));
+	const out: string[] = [];
+	for (const f of sorted) {
+		if (!out.some((o) => o === "" || f === o || f.startsWith(o + "/"))) out.push(f);
+	}
+	return out;
+}
+
+/**
+ * Existing notes by the value of the key property, searched (recursively) in the target folders of this run and in
+ * the folders of the notes the last import wrote. The latter finds a note whose row now resolves to another folder
+ * (a target folder with placeholders such as `Projects/{{status}}`) or that was moved to a sibling folder.
+ */
 class KeyIndex {
 	private readonly byKey = new Map<string, TFile[]>();
 
@@ -105,13 +122,15 @@ class KeyIndex {
 		property: string | null,
 		notes: PlannedNote[],
 		paths: PathIndex,
+		snapshot: ImportSnapshot,
 	) {
-		if (property) this.build(property, notes, paths);
+		if (property) this.build(property, notes, paths, snapshot);
 	}
 
-	private build(property: string, notes: PlannedNote[], paths: PathIndex): void {
+	private build(property: string, notes: PlannedNote[], paths: PathIndex, snapshot: ImportSnapshot): void {
 		try {
-			const folders = new Set(notes.map((n) => paths.resolveFolder(parentOf(normalizePath(n.path)))));
+			const planned = notes.map((n) => paths.resolveFolder(parentOf(normalizePath(n.path))));
+			const folders = outermostFolders([...planned, ...Object.keys(snapshot).map(parentOf)]);
 			const seen = new Set<string>();
 			for (const folder of folders) {
 				for (const file of this.vault.listMarkdown(folder)) {
@@ -178,7 +197,7 @@ class NoteWriter {
 		this.linkProperty = sourceLinkProperty(config);
 		this.ownedProps = ownedLinkProperties(config);
 		this.paths = new PathIndex(vault);
-		this.keys = new KeyIndex(vault, notes.find((n) => n.key)?.key?.property ?? null, notes, this.paths);
+		this.keys = new KeyIndex(vault, notes.find((n) => n.key)?.key?.property ?? null, notes, this.paths, this.snapshot);
 		this.planWarnings(notes);
 		if (needsKeyWarning(config, this.snapshot)) this.result.warnings.push(KEY_WARNING);
 	}

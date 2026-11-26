@@ -37,10 +37,10 @@ export function registerVaultEvents(plugin: Plugin, store: ConfigStore, storage:
 	);
 	plugin.registerEvent(
 		vault.on("delete", (file) => {
-			if (isCsv(file)) {
-				store.delete(file.path).catch(logFailure("could not remove the config of a deleted CSV"));
-				storage.delete(file.path).catch(logFailure("could not remove the import state of a deleted CSV"));
-			} else if (isMarkdown(file)) {
+			// A deleted CSV keeps its config and import state: the CSV imports index shows it as missing, its notes can
+			// still be deleted or undone, and restoring the file (from the trash, or by a sync tool that deletes and
+			// re-creates it) picks up where it left off. Remove from index forgets it.
+			if (isMarkdown(file)) {
 				storage.deleteNote(file.path).catch(logFailure("could not update history for a deleted note"));
 			}
 		}),

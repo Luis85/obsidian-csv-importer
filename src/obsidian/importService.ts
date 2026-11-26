@@ -6,8 +6,8 @@ import { parseCsv } from "../csv/parser";
 import { detectHeaderDrift, prepareConfig } from "../csv/typeInference";
 import { emptyResult } from "../core/result";
 import { errorMessage, plural } from "../core/util";
-import { ROW_FILTER_WARNING, HISTORY_NOT_SAVED_WARNING, applyUndo, applyUndoToSnapshot, writeNotes } from "../import/importer";
-import { valueHash } from "../import/merge";
+import { ROW_FILTER_WARNING, HISTORY_NOT_SAVED_WARNING, HISTORY_UNREADABLE_WARNING, applyUndo, applyUndoToSnapshot, writeNotes } from "../import/importer";
+import { matchesHash, valueHash } from "../import/merge";
 import { checkChanged, hashBytes, lastRunOf, makeFingerprint } from "../import/fingerprint";
 import { sanitizeFileName } from "../import/folders";
 import { countMatching, filterNotesByRows, planNotes, resolveTargetFolder, staticPrefix } from "../import/noteBuilder";
@@ -96,6 +96,7 @@ export class ImportService {
 			const stored = await this.storage.loadSnapshot(file.path);
 			const warnings = [...parsed.warnings];
 			if (cfg.rowFilter) warnings.push(ROW_FILTER_WARNING(countMatching(parsed, cfg), parsed.rows.length));
+			if (this.storage.unreadableState(file.path).includes("snapshot")) warnings.push(HISTORY_UNREADABLE_WARNING);
 			const staticFolder = staticPrefix(resolveTargetFolder(cfg, file.path));
 
 			const modal = new ImportRunModal(this.app, {
@@ -301,7 +302,7 @@ export class ImportService {
 			checked++;
 			let edited = false;
 			for (const [prop, hash] of Object.entries(hashes)) {
-				if (valueHash(fm[prop] ?? null) !== hash) {
+				if (!matchesHash(fm[prop] ?? null, hash)) {
 					edited = true;
 					props.add(prop);
 				}

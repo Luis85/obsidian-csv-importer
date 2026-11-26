@@ -26,6 +26,38 @@ interface Loaded {
 
 const MAX_DIRS = 200;
 const INDEX_FILE = "index.json";
+/**
+ * Format version of `<hash>.json` and `<hash>.undo.json`. Files without one are version 1 (0.4.1 and earlier); a
+ * file from a newer version is not read (treated like an unreadable file) so that it is never misread or overwritten
+ * without a warning.
+ */
+export const STATE_VERSION = 1;
+/** Suffix of the copy written before a state file is replaced; read when the file itself is incomplete. */
+const TEMP_SUFFIX = ".tmp";
+/** Suffix of the copy kept of a state file that could not be read, before it is overwritten. */
+const UNREADABLE_SUFFIX = ".unreadable";
+
+/** Which part of a CSV's import state could not be read. */
+export type StatePart = "snapshot" | "undo";
+
+/** Thrown by readState for a file this version cannot read. */
+class UnreadableState extends Error {}
+
+/** Parses a state file; throws UnreadableState for invalid JSON, a non-object or a newer format version. */
+function parseState<T>(text: string): T {
+	let data: unknown;
+	try {
+		data = JSON.parse(text);
+	} catch (e) {
+		throw new UnreadableState(`invalid JSON (${e instanceof Error ? e.message : String(e)})`);
+	}
+	if (!data || typeof data !== "object" || Array.isArray(data)) throw new UnreadableState("not an object");
+	const version = (data as { version?: unknown }).version;
+	if (typeof version === "number" && version > STATE_VERSION) {
+		throw new UnreadableState(`written by a newer version of the plugin (format ${version})`);
+	}
+	return data as T;
+}
 
 /** Stable 53-bit string hash (cyrb53), hex encoded. */
 function hashPath(s: string): string {
@@ -109,6 +141,12 @@ function addDir(dirs: string[] | null, dir: string): boolean {
 	return true;
 }
 
+/** An undo manifest without the format version of its file. */
+function withoutVersion(data: UndoManifest & { version?: unknown }): UndoManifest {
+	const { version: _version, ...manifest } = data;
+	return manifest;
+}
+
 /** Legacy `<hash>.json` files: not undo files and not the index. */
 function isStateFile(path: string): boolean {
 	return path.endsWith(".json") && !path.endsWith(".undo.json") && !path.endsWith(`/${INDEX_FILE}`);
@@ -125,6 +163,8 @@ export class ImportStorage {
 	private cache = new Map<string, Loaded>();
 	private ready: Promise<void> | null = null;
 	private writes = new Map<string, { tail: Promise<void>; queued: Promise<void> | null }>();
+	/** CSVs whose snapshot or undo file existed but could not be read, until that part is saved again. */
+	private unreadable = new Map<string, Set<StatePart>>();
 
 	constructor(
 		private readonly app: App,
@@ -198,11 +238,11 @@ export class ImportStorage {
 		const listing = await adapter.list(this.dir);
 		for (const path of listing.files.filter(isStateFile)) {
 			try {
-				const data = JSON.parse(await adapter.read(path)) as {
+				const data = parseState<{
 					csvPath?: string;
 					snapshot?: ImportSnapshot;
 					undo?: UndoManifest | null;
-				};
+				}>(await adapter.read(path));
 				if (typeof data.csvPath !== "string") continue;
 				let undo = data.undo ?? null;
 				if (!undo) undo = (await this.readUndoFile(data.csvPath)) ?? undo;
@@ -222,9 +262,7 @@ export class ImportStorage {
 
 	/** The separate `<hash>.undo.json` of a CSV, or null when there is none. */
 	private async readUndoFile(csvPath: string): Promise<UndoManifest | null> {
-		const adapter = this.app.vault.adapter;
-		const f = this.undoFile(hashPath(csvPath));
-		return (await adapter.exists(f)) ? (JSON.parse(await adapter.read(f)) as UndoManifest) : null;
+		return this.readState<UndoManifest>(csvPath, "undo", this.undoFile(hashPath(csvPath)));
 	}
 
 	/** Writes the scanned state files and the index in the new layout. */
@@ -260,18 +298,45 @@ export class ImportStorage {
 			const idx = this.index.get(csvPath);
 			if (!entry || !idx) return; // deleted or renamed meanwhile
 			await this.ensureDir();
-			const adapter = this.app.vault.adapter;
 			if (entry.snapDirty) {
 				entry.snapDirty = false;
-				await adapter.write(this.snapFile(idx.file), JSON.stringify({ csvPath, snapshot: entry.snapshot ?? {} }));
+				try {
+					await this.writeState(this.snapFile(idx.file), { version: STATE_VERSION, csvPath, snapshot: entry.snapshot ?? {} });
+				} catch (e) {
+					entry.snapDirty = true; // retried by the next save
+					throw e;
+				}
 			}
 			if (entry.undoDirty) {
 				entry.undoDirty = false;
-				const f = this.undoFile(idx.file);
-				if (entry.undo) await adapter.write(f, JSON.stringify(entry.undo));
-				else if (await adapter.exists(f)) await adapter.remove(f);
+				try {
+					const f = this.undoFile(idx.file);
+					if (entry.undo) await this.writeState(f, { ...entry.undo, version: STATE_VERSION });
+					else await this.removeState(f);
+				} catch (e) {
+					entry.undoDirty = true;
+					throw e;
+				}
 			}
 		});
+	}
+
+	/**
+	 * Replaces a state file so that a crash or a full disk never leaves only a half-written copy: the new content is
+	 * first written to `<file>.tmp`, then to the file, then the temporary copy is removed. readState falls back to
+	 * the temporary copy when the file itself cannot be read.
+	 */
+	private async writeState(path: string, data: object): Promise<void> {
+		const adapter = this.app.vault.adapter;
+		const text = JSON.stringify(data);
+		await adapter.write(path + TEMP_SUFFIX, text);
+		await adapter.write(path, text);
+		await adapter.remove(path + TEMP_SUFFIX);
+	}
+
+	private async removeState(path: string): Promise<void> {
+		const adapter = this.app.vault.adapter;
+		for (const f of [path, path + TEMP_SUFFIX]) if (await adapter.exists(f)) await adapter.remove(f);
 	}
 
 	private persistIndex(): Promise<void> {
@@ -301,15 +366,57 @@ export class ImportStorage {
 		return e;
 	}
 
-	private async readJson<T>(path: string): Promise<T | null> {
-		try {
-			const adapter = this.app.vault.adapter;
-			if (!(await adapter.exists(path))) return null;
-			return JSON.parse(await adapter.read(path)) as T;
-		} catch (e) {
-			console.error("CSV Importer: ignoring unreadable import state", path, e);
-			return null;
+	/**
+	 * Reads a state file, or its temporary copy when the file is missing or unreadable (a write was interrupted).
+	 * Returns null when neither exists. When one exists but neither can be read, the CSV's part is marked
+	 * unreadable (see unreadableState), a copy of the file is kept as `<file>.unreadable`, and null is returned.
+	 */
+	private async readState<T>(csvPath: string, part: StatePart, path: string): Promise<T | null> {
+		const adapter = this.app.vault.adapter;
+		let failure: unknown = null;
+		for (const f of [path, path + TEMP_SUFFIX]) {
+			try {
+				if (!(await adapter.exists(f))) continue;
+				return parseState<T>(await adapter.read(f));
+			} catch (e) {
+				failure ??= e;
+			}
 		}
+		if (failure === null) return null;
+		console.error("CSV Importer: could not read import state", path, failure);
+		this.markUnreadable(csvPath, part);
+		await this.keepUnreadableCopy(path);
+		return null;
+	}
+
+	private markUnreadable(csvPath: string, part: StatePart): void {
+		let parts = this.unreadable.get(csvPath);
+		if (!parts) this.unreadable.set(csvPath, (parts = new Set()));
+		parts.add(part);
+	}
+
+	/** Copies an unreadable state file to `<file>.unreadable`, so the next save does not destroy it. */
+	private async keepUnreadableCopy(path: string): Promise<void> {
+		const adapter = this.app.vault.adapter;
+		try {
+			if (await adapter.exists(path)) await adapter.write(path + UNREADABLE_SUFFIX, await adapter.read(path));
+		} catch (e) {
+			console.error("CSV Importer: could not keep a copy of unreadable import state", path, e);
+		}
+	}
+
+	/**
+	 * The parts of a CSV's import state that existed but could not be read (corrupt, or from a newer version of the
+	 * plugin) since they were last saved. Without the snapshot, values edited in Obsidian are not recognized as edits.
+	 */
+	unreadableState(csvPath: string): StatePart[] {
+		return [...(this.unreadable.get(csvPath) ?? [])];
+	}
+
+	private clearUnreadable(csvPath: string, part: StatePart): void {
+		const parts = this.unreadable.get(csvPath);
+		parts?.delete(part);
+		if (parts?.size === 0) this.unreadable.delete(csvPath);
 	}
 
 	private slot(csvPath: string): Loaded {
@@ -326,7 +433,7 @@ export class ImportStorage {
 		const l = this.slot(csvPath);
 		if (l.snapshot === null) {
 			const file = this.index.get(csvPath)?.file ?? hashPath(csvPath);
-			const data = await this.readJson<{ snapshot?: ImportSnapshot }>(this.snapFile(file));
+			const data = await this.readState<{ snapshot?: ImportSnapshot }>(csvPath, "snapshot", this.snapFile(file));
 			l.snapshot ??= data?.snapshot ?? {};
 		}
 		return l.snapshot;
@@ -337,8 +444,8 @@ export class ImportStorage {
 		const l = this.slot(csvPath);
 		if (l.undo === undefined) {
 			const idx = this.index.get(csvPath);
-			const data = !idx || idx.hasUndo ? await this.readJson<UndoManifest>(this.undoFile(idx?.file ?? hashPath(csvPath))) : null;
-			if (l.undo === undefined) l.undo = data;
+			const data = !idx || idx.hasUndo ? await this.readState<UndoManifest>(csvPath, "undo", this.undoFile(idx?.file ?? hashPath(csvPath))) : null;
+			if (l.undo === undefined) l.undo = data === null ? null : withoutVersion(data);
 		}
 		return l.undo ?? null;
 	}
@@ -357,6 +464,7 @@ export class ImportStorage {
 		const dirsChanged = JSON.stringify(dirs) !== JSON.stringify(idx.snapDirs);
 		l.snapshot = snapshot;
 		l.snapDirty = true;
+		this.clearUnreadable(csvPath, "snapshot");
 		idx.snapDirs = dirs;
 		const writes = [this.persist(csvPath)];
 		if (dirsChanged || isNew) writes.push(this.persistIndex());
@@ -370,6 +478,7 @@ export class ImportStorage {
 		const idx = this.indexEntry(csvPath);
 		l.undo = manifest;
 		l.undoDirty = true;
+		this.clearUnreadable(csvPath, "undo");
 		const hasUndo = manifest !== null;
 		const dirs = dirsOf(undoPaths(manifest));
 		const changed = isNew || idx.hasUndo !== hasUndo || JSON.stringify(dirs) !== JSON.stringify(idx.undoDirs);
@@ -405,6 +514,9 @@ export class ImportStorage {
 		const old = this.index.get(oldCsvPath)!;
 		this.index.delete(oldCsvPath);
 		this.cache.delete(oldCsvPath);
+		const unreadable = this.unreadable.get(oldCsvPath);
+		this.unreadable.delete(oldCsvPath);
+		if (unreadable) this.unreadable.set(newCsvPath, unreadable);
 		await this.removeFiles(old.file);
 		const moved = undo ? { ...undo, csvPath: newCsvPath } : null;
 		this.index.set(newCsvPath, { ...old, file: hashPath(newCsvPath) });
@@ -418,6 +530,7 @@ export class ImportStorage {
 		if (!idx) return;
 		this.index.delete(csvPath);
 		this.cache.delete(csvPath);
+		this.unreadable.delete(csvPath);
 		await this.removeFiles(idx.file);
 		await this.persistIndex();
 	}
@@ -496,8 +609,8 @@ export class ImportStorage {
 	private async removeFiles(file: string): Promise<void> {
 		try {
 			const adapter = this.app.vault.adapter;
-			for (const f of [this.snapFile(file), this.undoFile(file)]) {
-				if (await adapter.exists(f)) await adapter.remove(f);
+			for (const base of [this.snapFile(file), this.undoFile(file)]) {
+				for (const f of [base, base + TEMP_SUFFIX]) if (await adapter.exists(f)) await adapter.remove(f);
 			}
 		} catch (e) {
 			console.error("CSV Importer: could not remove import state", e);

@@ -1,6 +1,6 @@
 // Per-file config defaults and migration of stored (possibly old or hand-edited) configs.
 import { describe, expect, it } from "vitest";
-import { createDefaultFileConfig, DEFAULT_SETTINGS, migrateFileConfig } from "../../src/defaults";
+import { createDefaultFileConfig, DEFAULT_SETTINGS, migrateFileConfig, sanitizeSettings } from "../../src/defaults";
 import type { ColumnConfig, FileImportConfig } from "../../src/types";
 
 const migrate = (raw: unknown) => migrateFileConfig(raw as Partial<FileImportConfig>, DEFAULT_SETTINGS);
@@ -114,5 +114,31 @@ describe("migrateFileConfig", () => {
 		const columns: ColumnConfig[] = [{ source: "a", index: 0, property: "a", type: "text", include: true }];
 		expect(migrate({ columns }).columns).toEqual(columns);
 		expect(migrate({ columns: { a: 1 } }).columns).toEqual([]);
+	});
+});
+
+describe("sanitizeSettings", () => {
+	it("returns the defaults for missing or malformed data", () => {
+		expect(sanitizeSettings(undefined)).toEqual(DEFAULT_SETTINGS);
+		expect(sanitizeSettings("nope")).toEqual(DEFAULT_SETTINGS);
+	});
+
+	it("keeps valid values and replaces values of the wrong type or unknown choices", () => {
+		const s = sanitizeSettings({
+			defaultTags: "csv",
+			defaultHasHeader: "yes",
+			defaultConflict: "merge",
+			defaultDelimiter: ";",
+			defaultEncoding: "latin-9",
+			pageSize: 3,
+			somethingElse: 1,
+		});
+		expect(s.defaultTags).toBe("csv");
+		expect(s.defaultHasHeader).toBe(DEFAULT_SETTINGS.defaultHasHeader);
+		expect(s.defaultConflict).toBe(DEFAULT_SETTINGS.defaultConflict);
+		expect(s.defaultDelimiter).toBe(";");
+		expect(s.defaultEncoding).toBe("auto");
+		expect(s.pageSize).toBe(DEFAULT_SETTINGS.pageSize);
+		expect(s).not.toHaveProperty("somethingElse");
 	});
 });

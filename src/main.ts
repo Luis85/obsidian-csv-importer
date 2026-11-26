@@ -1,7 +1,7 @@
 import { Notice, Plugin } from "obsidian";
 import type { TFile } from "obsidian";
 import { ConfigStore } from "./configStore";
-import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig } from "./defaults";
+import { CURRENT_DATA_VERSION, DEFAULT_SETTINGS, migrateFileConfig, sanitizeSettings } from "./defaults";
 import type { CsvStatus, EditedNotes, ImportFileOptions, ImportIndexHost, ImportSummary } from "./host";
 import { ImportService } from "./obsidian/importService";
 import { isCsv, registerVaultEvents } from "./obsidian/vaultEvents";
@@ -23,18 +23,28 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 	private store!: ConfigStore;
 	private storage!: ImportStorage;
 	private service!: ImportService;
+	/** data.json was written by a newer version of the plugin: it is read as far as known, but never overwritten. */
+	private dataFromNewerVersion = false;
 
 	override async onload(): Promise<void> {
 		const raw = (await this.loadData()) as Partial<PluginData> | null;
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw?.settings ?? {});
+		this.settings = sanitizeSettings(raw?.settings);
 		const version = typeof raw?.version === "number" ? raw.version : 0;
+		this.dataFromNewerVersion = version > CURRENT_DATA_VERSION;
+		if (this.dataFromNewerVersion) {
+			new Notice(
+				"CSV importer: the saved settings come from a newer version of the plugin. Update the plugin; until then, changes to settings are not saved.",
+				0,
+			);
+		}
 		const files: Record<string, FileImportConfig> = {};
-		for (const [path, cfg] of Object.entries(raw?.files ?? {})) files[path] = migrateFileConfig(cfg, this.settings);
+		const storedFiles = raw?.files && typeof raw.files === "object" ? raw.files : {};
+		for (const [path, cfg] of Object.entries(storedFiles)) files[path] = migrateFileConfig(cfg, this.settings);
 		this.store = new ConfigStore(files, () => this.persist());
 		this.storage = new ImportStorage(this.app, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
 		this.service = new ImportService(this.app, this.storage, this.store, () => this.settings);
 		void this.storage.init();
-		if (version !== CURRENT_DATA_VERSION) void this.persist().catch((e) => console.error("CSV Importer: could not save data", e));
+		if (version < CURRENT_DATA_VERSION) void this.persist().catch((e) => console.error("CSV Importer: could not save data", e));
 
 		this.registerView(VIEW_TYPE_CSV, (leaf) => new CsvView(leaf, this));
 		try {
@@ -163,6 +173,7 @@ export default class CsvImporterPlugin extends Plugin implements ImportIndexHost
 	}
 
 	private persist(): Promise<void> {
+		if (this.dataFromNewerVersion) return Promise.resolve();
 		const data: PluginData = { version: CURRENT_DATA_VERSION, settings: this.settings, files: this.store ? this.store.toRecord() : {} };
 		return this.saveData(data);
 	}

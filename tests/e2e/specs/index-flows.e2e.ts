@@ -148,4 +148,25 @@ describe("CSV imports index", function () {
 		await browser.waitUntil(async () => (await (await indexRow("timesheet.csv")).getText()).includes("CSV missing"), { timeoutMsg: "no CSV missing marker" });
 		await shot(SPEC, "csv-missing", true);
 	});
+
+	it("keeps a CSV deleted inside Obsidian as CSV missing, and restores it when the file comes back", async function () {
+		await importViaDialog(CSV);
+		const bytes = await browser.executeObsidian(async ({ app }) => {
+			const f = app.vault.getFileByPath("Data/timesheet.csv")!;
+			const data = await app.vault.readBinary(f);
+			await app.vault.delete(f);
+			return Array.from(new Uint8Array(data));
+		});
+		await openIndex();
+		await browser.waitUntil(async () => (await (await indexRow("timesheet.csv")).getText()).includes("CSV missing"), { timeoutMsg: "no CSV missing marker" });
+		await browser.executeObsidian(async ({ app }, b) => {
+			await app.vault.createBinary("Data/timesheet.csv", new Uint8Array(b).buffer);
+		}, bytes);
+		await browser.waitUntil(async () => !(await (await indexRow("timesheet.csv")).getText()).includes("CSV missing"), { timeoutMsg: "still missing" });
+		const undoable = await browser.executeObsidian(({ app }) => {
+			const plugin = (app as unknown as { plugins: { plugins: Record<string, { canUndo(f: unknown): boolean }> } }).plugins.plugins["csv-importer"]!;
+			return plugin.canUndo(app.vault.getFileByPath("Data/timesheet.csv"));
+		});
+		expect(undoable).toBe(true);
+	});
 });
