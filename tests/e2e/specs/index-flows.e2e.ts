@@ -75,7 +75,26 @@ describe("CSV imports index", function () {
 		await all.click();
 		await waitForModal(/import preview/i);
 		await clickButton("Cancel");
+		// Closing a dialog without importing asks whether to go on with the rest.
+		await waitForModal("Continue with the next CSV file?");
+		await clickButton("Continue");
 		await waitForModal(/import preview/i);
+		await clickButton("Cancel");
+		await waitForNoModal(); // the last one: nothing left to ask about
+	});
+
+	it("stops Re-import all in one step when told not to go on", async function () {
+		await importViaDialog(CSV);
+		await importViaDialog(CSV_DE);
+		await openIndex();
+		await indexRow("timesheet-de.csv");
+		const all = browser.$(`${INDEX} .csv-importer-index-all`);
+		await all.waitForEnabled();
+		await all.waitForDisplayed();
+		await all.click();
+		await waitForModal(/import preview/i);
+		await clickButton("Cancel");
+		await waitForModal("Continue with the next CSV file?");
 		await clickButton("Cancel");
 		await waitForNoModal();
 	});
