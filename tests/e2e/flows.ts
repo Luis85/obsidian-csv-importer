@@ -177,7 +177,19 @@ export async function openIndex(): Promise<void> {
 
 /** Opens the index toolbar's Add CSV menu and picks "Scan vault for CSV files..." or "Copy a file from your device...". */
 export async function chooseAddCsv(item: "scan" | "device"): Promise<void> {
-	await browser.$(`${INDEX} [data-testid=csv-index-add]`).click();
+	// The index toolbar is drawn before the list has loaded and redraws once it has; a click in between, or one that a
+	// closing dialog or notice still covers, opens nothing. Wait until the button can take the click, and click again
+	// only when no menu came up.
+	const add = browser.$(`${INDEX} [data-testid=csv-index-add]`);
+	await browser.waitUntil(
+		async () => {
+			if (await browser.$(".menu").isDisplayed()) return true;
+			await add.waitForClickable({ timeout: 10000 });
+			await add.click();
+			return browser.$(".menu").isDisplayed();
+		},
+		{ timeout: 20000, interval: 500, timeoutMsg: "the Add CSV menu did not open" },
+	);
 	await clickMenuItem(item === "scan" ? "Scan vault for CSV files..." : "Copy a file from your device...");
 }
 
