@@ -63,17 +63,23 @@ describe("CSV imports index", function () {
 		await browser.waitUntil(async () => (await activeViewType()) === "csv-importer-view", { timeoutMsg: "CSV did not open" });
 	});
 
-	it("re-imports every listed CSV with Re-import all", async function () {
+	/** Imports both CSVs, then starts Re-import all from the index and waits for the first preview. */
+	async function importBothAndReimportAll(): Promise<void> {
 		await importViaDialog(CSV);
 		await importViaDialog(CSV_DE);
 		await openIndex();
-		// The button is disabled and hidden until the list has loaded; clicking earlier does nothing.
+		// The button is disabled and hidden until the list has loaded; clicking earlier does nothing. The notices of
+		// the two imports can still cover it, so wait until a click would reach it.
 		await indexRow("timesheet-de.csv");
 		const all = browser.$(`${INDEX} .csv-importer-index-all`);
 		await all.waitForEnabled();
-		await all.waitForDisplayed();
+		await all.waitForClickable({ timeout: 15000 });
 		await all.click();
 		await waitForModal(/import preview/i);
+	}
+
+	it("re-imports every listed CSV with Re-import all", async function () {
+		await importBothAndReimportAll();
 		await clickButton("Cancel");
 		// Closing a dialog without importing asks whether to go on with the rest.
 		await waitForModal("Continue with the next CSV file?");
@@ -84,15 +90,7 @@ describe("CSV imports index", function () {
 	});
 
 	it("stops Re-import all in one step when told not to go on", async function () {
-		await importViaDialog(CSV);
-		await importViaDialog(CSV_DE);
-		await openIndex();
-		await indexRow("timesheet-de.csv");
-		const all = browser.$(`${INDEX} .csv-importer-index-all`);
-		await all.waitForEnabled();
-		await all.waitForDisplayed();
-		await all.click();
-		await waitForModal(/import preview/i);
+		await importBothAndReimportAll();
 		await clickButton("Cancel");
 		await waitForModal("Continue with the next CSV file?");
 		await clickButton("Cancel");
